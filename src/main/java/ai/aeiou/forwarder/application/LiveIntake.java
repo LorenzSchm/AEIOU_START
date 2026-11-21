@@ -133,7 +133,7 @@ public class LiveIntake {
           "insert into inbox(upstream_id,payload) values(?,?)", id, mail.toString());
   }
 
-  @Scheduled(fixedDelay = 1000)
+  @Scheduled(fixedDelayString = "${forwarder.inbox-route-ms:1000}")
   public void routePending() {
     if (!flow.clock.live || !online) return;
     for (var raw :
@@ -278,6 +278,7 @@ public class LiveIntake {
       m.put("category", "RFQ");
       var d = flow.receive("s_" + upstream, "AE-" + upstream, m, at);
       attachments(d, m, raw, at);
+      if (d.has("hasSourceAttachments")) flow.store.save(d);
       flow.store.schedule(
           sid(d) + ":extract:1", sid(d), "EXTRACT", flow.clock.now(), extraction(d, m));
       source(d, at);
@@ -367,6 +368,7 @@ public class LiveIntake {
     } else if (carrier) {
       m.put("category", "BID");
       bid(d, m, at);
+      scheduleFast(d);
     }
     attachments(d, m, raw, at);
     flow.store.message(sid(d), m);
@@ -375,6 +377,7 @@ public class LiveIntake {
   }
 
   private void attachments(ObjectNode d, ObjectNode m, JsonNode raw, Instant at) {
+    if (!raw.path("attachments").isEmpty()) d.put("hasSourceAttachments", true);
     for (var a : raw.path("attachments")) {
       String aid = str(a, "id");
       if (!aid.matches("[0-9]+")) continue;
@@ -922,8 +925,11 @@ public class LiveIntake {
         d.put("requestRevision", d.get("requestRevision").asInt() + 1);
         d.remove("pin");
       }
+      if (extracted != null && extracted.isObject())
+        d.set("reviewedRevision", d.get("requestRevision"));
       flow.facts(d, verified, p.get("message"), at);
       source(d, at);
+      scheduleFast(d);
       return;
     }
     if (!str(r, "origin").equals(str(p, "origin"))
@@ -986,6 +992,51 @@ public class LiveIntake {
                     "evidence",
                     evidence))),
         at);
+    scheduleFast(d);
+  }
+
+  private boolean fastReady(ObjectNode d, Instant now) {
+    var session = session(d);
+    int revision = d.path("requestRevision").asInt();
+    if (d.has("quote")
+        || !str(session, "phase").equals("SOURCING")
+        || !str(session, "control").equals("AUTO")
+        || d.path("reviewedRevision").asInt(-1) != revision
+        || d.path("hasSourceAttachments").asBoolean()
+        || !d.at("/original/attachments").isEmpty()
+        || d.path("inputs").has("grossAlternatives")
+        || d.path("inputs").has("volumeAlternatives")
+        || d.path("inputs").hasNonNull("constraints")) return false;
+    Set<String> received = new HashSet<>();
+    for (var rate : d.path("upstreamRates"))
+      if (rate.at("/request/revision").asInt() == revision)
+        received.add(rate.at("/request/airline").asText());
+    for (var lane : ports)
+      if (str(lane, "origin").equals(str(session, "origin"))
+          && str(lane, "destination").equals(str(session, "destination")))
+        for (var airline : lane.path("airlines"))
+          if (!received.contains(str(airline, "code"))) return false;
+    return Pricing.choose(
+            d.withArray("candidates").valueStream().toList(),
+            str(session, "objective"),
+            now,
+            revision,
+            str(d, "pin"))
+        .isPresent();
+  }
+
+  private void scheduleFast(ObjectNode d) {
+    Instant now = flow.clock.now();
+    if (!fastReady(d, now)) return;
+    int revision = d.get("requestRevision").asInt();
+    Instant due = str(session(d), "scope").equals("DOOR_TO_PORT") ? now.plusSeconds(2) : now;
+    flow.store.schedule(
+        sid(d) + ":fast:" + revision, sid(d), "FAST_DECIDE", due, obj("revision", revision));
+  }
+
+  public void fastDecide(ObjectNode d, JsonNode p, Instant at) {
+    if (d.path("requestRevision").equals(p.path("revision")) && fastReady(d, at))
+      flow.decide(d, at);
   }
 
   @Scheduled(fixedDelay = 30000)

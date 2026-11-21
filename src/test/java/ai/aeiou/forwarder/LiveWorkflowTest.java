@@ -33,7 +33,7 @@ import org.springframework.test.context.*;
       "WEBHOOK_SIGNING_SECRET=local-fixture-secret",
       "forwarder.team-key=test-team",
       "forwarder.model=test-model",
-      "forwarder.demo.tick-ms=120000"
+      "forwarder.demo.tick-ms=250"
     })
 class LiveWorkflowTest {
   private static final Instant START = Instant.parse("2026-11-21T15:00:00Z");
@@ -246,22 +246,20 @@ class LiveWorkflowTest {
   @Test
   @Order(1)
   void readQuoteBookAndTrackThroughHttpUpstream() {
+    long startNanos = System.nanoTime();
     inbox.add(
         inbound(
             1,
             "buyer@hackloop.mail",
             "Please quote cheapest airport-to-airport MUC to LAX. 100 kg total, 0.2 cbm.",
             null));
-    waitFor(
-        () ->
-            store
-                    .shipment("s_1")
-                    .path("candidates")
-                    .valueStream()
-                    .anyMatch(c -> str(c, "source").equals("PORTAL"))
-                && gateway.get() == 1);
-    offset.set(45);
-    waitFor(() -> store.shipment("s_1").at("/session/phase").asText().equals("QUOTED"));
+    await()
+        .atMost(Duration.ofSeconds(12))
+        .until(() -> sent.stream().anyMatch(m -> str(m, "to").equals("buyer@hackloop.mail")));
+    long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+    System.out.println("Local scheduled mailbox-to-first-quote: " + elapsedMs + " ms");
+    assertEquals(0, offset.get(), "No advance to the 45-second fallback");
+    assertEquals(1, gateway.get());
     var quote =
         sent.stream()
             .filter(m -> str(m, "to").equals("buyer@hackloop.mail"))
@@ -376,7 +374,8 @@ class LiveWorkflowTest {
     assertEquals("2026-11-21T15:14:00Z", str(combined, "validUntil"));
     assertFalse(
         store.shipment("s_300").at("/pickupLegs/pickup_m_303/bookingRequired").asBoolean(true));
-    offset.addAndGet(45);
+    assertFalse(store.shipment("s_300").has("quote"));
+    offset.addAndGet(2);
     waitFor(() -> sent.stream().anyMatch(m -> str(m, "to").equals(buyer)));
     var quote = sent.stream().filter(m -> str(m, "to").equals(buyer)).findFirst().orElseThrow();
     assertTrue(str(quote, "body").contains("including collection in 51447"));

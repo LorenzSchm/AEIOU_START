@@ -146,10 +146,12 @@ public class Worker implements ApplicationRunner {
                 + " due_at<=? "
                 + (localOnly
                     ? "and action in"
-                          + " ('DECIDE','SHADOW','OFFER','TRACK','ACCEPT','CONFIRM','DEMO_INTAKE') "
+                          + " ('DECIDE','FAST_DECIDE','SHADOW','OFFER','TRACK','ACCEPT','CONFIRM','DEMO_INTAKE')"
+                          + " "
                     : "")
-                + "order by case when action='DECIDE' then 0 when action='SEND' then 1 else 2"
-                + " end,due_at,id limit 1",
+                + "order by case when action in ('DECIDE','FAST_DECIDE') or (action='SEND' and id"
+                + " like '%:quote') then 0 when action in ('BOOK','EXTRACT','PORTAL') then 1 when"
+                + " action='SEND' then 2 else 3 end,due_at,id limit 1",
             (r, i) ->
                 new Job(
                     r.getString(1),
@@ -386,6 +388,7 @@ public class Worker implements ApplicationRunner {
     var d = flow.store.shipment(j.id);
     var s = session(d);
     switch (j.action) {
+      case "FAST_DECIDE" -> live.fastDecide(d, j.payload, at);
       case "DECIDE" -> flow.decide(d, at);
       case "SHADOW" -> flow.scoreShadow(d, at);
       case "OFFER" -> flow.offer(d, j.payload, at);
