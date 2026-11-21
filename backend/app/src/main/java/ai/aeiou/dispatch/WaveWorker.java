@@ -277,8 +277,7 @@ class WaveWorker {
           replyId, parsed.issue(), id);
       if (parsed.issue() == null)
         ledger.jdbc().update("""
-            INSERT INTO rfq_parse(request_id,state,model) VALUES(?,'done','java')
-            ON CONFLICT(request_id) DO UPDATE SET state='done',model='java',result=NULL
+            INSERT OR IGNORE INTO rfq_parse(request_id,state,model) VALUES(?,'done','java')
             """, id);
     });
   }
@@ -796,14 +795,18 @@ class WaveWorker {
 
   synchronized Map<String, Object> sendQuote(long id, String revision) {
     var m = target(id);
-    checkPacking(id, m, ledger.read(m.get("fields"), Shipment.class));
+    var shipment = ledger.read(m.get("fields"), Shipment.class);
+    checkPacking(id, m, shipment);
     var d = ledger.read(m.get("proposal"), Draft.class);
     if (d == null || d.offer() == null || !d.revision().equals(revision))
       throw new Conflict("Calculate a current quote first.");
     if (d.offer().validUntil() != null && !d.offer().validUntil().isAfter(clock.instant()))
       throw new Conflict("Portal rate expired.");
-    gateway.ensure(id, m, false);
+    gateway.checkQuote(id, clarifications.details(id, m).message(), shipment,
+        "operator review".equals(m.get("stage")));
     target(id);
+    if (d.offer().validUntil() != null && !d.offer().validUntil().isAfter(clock.instant()))
+      throw new Conflict("Portal rate expired.");
     var result =
         send(
             "quote:" + id,

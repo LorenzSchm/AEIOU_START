@@ -73,6 +73,13 @@ class WaveWorkerTest {
         .thenAnswer(
             call -> {
               Map<String, Object> payload = call.getArgument(0);
+              var schema = mapper.valueToTree(payload.get("response_format")).path("json_schema");
+              if ("quote_check".equals(schema.path("name").asText())) {
+                assertEquals(24, payload.get("max_completion_tokens"));
+                assertEquals(mapper.createArrayNode().add("contradiction"),
+                    schema.path("schema").path("required"));
+                return gatewayResponse("{\"contradiction\":false}");
+              }
               boolean pickup = payload.toString().contains("60311");
               var fields =
                   mapper
@@ -86,15 +93,7 @@ class WaveWorkerTest {
                       .put("needs_review", false);
               if (pickup) fields.put("pickup_zone", "60");
               else fields.putNull("pickup_zone");
-              return mapper.valueToTree(
-                  Map.of(
-                      "choices",
-                      List.of(
-                          Map.of(
-                              "finish_reason",
-                              "stop",
-                              "message",
-                              Map.of("content", fields.toString())))));
+              return gatewayResponse(fields.toString());
             });
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(), true));
     when(upstream.post(eq("/v1/mailbox/messages"), anyMap()))
@@ -106,6 +105,11 @@ class WaveWorkerTest {
               outbound.add(receipt);
               return receipt;
             });
+  }
+
+  private JsonNode gatewayResponse(String content) {
+    return mapper.valueToTree(Map.of("choices", List.of(
+        Map.of("finish_reason", "stop", "message", Map.of("content", content)))));
   }
 
   void receive(long id, String from, String subject, String body, Long parent) {
@@ -305,6 +309,9 @@ class WaveWorkerTest {
         Ledger.id(followUp.get("id")));
     worker.work();
     assertEquals(7, outbound.size());
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
     verify(upstream, times(1)).parseRfq(anyMap());
   }
 
@@ -409,7 +416,7 @@ class WaveWorkerTest {
     assertTrue(outbound.getLast().get("body").toString().contains("3 days"));
     assertEquals("sent", ledger.delivery("quote:7"));
     assertEquals(10, ledger.cursor());
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @Test
@@ -470,6 +477,7 @@ class WaveWorkerTest {
     assertEquals("uncertain", ledger.delivery("quote:7"));
     assertEquals("review", ledger.mail(7).get("stage"));
     verify(upstream, times(6)).post(eq("/v1/mailbox/messages"), anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @Test
@@ -621,15 +629,35 @@ class WaveWorkerTest {
   }
 
   @Test
-  void manualPricingAndSendingReuseTheOriginalExtraction() throws Exception {
+  void manualPricingIsLocalAndSendingChecksTheShipmentOnce() throws Exception {
     request("");
     var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
     worker.price(7, s, null);
     restart();
     var draft = worker.price(7, s, null);
-    worker.sendQuote(7, draft.revision());
     verify(upstream, never()).parseRfq(anyMap());
+    worker.sendQuote(7, draft.revision());
+    verify(upstream, times(1)).parseRfq(anyMap());
     assertEquals("sent", ledger.delivery("quote:7"));
+  }
+
+  @Test
+  void contradictoryGatewayCheckRequiresOperatorReviewAndIsReusedAfterRestart() throws Exception {
+    request("");
+    when(upstream.parseRfq(anyMap())).thenReturn(gatewayResponse("{\"contradiction\":true}"));
+    worker.work();
+    verify(upstream, never()).parseRfq(anyMap());
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("review", ledger.mail(7).get("stage"));
+    assertNull(ledger.delivery("quote:7"));
+
+    restart();
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    var draft = worker.price(7, s, null);
+    worker.sendQuote(7, draft.revision());
+    assertEquals("sent", ledger.delivery("quote:7"));
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @org.junit.jupiter.params.ParameterizedTest(name = "Recorded wave {0}")
@@ -706,7 +734,7 @@ class WaveWorkerTest {
       verify(upstream, times(1))
           .post("/v1/portal/bookings", Map.of("rate_id", "TEST-R9-0", "team_reference", "AEIOU-7"));
     }
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -846,7 +874,7 @@ class WaveWorkerTest {
     assertEquals("486", shipment.weightKg().toPlainString());
     assertEquals("2.62", shipment.volumeCbm().toPlainString());
     assertNull(shipment.pickupZone());
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -958,7 +986,7 @@ class WaveWorkerTest {
     assertEquals("sent", ledger.delivery("quote:7"));
     assertEquals(1, outbound.size());
     assertTrue(outbound.getFirst().get("body").toString().contains("EUR 50.00"));
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @Test

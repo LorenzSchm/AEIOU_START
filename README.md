@@ -50,7 +50,7 @@ npm start -- --hostname 127.0.0.1 --port 3000
 | `DISPATCH_COUNTEROFFERS` | `false`. Use `true` to enable the optional counteroffer round. |
 | `DISPATCH_START_AT` | `2026-11-21T15:00:00Z` (16:00 Berlin). The worker handles RFQs arriving from this instant onward. |
 | `DISPATCH_DB` | `backend/state/dispatch.sqlite3`. Preserve this file across restarts so the worker remembers sent quotes and pending bids. |
-| `FIVEU_GATEWAY_MODEL` | `gpt-4o-mini`. Each RFQ uses up to 8,000 input characters of email and 240 completion tokens. |
+| `FIVEU_GATEWAY_MODEL` | `gpt-4o-mini`. The worker sends up to 8,000 characters of email. Structured extraction allows up to 240 completion tokens and the quote check allows up to 24. |
 | `FIVEU_BASE_URL` | `https://api.start-hack.5u.ai`. Integration tests use an isolated local HTTP fixture and temporary database. |
 | `DISPATCH_API_URL` | `http://127.0.0.1:8000`. Set before building Next.js to point the desk to another backend. |
 
@@ -114,7 +114,7 @@ python3 backend/register-openai-key.py
 
 The helper reads `TEAM_API_KEY` from the root `.env` or the environment. It checks the current registration first. If the team already has a key registered, it leaves it in place. Once 5U confirms registration you can delete the local staging file. The running worker uses only the team credential and picks up registration immediately.
 
-The worker calls `POST /v1/gateway/chat/completions` through the 5U API with a small structured-output model. Only ambiguous original RFQ text goes to the model. Java handles carrier replies, tariff calculations, pickup costs, ranking and customer email.
+The worker calls `POST /v1/gateway/chat/completions` through the 5U API with a small structured-output model. Ambiguous RFQs use structured extraction. If no gateway call was needed for extraction, the worker checks the proposed shipment against the customer email before sending the quote. This check returns one boolean with a limit of 24 completion tokens. The result is reused for the same RFQ across retries and restarts. An explicit contradiction sends an automatic quote to operator review. Java handles carrier replies, tariff calculations, pickup costs, ranking and customer email.
 
 ## Sender details
 
