@@ -697,6 +697,10 @@ class WaveWorkerTest {
     assertEquals(quote.get("body"), sent.path("body").asText());
     assertEquals(quote.get("subject"), sent.path("subject").asText());
     assertEquals(quote.get("id"), sent.path("message_id").asInt());
+    assertEquals("en", sent.path("language").asText());
+    var thanks = inbox.stream().filter(m -> Ledger.id(m.get("id")) == 20).findFirst().orElseThrow();
+    assertTrue(thanks.containsKey("language"));
+    assertNull(thanks.get("language"));
   }
 
   @Test
