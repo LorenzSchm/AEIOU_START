@@ -227,3 +227,4 @@ __marimo__/
 node_modules/
 .next/
 .gradle/
+.claude/worktrees/
