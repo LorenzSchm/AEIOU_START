@@ -108,7 +108,7 @@ const pointRadius = (p) => (p.isOrigin ? 0.42 : 0.26);
 const pointTip = (p) =>
   `<div class="cg-pt-tip">${esc(p.code)} · ${esc(p.city)}<br/><span>${esc(p.name)}</span></div>`;
 
-export default function CargoGlobe({ routes = [], selectedId = null, onSelect, height, compact = false }) {
+export default function CargoGlobe({ routes = [], selectedId = null, onSelect, height, compact = false, paused = false }) {
   const wrapRef = useRef(null);
   const globeRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -123,11 +123,20 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
     if (!el) return;
     const ro = new ResizeObserver(([e]) => {
       const { width, height: h } = e.contentRect;
+      if (!width || !h) return; // hidden (view kept alive): keep the last size instead of collapsing to 0
       setSize((s) => (Math.round(width) === s.w && Math.round(h) === s.h ? s : { w: Math.round(width), h: Math.round(h) }));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // --- stop the WebGL render loop while the view is hidden (kept mounted for instant switching)
+  useEffect(() => {
+    const g = globeRef.current;
+    if (!g || !ready) return;
+    if (paused) g.pauseAnimation?.();
+    else g.resumeAnimation?.();
+  }, [paused, ready]);
 
   // --- reduced motion
   useEffect(() => {

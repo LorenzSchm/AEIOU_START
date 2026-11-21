@@ -11,9 +11,17 @@ export function EmailTemplateProvider({ template, children }) {
 
 const escape = (text) => text.replace(/[&<>]/g, (character) => htmlEntities[character]);
 
+// Same plane separator as backend/cloudline/cloudline_renderer.py.
+const dotted =
+  '<span style="display:inline-block;width:9px;margin:0 2px;border-top:1px dotted #607889;vertical-align:.25em;"></span>';
+const plane =
+  '<span role="img" aria-label="→" style="color:#405a6b;font-family:\'Apple Symbols\',\'Segoe UI Symbol\',\'DejaVu Sans\',sans-serif;' +
+  "font-variant-emoji:text;font-size:.74em;font-weight:400;letter-spacing:0;display:inline-block;white-space:nowrap;vertical-align:.16em;\">" +
+  `${dotted}&#x2708;&#xFE0E;${dotted}</span>`;
+
 function laneOf(fields) {
   const ends = [fields?.origin, fields?.destination].map((code) => code?.trim().toUpperCase());
-  return ends.every(Boolean) ? ends.join(" → ") : ends.find(Boolean) || "Air freight";
+  return ends.every(Boolean) ? ends.map(escape).join(` ${plane} `) : "Freight offer";
 }
 
 /**
@@ -26,7 +34,8 @@ export default function EmailPreview({ body, fields }) {
   const host = useRef(null);
   const html = template
     .replace("$language", "en")
-    .replace("$lane", () => escape(laneOf(fields)))
+    .replace("$lane", () => laneOf(fields))
+    .replace("$cloud_image_url", "/mail-designs/clouds.webp")
     .replace("$message_html", () => `<div style="white-space: pre-wrap;">${escape(body)}</div>`);
 
   useLayoutEffect(() => {
@@ -35,12 +44,13 @@ export default function EmailPreview({ body, fields }) {
     const root = el.shadowRoot || el.attachShadow({ mode: "open" });
     const doc = new DOMParser().parseFromString(html, "text/html");
     const bodyStyle = (doc.body.getAttribute("style") || "").replace(/"/g, "&quot;");
-    root.innerHTML = `<style>:host{display:block}*{box-sizing:border-box}</style><div style="${bodyStyle}">${doc.body.innerHTML}</div>`;
+    const headStyles = [...doc.head.querySelectorAll("style")].map((s) => s.outerHTML).join("");
+    root.innerHTML = `<style>:host{display:block}*{box-sizing:border-box}</style>${headStyles}<div style="${bodyStyle}">${doc.body.innerHTML}</div>`;
   }, [html]);
 
   return (
     <figure className="email-preview">
-      <figcaption>Template preview · Mailbox sends plain text</figcaption>
+      <figcaption>Cloudline preview · Mailbox sends plain text</figcaption>
       <div className="email-frame" ref={host} role="document" aria-label="AEIOU email template preview" />
     </figure>
   );

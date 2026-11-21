@@ -38,6 +38,10 @@ public record Offer(
   }
 
   public Offer addPickup(Shipment s) {
+    return addPickup(s, null);
+  }
+
+  Offer addPickup(Shipment s, Instant pickupExpiry) {
     if (s.pickupZone() == null) return this;
     if (s.pickupEur() == null) throw new IllegalArgumentException("Missing confirmed pickup price");
     return new Offer(
@@ -47,7 +51,8 @@ public record Offer(
         billedKg,
         source,
         rateId,
-        validUntil);
+        pickupExpiry != null && (validUntil == null || pickupExpiry.isBefore(validUntil))
+            ? pickupExpiry : validUntil);
   }
 
   /** Equal price and transit weights among competing airline email bids. */

@@ -7,6 +7,7 @@ import { Chip, RouteBadge } from "../ui/primitives";
 import CargoGlobe from "../globe/CargoGlobe";
 import { globeState, waveSummary } from "../../lib/process";
 import { eur, needsAttention, statusOf } from "../../lib/format";
+import { boardTotal, verdictTone } from "../case/BoardScore";
 import { stagger } from "../../lib/motion";
 
 function Tile({ i, icon, label, value, sub, tone, children }) {
@@ -32,7 +33,7 @@ function Meter({ value }) {
 
 const SOURCE_COLORS = { portal: "var(--blue)", tariff: "var(--accent)", "email bid": "var(--ok)" };
 
-export default function Overview({ messages, now, onOpen }) {
+export default function Overview({ messages, now, onOpen, active = true }) {
   const s = useMemo(() => waveSummary(messages), [messages]);
   const routes = useMemo(
     () =>
@@ -51,6 +52,9 @@ export default function Overview({ messages, now, onOpen }) {
     [messages],
   );
   const attention = messages.filter(needsAttention).slice(0, 4);
+  const boards = messages.map((m) => m.board_result).filter(Boolean);
+  const boardPoints = boards.reduce((sum, b) => sum + (boardTotal(b) ?? 0), 0);
+  const boardWins = boards.filter((b) => verdictTone(b.verdict) === "ok").length;
   const sources = Object.entries(s.bySource || {}).filter(([, n]) => n > 0);
   const sourceTotal = sources.reduce((a, [, n]) => a + n, 0) || 1;
   const topDest = (s.byDestination || []).slice(0, 5);
@@ -69,7 +73,10 @@ export default function Overview({ messages, now, onOpen }) {
               value={s.medianQuoteSeconds != null ? Math.round(s.medianQuoteSeconds) + " s" : "—"} sub="from arrival" />
         <Tile i={4} icon="alert" label="Needs attention" value={s.attention ?? 0} tone={s.attention ? "warn" : undefined}
               sub={(s.expired ?? 0) + " expired"} />
-        <Tile i={5} icon="euro" label="Saved vs next best" value={eur(s.savedVsNext)} sub="sum across quotes" />
+        <Tile i={5} icon="bars" label="5U board points" value={boards.length ? boardPoints : "—"}
+              tone={boards.length ? "ok" : undefined}
+              sub={boards.length ? boardWins + " of " + boards.length + " accepted" : "no verdicts yet"} />
+        <Tile i={6} icon="euro" label="Saved vs next best" value={eur(s.savedVsNext)} sub="sum across quotes" />
       </div>
 
       <div className="overview-main">
@@ -79,7 +86,7 @@ export default function Overview({ messages, now, onOpen }) {
             <span className="muted">{routes.length} shipments · drag to rotate · click a route</span>
           </div>
           <div className="globe-wrap">
-            <CargoGlobe routes={routes} onSelect={onOpen} />
+            <CargoGlobe routes={routes} onSelect={onOpen} paused={!active} />
           </div>
         </motion.section>
 

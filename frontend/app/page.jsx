@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Icon from "./components/ui/Icon";
 import Overview from "./components/overview/Overview";
@@ -34,6 +34,36 @@ function modeLabel(status) {
       timeZone: "Europe/Berlin", hour12: false, hour: "2-digit", minute: "2-digit",
     }) + " Berlin";
   return "Automatic";
+}
+
+/**
+ * A view that stays mounted while hidden. On re-entry its top-level glass panels fade/slide in
+ * individually. Animating the panels themselves (not a wrapper) keeps backdrop-filter working:
+ * an ancestor with opacity < 1 would turn the blur off until the animation ends.
+ */
+function KeptView({ active, children }) {
+  const ref = useRef(null);
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    if (!active) return;
+    if (first.current) {
+      first.current = false; // first mount: components run their own entrance
+      return;
+    }
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const panels = [...ref.current.querySelectorAll(".glass")].filter((g) => !g.parentElement.closest(".glass"));
+    panels.forEach((g, i) =>
+      g.animate(
+        [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "translateY(0)" }],
+        { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)", delay: Math.min(i, 8) * 30, fill: "backwards" },
+      ),
+    );
+  }, [active]);
+  return (
+    <div ref={ref} className="view" hidden={!active}>
+      {children}
+    </div>
+  );
 }
 
 export default function Page() {
@@ -86,6 +116,10 @@ export default function Page() {
     if (p) go(p.patch, p.opts);
   }, [go, pending]);
   const cancelLeave = useCallback(() => setPending(null), []);
+
+  // Views stay mounted after their first visit: switching back is instant (no globe rebuild).
+  const seen = useRef(new Set());
+  seen.current.add(nav.view);
 
   const messages = data?.messages || [];
   const current = messages.find((m) => m.id === nav.caseId);
@@ -151,18 +185,20 @@ export default function Page() {
             {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton glass" />)}
           </div>
         ) : (
-          <AnimatePresence mode="wait">
-            <motion.div key={nav.view} className="view"
-                        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }} transition={spring}>
-              {nav.view === "overview" ? (
-                <Overview messages={messages} now={now} onOpen={(id) => guardedGo({ caseId: id })} />
-              ) : (
-                <Queue messages={messages} now={now} selectedId={nav.caseId} scope={nav.scope}
+          <>
+            {seen.current.has("overview") && (
+              <KeptView active={nav.view === "overview"}>
+                <Overview messages={messages} now={now} active={nav.view === "overview"}
+                          onOpen={(id) => guardedGo({ caseId: id })} />
+              </KeptView>
+            )}
+            {seen.current.has("queue") && (
+              <KeptView active={nav.view === "queue"}>
+                <Queue messages={messages} now={now} selectedId={nav.caseId} scope={nav.scope} active={nav.view === "queue"}
                        setScope={(scope) => go({ scope })} onSelect={(id, opts) => guardedGo({ caseId: id }, opts)} />
-              )}
-            </motion.div>
-          </AnimatePresence>
+              </KeptView>
+            )}
+          </>
         )}
       </main>
 

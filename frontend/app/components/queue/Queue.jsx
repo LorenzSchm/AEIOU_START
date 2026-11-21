@@ -5,11 +5,12 @@ import { AnimatePresence, motion } from "motion/react";
 import Icon from "../ui/Icon";
 import { Chip, CountdownRing, RouteBadge, Segmented } from "../ui/primitives";
 import ProcessStrip from "../case/ProcessStrip";
+import { BoardChip } from "../case/BoardScore";
 import { deriveProcess } from "../../lib/process";
 import { clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
 import { spring } from "../../lib/motion";
 
-export default function Queue({ messages, selectedId, onSelect, now, scope, setScope }) {
+export default function Queue({ messages, selectedId, onSelect, now, scope, setScope, active = true }) {
   const [filter, setFilter] = useState("");
   const top = useMemo(() => messages.filter((m) => !m.root || m.root === m.id), [messages]);
   const exceptions = top.filter(needsAttention);
@@ -21,6 +22,7 @@ export default function Queue({ messages, selectedId, onSelect, now, scope, setS
   );
   // ↑/↓ move through the visible list (Mail-style). Ignored while typing or when an overlay handled the key.
   useEffect(() => {
+    if (!active) return;
     const onKey = (e) => {
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -41,7 +43,7 @@ export default function Queue({ messages, selectedId, onSelect, now, scope, setS
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [list, selectedId, onSelect]);
+  }, [list, selectedId, onSelect, active]);
 
   return (
     <section className="queue glass" aria-label="Queue">
@@ -104,7 +106,10 @@ function Row({ m, messages, now, active, onSelect }) {
           ) : (
             <strong className="row-subject">{m.subject || "(No subject)"}</strong>
           )}
-          <Chip tone={status.tone}>{status.label}</Chip>
+          <span className="row-chips">
+            <BoardChip result={m.board_result} />
+            <Chip tone={status.tone}>{status.label}</Chip>
+          </span>
         </span>
         <span className="row-meta">
           {kindLabel[m.kind] || m.kind} · #{m.id} · {clock(m.received)}

@@ -7,6 +7,7 @@ import EmailPreview from "../../email-preview";
 import Icon from "../ui/Icon";
 import { Chip, CountdownRing, RouteBadge, Section } from "../ui/primitives";
 import OfferBars from "./OfferBars";
+import BoardScore from "./BoardScore";
 import Select from "../ui/Select";
 import Timeline from "./Timeline";
 import { deriveProcess } from "../../lib/process";
@@ -168,6 +169,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro, onD
       )}
 
       <div className="sheet-body">
+        <BoardScore result={m.board_result} />
         {request && proposal?.offer && (
           <div className="hero-quote">
             <div>

@@ -74,15 +74,21 @@ final class ShipmentDocuments {
         addDangerous(latestPacking, dangerous)
             || originalText.type() == PackingSafety.DocumentType.DANGEROUS
             || ledger.delivery("dg-docs:" + Ledger.id(original.get("id"))) != null;
+    var emptyCorrection = new MailParser.PackingCorrection(Set.of(), Set.of(), Set.of());
+    var correction = emptyCorrection;
     for (var message : followUps) {
       var body = new PackingSafety.Document(Ledger.str(message, "body"));
       dangerous.addAll(body.unNumbers());
       dg |= body.type() == PackingSafety.DocumentType.DANGEROUS;
       var attachments = read(message);
-      if (attachments.isEmpty()) continue;
-      dg |= addDangerous(attachments, dangerous);
-      attachments.stream().filter(Objects::nonNull).forEach(followUpDocuments::add);
-      latestPacking = attachments;
+      if (!attachments.isEmpty()) {
+        dg |= addDangerous(attachments, dangerous);
+        attachments.stream().filter(Objects::nonNull).forEach(followUpDocuments::add);
+        latestPacking = attachments;
+        correction = emptyCorrection;
+      }
+      correction = correction.followedBy(
+          MailParser.confirmedPackingCorrection(body.text()).orElse(emptyCorrection));
     }
     if (dg) return dangerousGoods(dangerous, followUpDocuments);
     if (latestPacking.isEmpty()) return new Decision(null, null, null, null);
@@ -112,10 +118,10 @@ final class ShipmentDocuments {
       weights.addAll(doc.grossWeights());
       volumes.addAll(doc.volumes());
     }
-    if (terms.destination() != null) destinations.add(terms.destination());
-    if (terms.weightKg() != null) weights.add(terms.weightKg().stripTrailingZeros());
-    if (terms.volumeCbm() != null) volumes.add(terms.volumeCbm().stripTrailingZeros());
-    if (destinations.size() == 1
+    reconcilePackingValue(destinations, terms.destination(), correction.destinations());
+    boolean weightsReadable = reconcilePackingTotal(weights, terms.weightKg(), correction.weightsKg());
+    boolean volumesReadable = reconcilePackingTotal(volumes, terms.volumeCbm(), correction.volumesCbm());
+    if (weightsReadable && volumesReadable && destinations.size() == 1
         && weights.size() == 1
         && volumes.size() == 1
         && (parsed.issue() == null || parsed.issue().equals(catalog.problem(terms))
@@ -141,6 +147,25 @@ final class ShipmentDocuments {
             + " total volume? I couldn’t reconcile the shipment details in the documents and"
             + " email.",
         null);
+  }
+
+  private static boolean reconcilePackingTotal(
+      Set<BigDecimal> documented, BigDecimal original, Set<String> correction) {
+    var values = new HashSet<BigDecimal>();
+    BigDecimal documentTotal = documented.size() == 1 ? documented.iterator().next() : null;
+    for (String claim : correction) {
+      var value = MailParser.packingNumber(claim, documentTotal);
+      if (value == null) return false;
+      values.add(value);
+    }
+    reconcilePackingValue(documented, original == null ? null : original.stripTrailingZeros(), values);
+    return true;
+  }
+
+  private static <T> void reconcilePackingValue(Set<T> documented, T original, Set<T> correction) {
+    boolean corroborated = documented.size() == 1 && documented.equals(correction);
+    if (original != null && !corroborated) documented.add(original);
+    documented.addAll(correction);
   }
 
   private static boolean addDangerous(List<PackingSafety.Document> documents, Set<String> numbers) {

@@ -1,6 +1,7 @@
 package ai.aeiou.dispatch;
 
 import ai.aeiou.freight.*;
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Pattern;
 import org.slf4j.*;
@@ -13,6 +14,7 @@ class TrackingReplies {
   private static final Logger log = LoggerFactory.getLogger(TrackingReplies.class);
   private static final Pattern REFERENCE =
       Pattern.compile("(?i)\\b(?:BK-[A-Z0-9_-]+|AEIOU-[0-9]+)\\b");
+  private static final Pattern WEIGHT = Pattern.compile("\\b(\\d+(?:[.,]\\d+)?)\\s*KG\\b");
   private static final Pattern STATUS = Pattern.compile("(?im)^Status:[ \\t]*([^\\r\\n]{1,150})$");
   private final Ledger ledger;
   private final WaveWorker worker;
@@ -88,11 +90,35 @@ class TrackingReplies {
                       + "\\b")
               .matcher(upper)
               .find();
+      // Customers often name the pickup postcode instead of the origin airport ("70498 to EZE,
+      // 544 kg"); accept it when the postcode lies in the booked pickup zone and the weight agrees.
+      boolean pickupLane =
+          s.pickupZone() != null
+              && !s.pickupZone().isBlank()
+              && Pattern.compile(
+                      "\\b"
+                          + Pattern.quote(s.pickupZone())
+                          + "\\d{"
+                          + Math.max(0, 5 - s.pickupZone().length())
+                          + "}\\b.{0,55}\\b"
+                          + Pattern.quote(s.destination())
+                          + "\\b")
+                  .matcher(upper)
+                  .find()
+              && weighs(upper, s);
       boolean sameThread = Objects.equals(q.get("root"), m.get("id"));
       if (refs.isEmpty()
-          ? lane || sameThread
+          ? lane || pickupLane || sameThread
           : refs.stream().allMatch(ref -> ref.equals(reference) || ref.equals(team)))
         matches.add(m);
+    }
+    // Repeat bookings on one lane ("MUC to PVG, 134 kg"): the stated weight picks the shipment.
+    if (matches.size() > 1) {
+      var weighed =
+          matches.stream()
+              .filter(m -> weighs(upper, ledger.read(m.get("fields"), Shipment.class)))
+              .toList();
+      if (!weighed.isEmpty()) matches = weighed;
     }
     if (matches.size() != 1) return null;
     var m = matches.getFirst();
@@ -128,7 +154,8 @@ class TrackingReplies {
     if (Pattern.compile("(?i)\\b(?:weight|kg|gewicht)\\b").matcher(question).find())
       detail +=
           " The gross weight is " + s.weightKg().stripTrailingZeros().toPlainString() + " kg.";
-    return "Hi,\n\nThe shipment from "
+    return Greeting.hi(q)
+        + "\n\nThe shipment from "
         + s.origin()
         + " to "
         + s.destination()
@@ -144,5 +171,14 @@ class TrackingReplies {
         + "”."
         + detail
         + "\n\nBest regards,\nTeam AEIOU";
+  }
+
+  private static boolean weighs(String question, Shipment s) {
+    return s.weightKg() != null
+        && WEIGHT
+            .matcher(question)
+            .results()
+            .anyMatch(w -> new BigDecimal(w.group(1).replace(',', '.'))
+                .compareTo(s.weightKg()) == 0);
   }
 }
