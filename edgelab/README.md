@@ -37,8 +37,19 @@ crashes come back as `UNREADABLE` with a note.
 
 `Router` sends each detected type to one named slot: photo (`image/*`), voice (`audio/*`),
 video (`video/*`), container (zip, eml, msg, ...), plain text (`text/plain`), office
-(everything else, the Tika catch-all). Today only plain text is wired; the others answer
+(everything else, the Tika catch-all). Plain text and office are wired; the others answer
 "no ... reader yet". Each later reader replaces its own line in `Router.standard()`.
+
+## Office reader (`ai.aeiou.edgelab.office`)
+
+`OfficeReader` runs Apache Tika on Word, Excel, PowerPoint (old and new), OpenOffice, RTF,
+HTML, CSV, markdown, text in UTF-8 / Latin-1 / Windows-1252, PDF with a text layer, and the
+body of eml/msg mails. Table rows come out one per line, cells joined with ` | `. Numbers keep
+English decimals (2.85). Attachments and embedded files are not opened here; a note lists
+them. A PDF page with almost no text gets the note `page N looks scanned`, and the Reading is
+`partial`; `OfficeReader.extract(...)` returns the pages so the photo reader can render them.
+eml/msg are routed to the container slot; until the container walker exists they only read
+when the office reader is called directly.
 
 ## Backend guard
 

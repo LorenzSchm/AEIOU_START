@@ -50,7 +50,7 @@ public final class Router {
                 .withVideo(FormatReader.notYetSupported("video"))          // ticket: video reader
                 .withContainer(FormatReader.notYetSupported("container"))  // ticket: container walker
                 .withPlainText(new PlainTextReader())
-                .withOffice(FormatReader.notYetSupported("office"));       // ticket: Tika catch-all
+                .withOffice(new ai.aeiou.edgelab.office.OfficeReader());   // ticket 04: Tika catch-all
     }
 
     /** Every slot set to "not yet supported". */
