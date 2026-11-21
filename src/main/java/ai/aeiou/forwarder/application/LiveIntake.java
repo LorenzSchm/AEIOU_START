@@ -186,11 +186,28 @@ public class LiveIntake {
             .toList();
     var lane = ShipmentFacts.extract(text);
     boolean hasLane = lane.has("origin") && lane.has("destination");
-    if (refs.isEmpty() && threads.isEmpty() && !hasLane) return false;
+    var postal = Pattern.compile("\\b(\\d{5})\\s+(?i:to|nach)\\s+([A-Z]{3})\\b").matcher(text);
+    boolean hasPostal = postal.find();
+    var weights = Pattern.compile("(?i)\\b(\\d+(?:[.,]\\d+)?)\\s*kg\\b").matcher(text);
+    var reportedWeights =
+        weights
+            .results()
+            .map(x -> new BigDecimal(x.group(1).replace(',', '.')).stripTrailingZeros())
+            .distinct()
+            .toList();
+    if (refs.isEmpty() && threads.isEmpty() && !hasLane && !hasPostal) return false;
     ObjectNode match = null;
     for (var data : flow.store.read("select data from shipment")) {
       var d = (ObjectNode) data;
       if (!d.has("booking") || (!threads.isEmpty() && !threads.contains(sid(d)))) continue;
+      if (hasPostal
+          && (!postal.group(1).equals(d.at("/inputs/pickupPostcode").asText())
+              || !postal.group(2).equals(str(session(d), "destination")))) continue;
+      if (!reportedWeights.isEmpty()
+          && (!d.path("inputs").has("grossKg")
+              || reportedWeights.stream()
+                  .anyMatch(w -> w.compareTo(Pricing.decimal(d.get("inputs"), "grossKg")) != 0)))
+        continue;
       if (hasLane
           && (!str(lane, "origin").equals(str(session(d), "origin"))
               || !str(lane, "destination").equals(str(session(d), "destination")))) continue;
@@ -396,11 +413,17 @@ public class LiveIntake {
           && (!d.get("booking").has("bookingReference")
               || ref.group().equals(d.at("/booking/bookingReference").asText()))) {
         boolean confirmed =
-            Pattern.compile(
-                        "(?i)\\b(?:booking (?:is |has been )?confirmed|confirm(?:ed)? (?:your |the"
-                            + " )?booking|booking confirmation)\\b")
-                    .matcher(fresh)
-                    .find()
+            (Pattern.compile(
+                            "(?i)\\bbooking\\s+"
+                                + Pattern.quote(ref.group())
+                                + "\\s+is confirmed\\b")
+                        .matcher(fresh)
+                        .find()
+                    || Pattern.compile(
+                            "(?i)\\b(?:booking (?:is |has been )?confirmed|confirm(?:ed)? (?:your"
+                                + " |the )?booking|booking confirmation)\\b")
+                        .matcher(fresh)
+                        .find())
                 && !fresh
                     .toLowerCase(Locale.ROOT)
                     .matches(
@@ -413,7 +436,8 @@ public class LiveIntake {
       m.put("category", "BOOKING");
     } else if (carrier) {
       m.put("category", "BID");
-      bid(d, m, at);
+      if (recordLaneRefusal(d, m, at)) source(d, at);
+      else bid(d, m, at);
       scheduleFast(d);
     }
     attachments(d, m, raw, at);
@@ -429,6 +453,8 @@ public class LiveIntake {
       if (!aid.matches("[0-9]+")) continue;
       String name = first(a, "filename", "name").replaceAll("[^\\p{L}\\p{N}._ -]", "_");
       String local = str(m, "id") + "_" + aid;
+      if (Set.of("RFQ", "CORRECTION").contains(str(m, "category")))
+        d.withObject("/pendingSourceDocs").put(local, true);
       var meta =
           obj(
               "id",
@@ -454,11 +480,45 @@ public class LiveIntake {
     flow.store.db.update("update mail set data=? where id=?", m.toString(), str(m, "id"));
   }
 
+  private boolean recordLaneRefusal(ObjectNode d, ObjectNode m, Instant at) {
+    var s = session(d);
+    String route = str(s, "origin") + "-" + str(s, "destination");
+    String email = str(m, "from");
+    var c = flow.catalog.byEmail(email);
+    String parent = sid(d) + "_r" + d.path("requestRevision").asInt() + "-" + email;
+    if (c.isEmpty() || !c.get().kind().equals("airline") || !parent.equals(str(m, "parentId")))
+      return false;
+    var denied =
+        Pattern.compile(
+                "(?i)\\b(?:do not|don't) serve (?:this |the )?(?:lane/zone|lane|route)\\s*:\\s*"
+                    + Pattern.quote(route)
+                    + "\\b")
+            .matcher(ShipmentFacts.fresh(str(m, "bodyText")));
+    if (!denied.find()) return false;
+    String key = "refusal:" + route + ":" + email;
+    String data =
+        obj(
+                "route",
+                route,
+                "email",
+                email,
+                "date",
+                at.atZone(ZoneOffset.UTC).toLocalDate().toString(),
+                "evidence",
+                str(m, "id"))
+            .toString();
+    if (flow.store.db.update("update upstream_state set data=? where name=?", data, key) == 0)
+      flow.store.db.update("insert into upstream_state(name,data) values(?,?)", key, data);
+    return true;
+  }
+
   private void source(ObjectNode d, Instant at) {
     var s = session(d);
     var facts = d.get("inputs");
     int rev = d.get("requestRevision").asInt();
     if (!flow.clock.now().isBefore(deadline(d))
+        || facts.has("dgReference")
+        || facts.path("lotManifestIncomplete").asBoolean()
         || !facts.has("grossKg")
         || !facts.has("volumeCbm")
         || !s.has("destination")
@@ -481,7 +541,19 @@ public class LiveIntake {
       if (str(lane, "origin").equals(str(s, "origin"))
           && str(lane, "destination").equals(str(s, "destination")))
         for (var airline : lane.path("airlines")) knownCarriers.add(str(airline, "name"));
-    for (var c : flow.catalog.contacts("airline", str(s, "destination"), knownCarriers))
+    if (d.has("quote") || !str(s, "phase").equals("SOURCING")) return;
+    String route = str(s, "origin") + "-" + str(s, "destination");
+    var denied = new HashSet<String>();
+    for (var entry :
+        flow.store.read(
+            "select data from upstream_state where name like ?", "refusal:" + route + ":%"))
+      if (str(entry, "date")
+          .equals(flow.clock.now().atZone(ZoneOffset.UTC).toLocalDate().toString()))
+        denied.add(str(entry, "email"));
+    var solicited = d.withObject("/airSolicitations").withObject("/" + rev);
+    for (var c : flow.catalog.contacts("airline", str(s, "destination"), knownCarriers, denied)) {
+      if (solicited.has(c.email()) || solicited.size() >= 8) continue;
+      solicited.put(c.email(), true);
       flow.queueMail(
           d,
           "r" + rev + "-" + c.email(),
@@ -492,6 +564,8 @@ public class LiveIntake {
               + manifest
               + ".",
           at);
+    }
+    flow.store.save(d);
     if (str(s, "scope").equals("DOOR_TO_PORT") && facts.has("pickupPostcode"))
       for (var c : flow.catalog.contacts("trucker", str(facts, "zone")))
         flow.queueMail(
@@ -852,6 +926,8 @@ public class LiveIntake {
                     text.substring(0, Math.min(text.length(), 6000)),
                     "at",
                     at.toString());
+            if (d.has("pendingSourceDocs"))
+              ((ObjectNode) d.get("pendingSourceDocs")).remove(str(m, "id"));
             var extra = ShipmentFacts.extract(text);
             extra.remove("language");
             for (String key : List.of("grossKg", "volumeCbm")) {
@@ -880,6 +956,8 @@ public class LiveIntake {
               session(d).get("version").asInt());
         }
       }
+      if (d.path("inputs").has("dgReference")
+          || d.at("/latestDecision/action").asText().equals("WAIT")) flow.decide(d, at);
       flow.store.changed(d, "MESSAGE", "Attachment available", at);
       return;
     }

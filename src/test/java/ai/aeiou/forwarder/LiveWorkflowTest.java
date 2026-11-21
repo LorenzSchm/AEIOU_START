@@ -98,6 +98,16 @@ class LiveWorkflowTest {
     JsonNode result = obj();
     int status = 200;
     switch (path) {
+      case "/v1/mailbox/messages/700/attachments/1" -> {
+        byte[] file =
+            "Packing specification\nDangerous goods: UN1133, Class 3, Adhesives"
+                .getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(200, file.length);
+        try (var out = ex.getResponseBody()) {
+          out.write(file);
+        }
+        return;
+      }
       case "/v1/me" -> result = obj("mailbox", "aeiou@hackloop.mail");
       case "/v1/gateway/openai-key" -> {
         if (!method.equals("GET")) violations.add("Provisioning attempted");
@@ -280,7 +290,7 @@ class LiveWorkflowTest {
         inbound(
             201,
             "yellowtail-air-freight@hackloop.mail",
-            "Booking confirmed for AE-1: BK-ABC12345.",
+            "Your booking BK-ABC12345 is confirmed. Your reference: AE-1.",
             null));
     waitFor(() -> store.shipment("s_1").at("/session/phase").asText().equals("BOOKED"));
     offset.set(50);
@@ -403,6 +413,122 @@ class LiveWorkflowTest {
     assertEquals("32", str(scores.getFirst(), "costPoints"));
     assertEquals("-1", str(scores.getFirst(), "adjustmentPoints"));
     assertEquals("88.5", str(scores.getFirst(), "totalPoints"));
+  }
+
+  @Test
+  @Order(6)
+  void replacesAnAirlineThatRefusesTheLane() {
+    inbox.add(
+        inbound(
+            600,
+            "lane-buyer@hackloop.mail",
+            "Fastest freight option to JFK. Ready for pickup on 2026-11-25 from 61018. 6 pieces,"
+                + " 1233 kg and 10.78 cbm.",
+            null));
+    waitFor(
+        () ->
+            sent.stream()
+                    .filter(
+                        m ->
+                            str(m, "body").contains("AE-600")
+                                && str(m, "body").contains("booking instructions for"))
+                    .count()
+                == 5);
+    var original =
+        sent.stream()
+            .filter(
+                m ->
+                    str(m, "to").equals("cobalt-skylift@hackloop.mail")
+                        && str(m, "body").contains("AE-600"))
+            .findFirst()
+            .orElseThrow();
+    inbox.add(
+        inbound(
+            601,
+            str(original, "to"),
+            "We do not serve this lane/zone: FRA-JFK. We fly DUS-JFK.",
+            original.path("id").asLong()));
+    waitFor(
+        () ->
+            sent.stream()
+                    .filter(
+                        m ->
+                            str(m, "body").contains("AE-600")
+                                && str(m, "body").contains("booking instructions for"))
+                    .count()
+                == 6);
+    assertEquals(
+        1,
+        sent.stream()
+            .filter(
+                m -> str(m, "to").equals(str(original, "to")) && str(m, "body").contains("AE-600"))
+            .count());
+  }
+
+  @Test
+  @Order(7)
+  void asksForDocumentsWhenPackingListContradictsEmail() {
+    var mail =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            inbound(
+                700,
+                "docs-buyer@hackloop.mail",
+                "Cheapest airport-to-airport MUC to LAX. 100 kg gross, 0.2 cbm. General cargo,"
+                    + " non-dangerous. Packing list attached.",
+                null);
+    mail.withArray("attachments")
+        .add(obj("id", 1, "filename", "packing.txt", "size", 67, "content_type", "text/plain"));
+    inbox.add(mail);
+    waitFor(() -> sent.stream().anyMatch(m -> str(m, "to").equals("docs-buyer@hackloop.mail")));
+    var answer =
+        sent.stream()
+            .filter(m -> str(m, "to").equals("docs-buyer@hackloop.mail"))
+            .findFirst()
+            .orElseThrow();
+    for (String phrase : List.of("UN1133", "declaration", "safety data sheet"))
+      assertTrue(str(answer, "body").contains(phrase));
+    assertEquals(700, answer.path("in_reply_to").asLong());
+    offset.addAndGet(46);
+    worker.tick();
+    assertFalse(store.shipment("s_700").has("quote"));
+    assertEquals(
+        1, sent.stream().filter(m -> str(m, "to").equals("docs-buyer@hackloop.mail")).count());
+  }
+
+  @Test
+  @Order(8)
+  void postalTrackingRequiresAUniqueBookedShipmentWithTheReportedWeight() {
+    for (int kg : List.of(1952, 730)) {
+      var shipment = store.shipment("s_1").deepCopy();
+      shipment
+          .withObject("/session")
+          .put("id", "s_postal_" + kg)
+          .put("origin", "FRA")
+          .put("destination", "LOS");
+      shipment.withObject("/inputs").put("pickupPostcode", "36627").put("grossKg", kg);
+      shipment.withObject("/booking").put("bookingReference", "BK-LOCAL" + kg);
+      store.save(shipment);
+    }
+    var weights = List.of("1952 kg", "731 kg", "weight unknown");
+    for (int i = 0; i < weights.size(); i++) {
+      var question =
+          (com.fasterxml.jackson.databind.node.ObjectNode)
+              inbound(
+                  800 + i,
+                  "tracking@hackloop.mail",
+                  "Please give us the latest status. " + weights.get(i),
+                  null);
+      question.put("subject", "Status of shipment 36627 to LOS");
+      inbox.add(question);
+    }
+    waitFor(() -> sent.stream().anyMatch(m -> m.path("in_reply_to").asLong() == 800));
+    assertEquals(
+        "s_postal_1952",
+        store.db.queryForObject("select shipment_id from mail where id='m_800'", String.class));
+    assertEquals(
+        0,
+        store.db.queryForObject(
+            "select count(*) from mail where id in ('m_801','m_802')", Integer.class));
   }
 
   JsonNode solicitation(String to) {

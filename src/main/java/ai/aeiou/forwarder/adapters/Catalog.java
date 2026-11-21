@@ -107,8 +107,15 @@ public class Catalog {
   }
 
   public List<Contact> contacts(String kind, String coverage, Set<String> preferred) {
+    return contacts(kind, coverage, preferred, Set.of());
+  }
+
+  public List<Contact> contacts(
+      String kind, String coverage, Set<String> preferred, Set<String> excluded) {
     return directory.stream()
-        .filter(c -> c.kind.equals(kind) && c.serves.contains(coverage))
+        .filter(
+            c ->
+                c.kind.equals(kind) && c.serves.contains(coverage) && !excluded.contains(c.email()))
         .sorted(Comparator.comparing(c -> !preferred.contains(c.name())))
         .limit(5)
         .toList();

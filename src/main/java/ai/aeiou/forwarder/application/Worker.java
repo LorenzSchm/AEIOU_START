@@ -179,6 +179,10 @@ public class Worker implements ApplicationRunner {
         state(j, "CANCELLED", at);
         return j;
       }
+      if (j.key.equals(j.id + ":dg-documents") && !at.isBefore(deadline(d))) {
+        state(j, "CANCELLED", at);
+        return j;
+      }
       boolean stale =
           quote
               && (flow.chosen(d).has("validUntil")

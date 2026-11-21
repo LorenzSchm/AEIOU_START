@@ -442,6 +442,31 @@ public class Workflow {
   public void decide(ObjectNode d, Instant at) {
     var s = session(d);
     if (!str(s, "phase").equals("SOURCING") || d.has("quote")) return;
+    var facts = d.path("inputs");
+    if (facts.has("dgReference")
+        && !d.has("dgRequest")
+        && str(s, "control").equals("AUTO")
+        && at.isBefore(deadline(d))) {
+      String ref = str(facts, "dgReference");
+      boolean de = str(s, "language").equals("de");
+      String body =
+          de
+              ? "Guten Tag,\n\nin den Sendungsunterlagen steht "
+                  + ref
+                  + ". Bitte senden Sie uns die Gefahrguterklärung des Versenders und das"
+                  + " Sicherheitsdatenblatt, damit wir die Beförderung mit der Airline klären"
+                  + " können.\n\n"
+                  + "Viele Grüße\n"
+                  + "Team AEIOU"
+              : "Hello,\n\nThe shipment documents list "
+                  + ref
+                  + ". Could you send the shipper’s declaration for dangerous goods and the safety"
+                  + " data sheet so we can check carriage with the airline?\n\n"
+                  + "Best regards,\n"
+                  + "Team AEIOU";
+      queueMail(d, "dg-documents", "OTHER", str(d, "customer"), str(d, "parent"), body, at);
+      d.put("dgRequest", ref);
+    }
     shadow.evaluate(d, at);
     String cutoff = Long.toString(store.cursor());
     var winner =
@@ -451,6 +476,11 @@ public class Workflow {
             at,
             d.get("requestRevision").asInt(),
             str(d, "pin"));
+    boolean documentsPending = !d.path("pendingSourceDocs").isEmpty();
+    if (documentsPending
+        || facts.has("dgReference")
+        || d.has("dgRequest")
+        || facts.path("lotManifestIncomplete").asBoolean()) winner = Optional.empty();
     boolean paused = str(s, "control").equals("PAUSED");
     if (!at.isBefore(deadline(d))
         || (!paused
@@ -541,7 +571,13 @@ public class Workflow {
           decision(
               "WAIT",
               at,
-              paused ? "Operator pause" : "Waiting for a complete offer",
+              paused
+                  ? "Operator pause"
+                  : facts.has("dgReference")
+                      ? "Awaiting dangerous goods documentation and carrier approval"
+                      : documentsPending
+                          ? "Reviewing shipment attachment"
+                          : "Waiting for a complete offer",
               cutoff,
               null,
               wake));

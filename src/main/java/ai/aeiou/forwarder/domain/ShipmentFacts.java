@@ -170,6 +170,75 @@ public class ShipmentFacts {
     if (zone.find()) result.put("zone", zone.group(1)).put("pickupPostcode", zone.group());
     result.put(
         "language", lower.matches("(?s).*(bitte|günstig|schnellst|abholung).*") ? "de" : "en");
+    if (lower.matches("(?s).*\\bwe(?:['’]ll| will) (?:deliver|bring) [^.]{0,90}\\bourselves\\b.*"))
+      result.put("scope", "AIRPORT_TO_AIRPORT");
+    var dg = Pattern.compile("(?i)\\bUN[ -]?(\\d{4})\\b").matcher(text);
+    if (dg.find()) result.put("dgReference", "UN" + dg.group(1));
+    aggregateLots(text, result);
     return result;
+  }
+
+  private static final Pattern LOT =
+      Pattern.compile("(?im)^\\s*Lot\\s+(\\d+)\\s*:\\s*([^\\r\\n]+)");
+  private static final String Q = "(\\d+(?:[.,]\\d+)?)";
+  private static final Pattern LINE =
+      Pattern.compile(
+          "(?i)^(\\d{1,5})\\s+(?:pieces?|pcs|drums?|cartons?|cases?|boxes|packages?),\\s*"
+              + "(?:(each|together)\\s+)?(?:gross weight\\s+)?"
+              + Q
+              + "\\s*kg(?:\\s+gross)?(?:\\s*\\(\\d+(?:[.,]\\d+)?\\s*kg net\\))?,\\s*"
+              + "(?:(each|together)\\s+)?(?:volume\\s+)?"
+              + Q
+              + "(?:\\s*(cbm|m³|m3)|\\s*[x×]\\s*"
+              + Q
+              + "\\s*[x×]\\s*"
+              + Q
+              + "\\s*(cm))\\s*[.;]?$");
+
+  private static void aggregateLots(String text, ObjectNode facts) {
+    var rows = LOT.matcher(text);
+    if (!rows.find()) return;
+    // A partial lot is never a shipment total. Only publish the complete manifest.
+    facts.remove(
+        List.of(
+            "grossKg",
+            "grossAlternatives",
+            "volumeCbm",
+            "volumeAlternatives",
+            "pieces",
+            "packages"));
+    facts.put("lotManifestIncomplete", true);
+    var numbers = new HashSet<String>();
+    int count = 0;
+    BigDecimal kg = BigDecimal.ZERO, cube = BigDecimal.ZERO;
+    do {
+      var row = LINE.matcher(rows.group(2).strip());
+      if (!row.matches() || !numbers.add(rows.group(1))) return;
+      int pieces = Integer.parseInt(row.group(1));
+      if (pieces < 1) return;
+      var weight = number(row.group(3));
+      var volume = number(row.group(5));
+      if (row.group(6) == null) {
+        if (pieces > 1 && !"each".equalsIgnoreCase(row.group(4))) return;
+        volume =
+            volume.multiply(number(row.group(7))).multiply(number(row.group(8))).movePointLeft(6);
+      }
+      kg =
+          kg.add(
+              "each".equalsIgnoreCase(row.group(2))
+                  ? weight.multiply(BigDecimal.valueOf(pieces))
+                  : weight);
+      cube =
+          cube.add(
+              "each".equalsIgnoreCase(row.group(4))
+                  ? volume.multiply(BigDecimal.valueOf(pieces))
+                  : volume);
+      count += pieces;
+    } while (rows.find());
+    facts
+        .put("lotManifestIncomplete", false)
+        .put("pieces", count)
+        .put("grossKg", kg.stripTrailingZeros().toPlainString())
+        .put("volumeCbm", cube.stripTrailingZeros().toPlainString());
   }
 }

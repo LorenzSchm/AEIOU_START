@@ -102,6 +102,41 @@ class DomainTest {
         str(Pricing.choose(values, "CHEAPEST", Instant.EPOCH, 1, "").orElseThrow(), "id"));
   }
 
+  @Test
+  void consolidatesAllLotsWithGrossAndPerPieceUnits() {
+    for (var fixture :
+        List.of(
+            List.of(
+                "Lot 1: 1 piece, gross weight 618 kg, volume 0.74 cbm\n"
+                    + "Lot 2: 1 piece, gross weight 380 kg, volume 1.65 cbm",
+                "998",
+                "2.39",
+                "2"),
+            List.of(
+                "Lot 1: 9 pieces, 345 kg gross, 0.58 cbm\nLot 2: 2 pieces, 141 kg gross, 2.04 cbm",
+                "486",
+                "2.62",
+                "11"),
+            List.of(
+                "Lot 1: 4 drums, together 730 kg gross (642 kg net), together 1.68 cbm\n"
+                    + "Lot 2: 4 cartons, each 48 kg gross (41 kg net), each 110 x 110 x 52 cm\n"
+                    + "Lot 3: 5 cases, each 206 kg gross (191 kg net), each 120 x 100 x 8 cm",
+                "1952",
+                "4.6768",
+                "13"))) {
+      var facts = ShipmentFacts.extract(fixture.getFirst());
+      assertFalse(facts.get("lotManifestIncomplete").asBoolean());
+      assertEquals(fixture.get(1), str(facts, "grossKg"));
+      assertEquals(fixture.get(2), str(facts, "volumeCbm"));
+      assertEquals(fixture.get(3), str(facts, "pieces"));
+    }
+    var partial =
+        ShipmentFacts.extract("Lot 1: 9 pieces, 345 kg gross, 0.58 cbm\nLot 2: pending details");
+    assertTrue(partial.get("lotManifestIncomplete").asBoolean());
+    assertFalse(partial.has("grossKg"));
+    assertFalse(partial.has("volumeCbm"));
+  }
+
   private com.fasterxml.jackson.databind.JsonNode candidate(
       String id, String source, String total, int days) {
     return obj(
