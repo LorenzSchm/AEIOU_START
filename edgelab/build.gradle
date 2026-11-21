@@ -13,6 +13,7 @@ repositories { mavenCentral() }
 java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 
 dependencies {
+    implementation project(':packing-tools')
     // Content-based type detection (magic bytes). Text extraction for office
     // formats (tika-parsers) arrives with the office reader ticket.
     api 'org.apache.tika:tika-core:3.2.3'
