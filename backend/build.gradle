@@ -1,0 +1,13 @@
+plugins {
+    id 'org.springframework.boot' version '3.5.16' apply false
+}
+
+subprojects {
+    apply plugin: 'java'
+    group = 'ai.aeiou'
+    version = '0.1.0'
+    repositories { mavenCentral() }
+    java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+    tasks.withType(JavaCompile).configureEach { options.compilerArgs.add('-parameters') }
+    tasks.withType(Test).configureEach { useJUnitPlatform() }
+}

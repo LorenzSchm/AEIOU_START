@@ -2,7 +2,7 @@ name,kind,email,serves
 Aurelia Air Cargo,airline,aurelia-air-cargo@hackloop.mail,CAI EZE LAX LIM MEL MIA NBO ORD RUH SCL SIN TLV YYZ
 Borealis Freight Airways,airline,borealis-freight-airways@hackloop.mail,CAI DEL LIM NRT ORD PEK SCL SGN SYD YYZ
 Cobalt Skylift,airline,cobalt-skylift@hackloop.mail,BOG BOM DEL EZE ICN JFK JNB LIM MEL MEX MIA RUH SGN SIN SYD TPE YYZ
-Danube Wings Cargo,airline,danube-wings-cargo@hackloop.mail,DXB EZE JNB MEX SGN SYD TPE YYZ
+Danube Wings Cargo,airline,danube-wings-cargo@hackloop.mail,DXB EZE JNB MEX SGN SYD TPE     
 Elbflug Air Freight,airline,elbflug-air-freight@hackloop.mail,BOG DFW DXB HKG LOS MEL MEX MIA ORD PVG SGN SIN SYD TLV
 Fjordline Air Cargo,airline,fjordline-air-cargo@hackloop.mail,ATL BOM DEL EZE GRU JFK JNB KUL LAX NBO SIN TLV
 Gannet Airways,airline,gannet-airways@hackloop.mail,ICN LAX PEK TLV

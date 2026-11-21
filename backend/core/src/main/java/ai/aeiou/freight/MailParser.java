@@ -1,0 +1,226 @@
+package ai.aeiou.freight;
+
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.regex.*;
+
+public final class MailParser {
+  private static final String NUM = "(?<![\\w.,-])(\\d+(?:[.,]\\d+)*)(?![.,]\\d)";
+
+  private static final Pattern STREET_POSTCODE =
+      Pattern.compile(
+          "(?iu:\\b(?:PLZ|post\\s*code|postal code|zip(?: code)?)\\s*[:#-]?\\s*)([0-9]{5})\\b"
+              + "|(?<![\\p{L}\\d.,])(?:D-)?([0-9]{5})\\h+\\(?(?=\\p{Lu}\\p{Ll})");
+
+  public static Optional<String> pickupPostcode(String text, String zone) {
+    var candidates =
+        STREET_POSTCODE
+            .matcher(text)
+            .results()
+            .map(m -> m.group(1) != null ? m.group(1) : m.group(2))
+            .filter(code -> code.startsWith(zone))
+            .distinct()
+            .toList();
+    return candidates.size() == 1 ? Optional.of(candidates.getFirst()) : Optional.empty();
+  }
+
+  private static Pattern pattern(String s) {
+    return Pattern.compile(s, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+  }
+
+  private static boolean has(String s, String regex) {
+    return pattern(regex).matcher(s).find();
+  }
+
+  private static List<String> captures(String text, String regex) {
+    return pattern(regex).matcher(text).results().map(m -> m.group(1)).toList();
+  }
+
+  private static BigDecimal number(String raw) {
+    if (raw == null) return null;
+    if (raw.matches("[1-9]\\d*[.,]\\d{3}")) return null;
+    if (raw.matches("\\d{1,3}(,\\d{3})+\\.\\d{1,2}")) raw = raw.replace(",", "");
+    if (raw.matches("\\d{1,3}(\\.\\d{3})+,\\d{1,2}")) raw = raw.replace(".", "");
+    try {
+      return new BigDecimal(raw.replace(',', '.'));
+    } catch (NumberFormatException ex) {
+      return null;
+    }
+  }
+
+  private static String only(Collection<String> values) {
+    var unique = new HashSet<>(values);
+    return unique.size() == 1 ? unique.iterator().next() : null;
+  }
+
+  private static BigDecimal quantity(String text, String unit) {
+    var values = captures(text, NUM + "\\s*(?:" + unit + ")\\b");
+    return values.size() == 1 ? number(values.getFirst()) : null;
+  }
+
+  private static BigDecimal dimensions(String text) {
+    var dims =
+        pattern(
+                "(\\d+(?:[.,]\\d+)?)\\s*[x×]\\s*(\\d+(?:[.,]\\d+)?)\\s*[x×]\\s*(\\d+(?:[.,]\\d+)?)\\s*(cm|mm|m)\\b")
+            .matcher(text)
+            .results()
+            .toList();
+    var counts =
+        captures(
+            text,
+            "\\b(\\d+)\\s*(?:pallets?|pieces?|pcs|crates?|cartons?|boxes|box|colli|paletten|kisten)\\b");
+    if (dims.size() != 1 || counts.size() != 1) return null;
+    var match = dims.getFirst();
+    int scale =
+        switch (match.group(4).toLowerCase(Locale.ROOT)) {
+          case "mm" -> 9;
+          case "cm" -> 6;
+          default -> 0;
+        };
+    var total = new BigDecimal(counts.getFirst());
+    for (int i = 1; i <= 3; i++) {
+      var n = number(match.group(i));
+      if (n == null) return null;
+      total = total.multiply(n);
+    }
+    return total.movePointLeft(scale);
+  }
+
+  private static final Map<String, String> CITIES =
+      Map.ofEntries(
+          Map.entry("Frankfurt", "FRA"),
+          Map.entry("Munich|München", "MUC"),
+          Map.entry("Stuttgart", "STR"),
+          Map.entry("Hamburg", "HAM"),
+          Map.entry("Düsseldorf|Duesseldorf", "DUS"),
+          Map.entry("Cologne|Köln", "CGN"),
+          Map.entry("Los Angeles", "LAX"),
+          Map.entry("Chicago", "ORD"),
+          Map.entry("Miami", "MIA"),
+          Map.entry("Toronto", "YYZ"),
+          Map.entry("Dallas", "DFW"),
+          Map.entry("Hong Kong", "HKG"),
+          Map.entry("Singapore", "SIN"),
+          Map.entry("Nairobi", "NBO"),
+          Map.entry("Johannesburg", "JNB"),
+          Map.entry("Lima", "LIM"),
+          Map.entry("Bangkok", "BKK"),
+          Map.entry("Dubai", "DXB"),
+          Map.entry("Sydney", "SYD"),
+          Map.entry("Melbourne", "MEL"),
+          Map.entry("Mexico City", "MEX"));
+
+  private static List<String> cityCodes(String text, Collection<String> valid) {
+    return CITIES.entrySet().stream()
+        .filter(e -> valid.contains(e.getValue()) && has(text, "\\b(?:" + e.getKey() + ")\\b"))
+        .map(Map.Entry::getValue)
+        .distinct()
+        .toList();
+  }
+
+  public record Parsed(Shipment shipment, String issue) {}
+
+  public static Parsed request(String subject, String body, boolean attachments, Catalog catalog) {
+    String text = subject + "\n" + body;
+    var codes = captures(text.toUpperCase(Locale.ROOT), "\\b([A-Z]{3})\\b");
+    var origins = codes.stream().filter(catalog.zones::containsValue).distinct().toList();
+    var destinations = codes.stream().filter(catalog.destinations::contains).distinct().toList();
+    if (origins.isEmpty()) origins = cityCodes(text, catalog.zones.values());
+    if (destinations.isEmpty()) destinations = cityCodes(text, catalog.destinations);
+    boolean pickup =
+        has(text, "pick[ -]?up|collect(?:ion)?\\b|door[ -]to|abhol|vorlauf|ex[ -]?works|\\bEXW\\b");
+    var zones =
+        new ArrayList<>(
+            captures(
+                text,
+                "\\b(?:zone|PLZ|postal code|post ?code|zip(?:"
+                    + " code)?)\\s*[:#-]?\\s*(\\d{2})(?:\\d{3})?\\b"));
+    if (pickup) zones.addAll(captures(text, "\\b(\\d{2})\\d{3}\\b"));
+    String zone = only(zones);
+    String origin = origins.isEmpty() ? catalog.zones.get(zone) : only(origins);
+    boolean fast = has(text, "fastest|quickest|shortest|schnellst|prioriti[sz]e speed");
+    boolean cheap =
+        has(
+            text,
+            "cheapest|lowest|economical|günstig|preiswert|best price|most economical|prioriti[sz]e"
+                + " (?:price|cost)");
+    var volume = quantity(body, "cbm|m³|m3|cubic met(?:er|re)s?");
+    if (volume == null && !has(body, "\\b(?:cbm|m³|m3)\\b")) volume = dimensions(body);
+    var shipment =
+        new Shipment(
+            origin,
+            only(destinations),
+            quantity(body, "kg|kgs|kilograms?"),
+            volume,
+            fast == cheap ? null : fast ? "fastest" : "cheapest",
+            zone,
+            null,
+            0);
+    String issue = catalog.problem(shipment);
+    if (attachments) issue = "Review the attached shipment specifications.";
+    else if (has(
+        text,
+        "dangerous|hazardous|lithium|temperature.control|dry ice|gefahrgut|perishable|refrigerat"))
+      issue = "Special handling needs a confirmed price.";
+    else if ((pickup || !zones.isEmpty()) && zone == null)
+      issue = "Pickup requested. Confirm the pickup postcode or zone.";
+    else if (has(
+        body,
+        "(?:\\d+\\s*[x×]\\s*\\d+(?:[.,]\\d+)?\\s*kg)|(?:kg|kgs)\\s*(?:each|per"
+            + " (?:piece|pallet|crate))|(?:each|per piece)\\s*[:=]?\\s*\\d+[.,\\d]*\\s*kg"))
+      issue = "Confirm total gross weight. The request gives a per-piece weight.";
+    else if (!has(
+        text,
+        "\\b(?:rfq|quot(?:e|ation)|rat(?:e|es)|pric(?:e|ing)|angebot|anfrage|freight|airfreight|versand)\\b"))
+      issue = "Confirm that this message requests a freight quote.";
+    return new Parsed(shipment, issue);
+  }
+
+  public record Bid(BigDecimal euros, Double days) {}
+
+  /**
+   * Never promote a per-kg, provisional, mixed-currency or multi-option number to an all-in price.
+   */
+  public static Optional<Bid> bid(String body, boolean truck) {
+    String text =
+        body.split("(?im)^\\s*(?:>|On .+ wrote:|Am .+ schrieb|-----Original Message-----)", 2)[0];
+    if (has(
+        text,
+        "\\b(?:USD|GBP|CHF|plus|excluding|excluded|estimate|estimated"
+            + " price|indicative|unavailable|unable|cannot|decline|separately|additional"
+            + " charges|starting at|extras"
+            + " apply)\\b|\\+\\s*(?:VAT|fuel|security)|(?:per|/)\\s*(?:kg|km|pallet)|\\bsubject"
+            + " to\\b")) return Optional.empty();
+    var amounts = new ArrayList<>(captures(text, "(?:\\bEUR\\s*|€\\s*)" + NUM));
+    amounts.addAll(captures(text, NUM + "\\s*(?:EUR\\b|€)"));
+    var price = number(only(amounts));
+    if (price == null || price.signum() <= 0) return Optional.empty();
+    // A range, or separate options with different transit times, requires review.
+    if (has(
+        text, "\\d+\\s*(?:-|–|to)\\s*\\d+\\s*(?:business |working )?(?:days?|tage?|hours?|hrs?|h)"))
+      return Optional.empty();
+    String timing =
+        pattern(
+                "(?:valid(?:ity)?|gültig)\\s*(?:for|of|:)?\\s*\\d+\\s*(?:days?|tage?|hours?|hrs?|h)\\b")
+            .matcher(text)
+            .replaceAll("");
+    var transit =
+        captures(
+            timing, "\\b(\\d{1,2})\\s*(?:business |working |calendar )?(?:days?|tag(?:e|en)?)\\b");
+    if (transit.isEmpty()) transit = captures(timing, "\\bD\\+(\\d{1,2})\\b");
+    if (transit.isEmpty() && has(timing, "same[ -]day|am selben tag")) transit = List.of("0");
+    var hours =
+        captures(
+            timing,
+            "\\b(?:pickup|collection|delivery|transit|lead)(?:\\s+time)?\\s*(?:is|of|in|:|=)?\\s*(\\d{1,4})\\s*(?:hours?|hrs?|h)\\b");
+    if (!hours.isEmpty()) {
+      if (hours.size() != 1 || !transit.isEmpty()) return Optional.empty();
+      int duration = Integer.parseInt(hours.getFirst());
+      return duration <= 90 * 24 ? Optional.of(new Bid(price, duration / 24.0)) : Optional.empty();
+    }
+    if (transit.isEmpty() && truck) return Optional.of(new Bid(price, null));
+    if (transit.size() != 1) return Optional.empty();
+    int days = Integer.parseInt(transit.getFirst());
+    return days <= 90 ? Optional.of(new Bid(price, (double) days)) : Optional.empty();
+  }
+}
