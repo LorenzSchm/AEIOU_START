@@ -15,6 +15,17 @@ docker compose up --build       # UI on :3000, backend on :8080 (Swagger at /swa
 
 **Test mode against the real API** (nothing scored is answered): `POLLER_ENABLED=true SEND_ENABLED=true CUSTOMER_REPLIES_ENABLED=false` plus `LLM_BASE_URL=https://api.openai.com/v1` and `LLM_API_KEY=<own key>`, so LLM cost doesn't land on the team's gateway bill. Carriers and the rate desk get real mail; quotes to customers and answers to tracking@ are stored as dry runs and drafts.
 
+## Sim mode: no traffic to 5U at all
+```sh
+docker compose -f docker-compose.yml -f docker-compose.sim.yml up -d --build
+```
+The backend talks only to `sim5u` (http://localhost:8090), a simulated 5U API with customers, carriers, a rate desk, a tracking desk and a scoreboard.
+- It has its own database and a fake team key.
+- The backend refuses to start unless it points to the simulator.
+- LLM calls go directly to OpenAI (`LLM_BASE_URL`/`LLM_API_KEY` in `.env`).
+
+All testing happens here. See [sim/README.md](sim/README.md).
+
 ## Develop
 ```sh
 docker compose up -d postgres

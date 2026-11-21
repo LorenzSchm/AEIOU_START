@@ -253,6 +253,14 @@ setting           key PK, value JSONB, updated_at, updated_by
 - **Pricing** runs in memory. Portal calls go out in parallel through a token bucket that follows the `X-RateLimit-*` headers.
 - HikariCP is sized for virtual threads (around 20 connections), and long LLM or HTTP calls never hold a DB connection.
 
+## 13a. Simulator (sim5u)
+`forwarder/sim` is a FastAPI stand-in for the whole 5U API (mailbox, portal, gateway key, board) with simulated customers, carriers, rate desk, tracking desk and a scorer. `docker-compose.sim.yml` points the backend at it.
+- Separate database, fake key.
+- A start guard on `FIVEU_BASE_URL`.
+- Direct OpenAI for the LLM.
+
+Every test run happens there, so nothing reaches the real event. The ground truth uses the same pricing model as §5; tariff-sheet prices come from our own parsed tariffs. So the sim validates flow, timing, formats and robustness, while price accuracy is validated by unit tests and the live board. See `sim/README.md`.
+
 ## 14. Repository layout & running
 ```
 forwarder/backend   Spring Boot 4 (Gradle, Java 21), Dockerfile

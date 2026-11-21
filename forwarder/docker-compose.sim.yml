@@ -1,0 +1,68 @@
+# Sim mode: the whole stack runs against sim5u, a local stand-in for the 5U API. No traffic to 5U at all.
+#   docker compose -f docker-compose.yml -f docker-compose.sim.yml up -d --build
+# Sim board: http://localhost:8090 · control panel: http://localhost:3000
+services:
+  sim5u:
+    build: ./sim
+    environment:
+      SIM_RFQ_INTERVAL_SECONDS: ${SIM_RFQ_INTERVAL_SECONDS:-360}
+      SIM_FIRST_RFQ_DELAY_SECONDS: ${SIM_FIRST_RFQ_DELAY_SECONDS:-20}
+      SIM_CARRIER_DELAY_MIN: ${SIM_CARRIER_DELAY_MIN:-5}
+      SIM_CARRIER_DELAY_MAX: ${SIM_CARRIER_DELAY_MAX:-40}
+      SIM_RATE_LIMIT: ${SIM_RATE_LIMIT:-10}
+      SIM_SEED: ${SIM_SEED:-5}
+    volumes:
+      - ../start-kit:/start-kit:ro
+    ports:
+      - "8090:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  postgres:
+    volumes:
+      - pgdata-sim:/var/lib/postgresql/data   # own database: simulated mail never mixes with real mail
+
+  backend:
+    depends_on:
+      sim5u:
+        condition: service_healthy
+    environment:
+      FIVEU_BASE_URL: http://sim5u:8000
+      TEAM_API_KEY: sim-key                   # the real team key never reaches the backend in sim mode
+      POLLER_ENABLED: "true"
+      SEND_ENABLED: "true"
+      CUSTOMER_REPLIES_ENABLED: "true"        # safe: every mail goes to the simulator
+      LLM_BASE_URL: ${LLM_BASE_URL:?sim mode calls OpenAI directly, set LLM_BASE_URL in .env}
+      LLM_API_KEY: ${LLM_API_KEY:?sim mode calls OpenAI directly, set LLM_API_KEY in .env}
+    # Guard: refuse to start unless the 5U base URL is the simulator.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        case "$$FIVEU_BASE_URL" in
+          http://sim5u:8000*) exec java -XX:MaxRAMPercentage=75 -jar app.jar ;;
+          *) echo "refusing to start: FIVEU_BASE_URL is not the simulator" >&2; exit 1 ;;
+        esac
+
+  # One-shot: autopilot on (the database seeds it off), so the backend answers the simulated customers.
+  sim-init:
+    build: ./sim
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: "no"
+    command:
+      - python
+      - -c
+      - |
+        import json, urllib.request
+        req = urllib.request.Request("http://backend:8080/api/admin/live", method="PUT",
+                                     data=json.dumps({"autopilot": True, "pollingEnabled": True}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        print(urllib.request.urlopen(req).read().decode())
+
+volumes:
+  pgdata-sim:

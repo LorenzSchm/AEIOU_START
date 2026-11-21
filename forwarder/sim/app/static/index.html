@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sim5u board</title>
+<style>
+  :root { --bg:#0f1216; --panel:#171b21; --line:#262c35; --text:#e6e9ee; --muted:#8b95a3; --ok:#3fb68b; --bad:#e5604f; --warn:#e0a33b; --accent:#5aa9e6; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--line); }
+  h1 { font-size:16px; margin:0; letter-spacing:.02em; } h1 span { color:var(--muted); font-weight:400; }
+  main { padding:16px 20px; display:grid; gap:16px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .kpi b { display:block; font-size:20px; font-variant-numeric:tabular-nums; } .kpi small { color:var(--muted); }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:auto; }
+  section h2 { font-size:13px; margin:0; padding:10px 12px; border-bottom:1px solid var(--line); color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; vertical-align:top; }
+  th { color:var(--muted); font-weight:500; font-size:12px; }
+  td.wrap { white-space:normal; min-width:220px; }
+  .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+  .pill { padding:1px 8px; border-radius:99px; font-size:12px; border:1px solid currentColor; }
+  .accepted { color:var(--ok); } .rejected { color:var(--bad); } .open { color:var(--accent); } .noans, .voided { color:var(--warn); }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  button { background:#222a34; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:var(--accent); } button.on { border-color:var(--warn); color:var(--warn); }
+  .muted { color:var(--muted); }
+  @media (max-width:600px) { header, main { padding:12px 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>sim5u <span>simulated 5U API · no traffic to the real event</span></h1>
+  <div class="controls">
+    <button onclick="post('/sim/rfq', {})">New RFQ</button>
+    <button onclick="post('/sim/rfq', {history:true})">History RFQ</button>
+    <button onclick="post('/sim/tracking', {})">Tracking question</button>
+    <button id="c503" onclick="toggle('portal_503_share', 0.5)">Portal 503</button>
+    <button id="cbook" onclick="toggle('booking_503_share', 1)">Booking 503</button>
+    <button id="calt" onclick="toggle('alt_phrasing', true)">Odd phrasing</button>
+    <button id="crl" onclick="toggleLimit()">Rate limit 3/min</button>
+    <button onclick="post('/sim/chaos/tariff', {airline:'Yellowtail Air Freight', pct:8})">Tariff update +8%</button>
+  </div>
+</header>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <section><h2>Rounds</h2><table><thead><tr>
+    <th>#</th><th>Sent</th><th>RFQ</th><th>Best</th><th>Our quote</th><th>Δ</th><th>Time</th><th>Verdict</th><th>Points</th><th>Booking / tracking</th>
+  </tr></thead><tbody id="rounds"></tbody></table></section>
+  <section><h2>Mail traffic</h2><table><thead><tr><th>#</th><th>At</th><th>From</th><th>To</th><th>Subject</th></tr></thead><tbody id="mails"></tbody></table></section>
+</main>
+<script>
+let chaos = {};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const t = s => s ? new Date(s).toLocaleTimeString() : "";
+const eur = v => v == null ? "–" : v.toLocaleString("en", {minimumFractionDigits:2, maximumFractionDigits:2});
+async function post(path, body) { await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)}); refresh(); }
+function toggle(key, onValue) { const on = chaos[key] && chaos[key] !== 0; post("/sim/chaos", {[key]: on ? (onValue === true ? false : 0) : onValue}); }
+function toggleLimit() { post("/sim/chaos", {rate_limit: chaos.rate_limit === 3 ? 10 : 3}); }
+function verdictClass(v) { return v === "no answer" ? "noans" : v; }
+async function refresh() {
+  const s = await (await fetch("/sim/state")).json();
+  chaos = s.chaos;
+  const k = s.totals;
+  document.getElementById("kpis").innerHTML = [
+    ["Rounds", k.rounds], ["Accepted", k.accepted], ["Rejected", k.rejected], ["No answer", k.no_answer],
+    ["Points", k.points], ["Bookings", k.bookings], ["Avg response", k.avg_response_s + " s"],
+  ].map(([l, v]) => `<div class="kpi"><small>${l}</small><b>${esc(v)}</b></div>`).join("");
+  document.getElementById("rounds").innerHTML = s.rounds.map(r => {
+    const tr = r.tracking ? ` · tracking ${r.tracking.answered ? (r.tracking.correct ? "✓" : "✗") : "asked"}` : "";
+    const best = r.truth ? `${eur(r.best)}<div class="muted">${esc(r.truth.airline)}, ${r.truth.transit_days} d${r.truth.truck ? " + truck " + eur(r.truth.truck) : ""}</div>` : "–";
+    return `<tr><td>${r.no}</td><td>${t(r.sent_at)}</td><td class="wrap">${esc(r.summary)}<div class="muted mono">${esc(r.customer)}</div></td>
+      <td>${best}</td><td>${r.quote_total != null ? eur(r.quote_total) + " " + esc(r.quote_currency) : "–"}</td>
+      <td>${r.delta_pct != null ? (r.delta_pct > 0 ? "+" : "") + r.delta_pct + "%" : ""}</td>
+      <td>${r.response_s != null ? Math.round(r.response_s) + " s" : ""}</td>
+      <td><span class="pill ${verdictClass(r.verdict)}">${esc(r.verdict)}</span> <span class="muted">${esc(r.reason || "")}</span></td>
+      <td>${r.total_points || ""}</td><td>${r.booking_reference ? esc(r.booking_reference) : (r.booked === false ? "book requested" : "")}${tr}</td></tr>`;
+  }).join("") || `<tr><td colspan="10" class="muted">No rounds yet. The first RFQ arrives shortly, or press "New RFQ".</td></tr>`;
+  document.getElementById("mails").innerHTML = s.mails.map(m =>
+    `<tr><td>${m.id}</td><td>${t(m.at)}</td><td class="mono">${esc(m.from)}</td><td class="mono">${esc(m.to)}</td><td class="wrap">${esc(m.subject)}${m.attachments ? " 📎" : ""}</td></tr>`).join("");
+  document.getElementById("c503").classList.toggle("on", chaos.portal_503_share > 0);
+  document.getElementById("cbook").classList.toggle("on", chaos.booking_503_share > 0);
+  document.getElementById("calt").classList.toggle("on", chaos.alt_phrasing);
+  document.getElementById("crl").classList.toggle("on", chaos.rate_limit === 3);
+}
+refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>

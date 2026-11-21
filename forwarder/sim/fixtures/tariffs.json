@@ -1,0 +1,5814 @@
+[
+ {
+  "airlineName": "Cobalt Skylift",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "EZE",
+    "transitDays": 5,
+    "minimum": 79.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.41
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.17
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.21
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.89
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.54
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.06
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.67
+     }
+    ],
+    "fuelPerKg": 0.7,
+    "securityPerKg": 0.2
+   },
+   {
+    "origin": "CGN",
+    "destination": "SGN",
+    "transitDays": 4,
+    "minimum": 73.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.22
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.67
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.19
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.84
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.51
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.27
+     }
+    ],
+    "fuelPerKg": 1.01,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "CGN",
+    "destination": "SIN",
+    "transitDays": 4,
+    "minimum": 102.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.7
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.48
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.61
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.91
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.74
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.46
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.27
+     }
+    ],
+    "fuelPerKg": 1.16,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "DUS",
+    "destination": "BOM",
+    "transitDays": 5,
+    "minimum": 115.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.42
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.8
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.24
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.79
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.58
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.17
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.92
+     }
+    ],
+    "fuelPerKg": 1.16,
+    "securityPerKg": 0.2
+   },
+   {
+    "origin": "DUS",
+    "destination": "DEL",
+    "transitDays": 4,
+    "minimum": 68.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.18
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.3
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.87
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.44
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.63
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.34
+     }
+    ],
+    "fuelPerKg": 0.62,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "DUS",
+    "destination": "JFK",
+    "transitDays": 4,
+    "minimum": 78.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.13
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.38
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.17
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.84
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.36
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.22
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.93
+     }
+    ],
+    "fuelPerKg": 0.8,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "DUS",
+    "destination": "SYD",
+    "transitDays": 4,
+    "minimum": 68.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 6.53
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.9
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.63
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.61
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.24
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.02
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.47
+     }
+    ],
+    "fuelPerKg": 0.85,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "FRA",
+    "destination": "BOG",
+    "transitDays": 4,
+    "minimum": 83.74,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.1
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.1
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.24
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.92
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.25
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.76
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.46
+     }
+    ],
+    "fuelPerKg": 1.34,
+    "securityPerKg": 0.17
+   },
+   {
+    "origin": "FRA",
+    "destination": "ICN",
+    "transitDays": 6,
+    "minimum": 58.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.23
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.55
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.84
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.36
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.17
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.01
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.85
+     }
+    ],
+    "fuelPerKg": 1.21,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "FRA",
+    "destination": "JNB",
+    "transitDays": 4,
+    "minimum": 118.72,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.33
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.37
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.36
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.99
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.45
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.25
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.71
+     }
+    ],
+    "fuelPerKg": 1.3,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "FRA",
+    "destination": "SYD",
+    "transitDays": 6,
+    "minimum": 124.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.36
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.45
+     },
+     {
+      "fromKg": 100,
+      "rate": 4.05
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.04
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.71
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.44
+     },
+     {
+      "fromKg": 2000,
+      "rate": 2.15
+     }
+    ],
+    "fuelPerKg": 0.65,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "FRA",
+    "destination": "TPE",
+    "transitDays": 3,
+    "minimum": 71.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.33
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.46
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.56
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.95
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.72
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.3
+     }
+    ],
+    "fuelPerKg": 1.12,
+    "securityPerKg": 0.1
+   },
+   {
+    "origin": "HAM",
+    "destination": "BOG",
+    "transitDays": 3,
+    "minimum": 77.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.63
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.94
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.03
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.39
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.82
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.57
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.22
+     }
+    ],
+    "fuelPerKg": 1.04,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "HAM",
+    "destination": "RUH",
+    "transitDays": 3,
+    "minimum": 114.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.32
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.62
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.12
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.26
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.15
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.04
+     }
+    ],
+    "fuelPerKg": 0.92,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "MUC",
+    "destination": "BOG",
+    "transitDays": 4,
+    "minimum": 94.34,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.11
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.74
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.03
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.63
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.0
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.84
+     }
+    ],
+    "fuelPerKg": 1.28,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "MUC",
+    "destination": "LIM",
+    "transitDays": 6,
+    "minimum": 137.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.49
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.23
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.17
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.84
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.62
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.31
+     }
+    ],
+    "fuelPerKg": 0.7,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "MUC",
+    "destination": "MEL",
+    "transitDays": 3,
+    "minimum": 138.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 6.24
+     },
+     {
+      "fromKg": 45,
+      "rate": 5.49
+     },
+     {
+      "fromKg": 100,
+      "rate": 4.83
+     },
+     {
+      "fromKg": 300,
+      "rate": 4.2
+     },
+     {
+      "fromKg": 500,
+      "rate": 3.49
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.69
+     },
+     {
+      "fromKg": 2000,
+      "rate": 2.37
+     }
+    ],
+    "fuelPerKg": 0.99,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "MUC",
+    "destination": "MEX",
+    "transitDays": 3,
+    "minimum": 63.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.98
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.95
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.36
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.94
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.63
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.35
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.04
+     }
+    ],
+    "fuelPerKg": 0.73,
+    "securityPerKg": 0.16
+   },
+   {
+    "origin": "MUC",
+    "destination": "MIA",
+    "transitDays": 2,
+    "minimum": 134.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.0
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.37
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.62
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.23
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.05
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.61
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.61
+     }
+    ],
+    "fuelPerKg": 0.84,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "MUC",
+    "destination": "YYZ",
+    "transitDays": 3,
+    "minimum": 123.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.93
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.22
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.32
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.06
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.9
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.43
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.13
+     }
+    ],
+    "fuelPerKg": 1.29,
+    "securityPerKg": 0.15
+   },
+   {
+    "origin": "STR",
+    "destination": "YYZ",
+    "transitDays": 4,
+    "minimum": 72.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.08
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.22
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.6
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.46
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.23
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.07
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.77
+     }
+    ],
+    "fuelPerKg": 0.71,
+    "securityPerKg": 0.17
+   }
+  ]
+ },
+ {
+  "airlineName": "Danube Wings Cargo",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "SYD",
+    "transitDays": 4,
+    "minimum": 134.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 6.28
+     },
+     {
+      "fromKg": 45,
+      "rate": 5.34
+     },
+     {
+      "fromKg": 100,
+      "rate": 4.28
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.89
+     },
+     {
+      "fromKg": 500,
+      "rate": 3.27
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.84
+     }
+    ],
+    "fuelPerKg": 1.13,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "DUS",
+    "destination": "MEX",
+    "transitDays": 5,
+    "minimum": 101.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.02
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.36
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.89
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.57
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.32
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.0
+     }
+    ],
+    "fuelPerKg": 0.74,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "DUS",
+    "destination": "SYD",
+    "transitDays": 5,
+    "minimum": 110.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.78
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.45
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.92
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.9
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.89
+     }
+    ],
+    "fuelPerKg": 0.69,
+    "securityPerKg": 0.16
+   },
+   {
+    "origin": "DUS",
+    "destination": "YYZ",
+    "transitDays": 4,
+    "minimum": 62.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.08
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.62
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.07
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.61
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.22
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.96
+     }
+    ],
+    "fuelPerKg": 0.88,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "FRA",
+    "destination": "DXB",
+    "transitDays": 2,
+    "minimum": 138.86,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.9
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.23
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.05
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.66
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.45
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.33
+     }
+    ],
+    "fuelPerKg": 1.12,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "FRA",
+    "destination": "EZE",
+    "transitDays": 2,
+    "minimum": 126.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.57
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.34
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.74
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.52
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.92
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.48
+     }
+    ],
+    "fuelPerKg": 1.06,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "MUC",
+    "destination": "JNB",
+    "transitDays": 7,
+    "minimum": 105.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.74
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.81
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.19
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.62
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.39
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.22
+     }
+    ],
+    "fuelPerKg": 0.85,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "MUC",
+    "destination": "TPE",
+    "transitDays": 5,
+    "minimum": 69.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.1
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.73
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.21
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.57
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.36
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.03
+     }
+    ],
+    "fuelPerKg": 1.15,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "STR",
+    "destination": "SGN",
+    "transitDays": 5,
+    "minimum": 83.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.63
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.21
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.45
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.93
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.18
+     }
+    ],
+    "fuelPerKg": 1.09,
+    "securityPerKg": 0.11
+   }
+  ]
+ },
+ {
+  "airlineName": "Elbflug Air Freight",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "LOS",
+    "transitDays": 5,
+    "minimum": 108.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.87
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.06
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.63
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.18
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.94
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.59
+     }
+    ],
+    "fuelPerKg": 1.21,
+    "securityPerKg": 0.1
+   },
+   {
+    "origin": "DUS",
+    "destination": "HKG",
+    "transitDays": 4,
+    "minimum": 67.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.1
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.29
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.65
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.32
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.19
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.96
+     }
+    ],
+    "fuelPerKg": 0.76,
+    "securityPerKg": 0.12
+   },
+   {
+    "origin": "DUS",
+    "destination": "TLV",
+    "transitDays": 1,
+    "minimum": 85.86,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.52
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.89
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.87
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.35
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.04
+     }
+    ],
+    "fuelPerKg": 1.34,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "FRA",
+    "destination": "BOG",
+    "transitDays": 7,
+    "minimum": 65.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.69
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.94
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.51
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.56
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.28
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.85
+     }
+    ],
+    "fuelPerKg": 0.84,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "FRA",
+    "destination": "DFW",
+    "transitDays": 3,
+    "minimum": 108.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.79
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.01
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.57
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.19
+     },
+     {
+      "fromKg": 500,
+      "rate": 0.92
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.84
+     }
+    ],
+    "fuelPerKg": 0.74,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "FRA",
+    "destination": "DXB",
+    "transitDays": 3,
+    "minimum": 131.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.73
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.1
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.93
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.56
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.36
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.25
+     }
+    ],
+    "fuelPerKg": 0.91,
+    "securityPerKg": 0.2
+   },
+   {
+    "origin": "FRA",
+    "destination": "HKG",
+    "transitDays": 4,
+    "minimum": 75.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.32
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.39
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.91
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.51
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.22
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.98
+     }
+    ],
+    "fuelPerKg": 0.84,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "FRA",
+    "destination": "MEL",
+    "transitDays": 7,
+    "minimum": 134.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.99
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.79
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.26
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.71
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.09
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.76
+     }
+    ],
+    "fuelPerKg": 1.22,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "FRA",
+    "destination": "MIA",
+    "transitDays": 5,
+    "minimum": 91.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.84
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.11
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.46
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.14
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.9
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.52
+     }
+    ],
+    "fuelPerKg": 1.29,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "FRA",
+    "destination": "SGN",
+    "transitDays": 3,
+    "minimum": 115.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.07
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.7
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.15
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.71
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.74
+     }
+    ],
+    "fuelPerKg": 0.77,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "FRA",
+    "destination": "SIN",
+    "transitDays": 3,
+    "minimum": 72.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.07
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.34
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.54
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.24
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.06
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.65
+     }
+    ],
+    "fuelPerKg": 0.85,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "HAM",
+    "destination": "DFW",
+    "transitDays": 4,
+    "minimum": 79.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.1
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.48
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.03
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.46
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.27
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.97
+     }
+    ],
+    "fuelPerKg": 1.29,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "HAM",
+    "destination": "DXB",
+    "transitDays": 2,
+    "minimum": 114.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.58
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.64
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.31
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.87
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.59
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.44
+     }
+    ],
+    "fuelPerKg": 1.09,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "HAM",
+    "destination": "MEX",
+    "transitDays": 3,
+    "minimum": 117.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.86
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.57
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.98
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.43
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.27
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.12
+     }
+    ],
+    "fuelPerKg": 1.34,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "HAM",
+    "destination": "TLV",
+    "transitDays": 3,
+    "minimum": 128.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.72
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.48
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.21
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.9
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.6
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.22
+     }
+    ],
+    "fuelPerKg": 0.66,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "MUC",
+    "destination": "BOG",
+    "transitDays": 6,
+    "minimum": 75.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.38
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.15
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.74
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.22
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.95
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.79
+     }
+    ],
+    "fuelPerKg": 0.89,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "MUC",
+    "destination": "SYD",
+    "transitDays": 6,
+    "minimum": 105.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.52
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.42
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.54
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.12
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.43
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.87
+     }
+    ],
+    "fuelPerKg": 0.77,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "STR",
+    "destination": "ORD",
+    "transitDays": 2,
+    "minimum": 140.98,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.08
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.3
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.04
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.52
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.29
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.66
+     }
+    ],
+    "fuelPerKg": 0.87,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "STR",
+    "destination": "PVG",
+    "transitDays": 4,
+    "minimum": 112.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.72
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.45
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.76
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.04
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.61
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.37
+     }
+    ],
+    "fuelPerKg": 1.24,
+    "securityPerKg": 0.1
+   }
+  ]
+ },
+ {
+  "airlineName": "Helix Air Freight",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "LOS",
+    "transitDays": 4,
+    "minimum": 76.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.62
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.83
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.49
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.65
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.93
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.7
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.29
+     }
+    ],
+    "fuelPerKg": 1.04,
+    "securityPerKg": 0.12
+   },
+   {
+    "origin": "CGN",
+    "destination": "SYD",
+    "transitDays": 6,
+    "minimum": 124.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.52
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.91
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.98
+     },
+     {
+      "fromKg": 250,
+      "rate": 3.62
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.93
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.67
+     },
+     {
+      "fromKg": 2000,
+      "rate": 2.22
+     }
+    ],
+    "fuelPerKg": 0.98,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "DUS",
+    "destination": "RUH",
+    "transitDays": 3,
+    "minimum": 64.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.37
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.93
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.64
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.09
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.88
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.73
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.37
+     }
+    ],
+    "fuelPerKg": 0.6,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "FRA",
+    "destination": "LAX",
+    "transitDays": 1,
+    "minimum": 112.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.33
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.73
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.24
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.24
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.62
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.25
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.25
+     }
+    ],
+    "fuelPerKg": 1.4,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "FRA",
+    "destination": "PVG",
+    "transitDays": 2,
+    "minimum": 102.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.66
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.45
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.03
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.64
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.17
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.82
+     }
+    ],
+    "fuelPerKg": 0.85,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "FRA",
+    "destination": "SCL",
+    "transitDays": 3,
+    "minimum": 92.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.68
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.84
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.11
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.24
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.86
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.66
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.31
+     }
+    ],
+    "fuelPerKg": 0.84,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "HAM",
+    "destination": "HKG",
+    "transitDays": 2,
+    "minimum": 130.38,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.16
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.62
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.61
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.52
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.9
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.69
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.69
+     }
+    ],
+    "fuelPerKg": 1.29,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "MUC",
+    "destination": "HKG",
+    "transitDays": 5,
+    "minimum": 105.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.68
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.94
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.68
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.44
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.22
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.02
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.58
+     }
+    ],
+    "fuelPerKg": 0.84,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "MUC",
+    "destination": "PVG",
+    "transitDays": 5,
+    "minimum": 140.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.54
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.58
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.17
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.82
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.64
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.48
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.2
+     }
+    ],
+    "fuelPerKg": 0.86,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "MUC",
+    "destination": "SGN",
+    "transitDays": 6,
+    "minimum": 65.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.56
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.1
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.57
+     },
+     {
+      "fromKg": 250,
+      "rate": 3.07
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.87
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.55
+     }
+    ],
+    "fuelPerKg": 1.32,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "STR",
+    "destination": "ORD",
+    "transitDays": 3,
+    "minimum": 133.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.84
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.11
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.86
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.37
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.16
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.56
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.36
+     }
+    ],
+    "fuelPerKg": 0.82,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "STR",
+    "destination": "PVG",
+    "transitDays": 4,
+    "minimum": 81.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.79
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.34
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.74
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.52
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.92
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.67
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.5
+     }
+    ],
+    "fuelPerKg": 0.74,
+    "securityPerKg": 0.2
+   }
+  ]
+ },
+ {
+  "airlineName": "Kestrel Airways",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "MIA",
+    "transitDays": 4,
+    "minimum": 76.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.05
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.35
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.72
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.38
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.16
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.97
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.85
+     }
+    ],
+    "fuelPerKg": 0.69,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "DUS",
+    "destination": "DFW",
+    "transitDays": 1,
+    "minimum": 119.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.06
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.45
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.11
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.72
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.86
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.56
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.47
+     }
+    ],
+    "fuelPerKg": 1.29,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "DUS",
+    "destination": "KUL",
+    "transitDays": 5,
+    "minimum": 56.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.15
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.11
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.74
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.52
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.92
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.73
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.51
+     }
+    ],
+    "fuelPerKg": 1.04,
+    "securityPerKg": 0.15
+   },
+   {
+    "origin": "DUS",
+    "destination": "NRT",
+    "transitDays": 2,
+    "minimum": 113.42,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.39
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.04
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.31
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.78
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.91
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.43
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.17
+     }
+    ],
+    "fuelPerKg": 1.31,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "FRA",
+    "destination": "BOM",
+    "transitDays": 2,
+    "minimum": 134.62,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.25
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.23
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.34
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.34
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.93
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.7
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.3
+     }
+    ],
+    "fuelPerKg": 0.81,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "FRA",
+    "destination": "CAI",
+    "transitDays": 3,
+    "minimum": 118.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.64
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.62
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.64
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.9
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.52
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.19
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.09
+     }
+    ],
+    "fuelPerKg": 0.88,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "FRA",
+    "destination": "DEL",
+    "transitDays": 3,
+    "minimum": 97.52,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.2
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.82
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.48
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.03
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.75
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.45
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.32
+     }
+    ],
+    "fuelPerKg": 1.27,
+    "securityPerKg": 0.27
+   },
+   {
+    "origin": "FRA",
+    "destination": "MEX",
+    "transitDays": 4,
+    "minimum": 79.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.11
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.61
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.19
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.95
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.44
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.15
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.94
+     }
+    ],
+    "fuelPerKg": 1.15,
+    "securityPerKg": 0.17
+   },
+   {
+    "origin": "FRA",
+    "destination": "MIA",
+    "transitDays": 2,
+    "minimum": 137.8,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.18
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.52
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.04
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.93
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.19
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.02
+     }
+    ],
+    "fuelPerKg": 0.94,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "FRA",
+    "destination": "NRT",
+    "transitDays": 4,
+    "minimum": 116.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.5
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.66
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.34
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.01
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.61
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.37
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.14
+     }
+    ],
+    "fuelPerKg": 0.89,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "HAM",
+    "destination": "HKG",
+    "transitDays": 4,
+    "minimum": 73.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.18
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.7
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.48
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.93
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.66
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.2
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.06
+     }
+    ],
+    "fuelPerKg": 0.63,
+    "securityPerKg": 0.15
+   },
+   {
+    "origin": "HAM",
+    "destination": "PEK",
+    "transitDays": 3,
+    "minimum": 133.56,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.47
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.7
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.26
+     },
+     {
+      "fromKg": 250,
+      "rate": 3.26
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.34
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.75
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.3
+     }
+    ],
+    "fuelPerKg": 0.96,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "MUC",
+    "destination": "GRU",
+    "transitDays": 5,
+    "minimum": 127.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.09
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.39
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.92
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.69
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.1
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.87
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.53
+     }
+    ],
+    "fuelPerKg": 0.62,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "MUC",
+    "destination": "LAX",
+    "transitDays": 6,
+    "minimum": 59.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.47
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.78
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.34
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.78
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.5
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.28
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.95
+     }
+    ],
+    "fuelPerKg": 1.13,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "MUC",
+    "destination": "MEL",
+    "transitDays": 4,
+    "minimum": 69.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.88
+     },
+     {
+      "fromKg": 45,
+      "rate": 5.06
+     },
+     {
+      "fromKg": 100,
+      "rate": 4.35
+     },
+     {
+      "fromKg": 250,
+      "rate": 3.83
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.87
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.35
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.79
+     }
+    ],
+    "fuelPerKg": 0.91,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "MUC",
+    "destination": "PEK",
+    "transitDays": 6,
+    "minimum": 113.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.39
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.73
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.39
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.78
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.06
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.5
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.31
+     }
+    ],
+    "fuelPerKg": 1.23,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "MUC",
+    "destination": "SIN",
+    "transitDays": 6,
+    "minimum": 104.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.15
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.2
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.66
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.21
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.92
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.75
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.54
+     }
+    ],
+    "fuelPerKg": 0.98,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "STR",
+    "destination": "MIA",
+    "transitDays": 4,
+    "minimum": 63.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.87
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.86
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.26
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.83
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.45
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.1
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.0
+     }
+    ],
+    "fuelPerKg": 0.84,
+    "securityPerKg": 0.1
+   }
+  ]
+ },
+ {
+  "airlineName": "Orion Cargo Air",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "MIA",
+    "transitDays": 2,
+    "minimum": 78.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.91
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.12
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.61
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.26
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.1
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.84
+     }
+    ],
+    "fuelPerKg": 1.11,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "CGN",
+    "destination": "TLV",
+    "transitDays": 2,
+    "minimum": 73.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.25
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.54
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.83
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.68
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.19
+     }
+    ],
+    "fuelPerKg": 0.61,
+    "securityPerKg": 0.1
+   },
+   {
+    "origin": "FRA",
+    "destination": "KUL",
+    "transitDays": 4,
+    "minimum": 72.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.04
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.97
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.67
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.29
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.1
+     }
+    ],
+    "fuelPerKg": 0.69,
+    "securityPerKg": 0.17
+   },
+   {
+    "origin": "FRA",
+    "destination": "NBO",
+    "transitDays": 4,
+    "minimum": 96.46,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.56
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.01
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.05
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.37
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.1
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.64
+     }
+    ],
+    "fuelPerKg": 1.0,
+    "securityPerKg": 0.17
+   },
+   {
+    "origin": "FRA",
+    "destination": "ORD",
+    "transitDays": 2,
+    "minimum": 114.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.46
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.15
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.52
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.02
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.47
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.07
+     }
+    ],
+    "fuelPerKg": 0.97,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "FRA",
+    "destination": "PEK",
+    "transitDays": 4,
+    "minimum": 139.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.05
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.4
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.65
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.99
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.57
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.43
+     }
+    ],
+    "fuelPerKg": 0.87,
+    "securityPerKg": 0.15
+   },
+   {
+    "origin": "FRA",
+    "destination": "SGN",
+    "transitDays": 5,
+    "minimum": 77.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.92
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.19
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.97
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.58
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.33
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.06
+     }
+    ],
+    "fuelPerKg": 1.19,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "HAM",
+    "destination": "DXB",
+    "transitDays": 4,
+    "minimum": 91.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.37
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.07
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.76
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.5
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.14
+     }
+    ],
+    "fuelPerKg": 1.01,
+    "securityPerKg": 0.17
+   },
+   {
+    "origin": "MUC",
+    "destination": "GRU",
+    "transitDays": 4,
+    "minimum": 103.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.26
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.47
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.58
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.11
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.12
+     }
+    ],
+    "fuelPerKg": 1.02,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "MUC",
+    "destination": "HKG",
+    "transitDays": 3,
+    "minimum": 111.3,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.31
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.84
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.46
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.01
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.5
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.15
+     }
+    ],
+    "fuelPerKg": 0.96,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "MUC",
+    "destination": "NBO",
+    "transitDays": 3,
+    "minimum": 132.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.25
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.68
+     },
+     {
+      "fromKg": 100,
+      "rate": 4.08
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.26
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.77
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.19
+     }
+    ],
+    "fuelPerKg": 1.2,
+    "securityPerKg": 0.27
+   },
+   {
+    "origin": "STR",
+    "destination": "MNL",
+    "transitDays": 4,
+    "minimum": 120.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.72
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.27
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.58
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.09
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.63
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.43
+     }
+    ],
+    "fuelPerKg": 1.03,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "STR",
+    "destination": "PEK",
+    "transitDays": 5,
+    "minimum": 70.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.36
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.76
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.37
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.85
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.48
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.08
+     }
+    ],
+    "fuelPerKg": 0.71,
+    "securityPerKg": 0.19
+   },
+   {
+    "origin": "STR",
+    "destination": "TLV",
+    "transitDays": 4,
+    "minimum": 118.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.43
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.78
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.22
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.86
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.34
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.98
+     }
+    ],
+    "fuelPerKg": 0.94,
+    "securityPerKg": 0.23
+   }
+  ]
+ },
+ {
+  "airlineName": "Quetzal Air Freight",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "DFW",
+    "transitDays": 2,
+    "minimum": 76.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.1
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.79
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.18
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.61
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.19
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.89
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.75
+     }
+    ],
+    "fuelPerKg": 1.14,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "CGN",
+    "destination": "LOS",
+    "transitDays": 4,
+    "minimum": 139.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.31
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.19
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.23
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.84
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.13
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.83
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.68
+     }
+    ],
+    "fuelPerKg": 1.16,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "DUS",
+    "destination": "HKG",
+    "transitDays": 4,
+    "minimum": 108.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.68
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.93
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.18
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.58
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.04
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.53
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.41
+     }
+    ],
+    "fuelPerKg": 1.26,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "FRA",
+    "destination": "BOM",
+    "transitDays": 3,
+    "minimum": 127.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.44
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.75
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.98
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.82
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.6
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.22
+     }
+    ],
+    "fuelPerKg": 0.56,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "FRA",
+    "destination": "LIM",
+    "transitDays": 5,
+    "minimum": 106.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.45
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.65
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.88
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.33
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.89
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.4
+     }
+    ],
+    "fuelPerKg": 1.26,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "FRA",
+    "destination": "RUH",
+    "transitDays": 2,
+    "minimum": 129.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.17
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.63
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.26
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.79
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.43
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.26
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.26
+     }
+    ],
+    "fuelPerKg": 0.95,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "HAM",
+    "destination": "JFK",
+    "transitDays": 1,
+    "minimum": 116.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.43
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.81
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.31
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.05
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.58
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.17
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.03
+     }
+    ],
+    "fuelPerKg": 0.83,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "MUC",
+    "destination": "DXB",
+    "transitDays": 2,
+    "minimum": 97.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.09
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.53
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.94
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.71
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.47
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.26
+     }
+    ],
+    "fuelPerKg": 1.01,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "MUC",
+    "destination": "EZE",
+    "transitDays": 5,
+    "minimum": 132.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.01
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.51
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.88
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.79
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.48
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.96
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.69
+     }
+    ],
+    "fuelPerKg": 1.28,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "MUC",
+    "destination": "RUH",
+    "transitDays": 3,
+    "minimum": 70.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.05
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.41
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.22
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.04
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.59
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.16
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.88
+     }
+    ],
+    "fuelPerKg": 0.74,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "STR",
+    "destination": "SCL",
+    "transitDays": 2,
+    "minimum": 111.3,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.82
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.14
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.64
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.16
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.75
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.39
+     },
+     {
+      "fromKg": 2000,
+      "rate": 2.39
+     }
+    ],
+    "fuelPerKg": 1.23,
+    "securityPerKg": 0.24
+   }
+  ]
+ },
+ {
+  "airlineName": "Vega Skyfreight",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "LOS",
+    "transitDays": 3,
+    "minimum": 114.48,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.6
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.19
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.73
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.69
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.42
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.94
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.69
+     }
+    ],
+    "fuelPerKg": 1.29,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "DUS",
+    "destination": "KUL",
+    "transitDays": 2,
+    "minimum": 72.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.47
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.38
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.77
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.41
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.12
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.35
+     }
+    ],
+    "fuelPerKg": 1.15,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "DUS",
+    "destination": "PEK",
+    "transitDays": 2,
+    "minimum": 118.72,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.88
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.42
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.46
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.8
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.53
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.22
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.22
+     }
+    ],
+    "fuelPerKg": 1.34,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "FRA",
+    "destination": "MNL",
+    "transitDays": 5,
+    "minimum": 65.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.04
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.64
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.06
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.36
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.15
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.24
+     }
+    ],
+    "fuelPerKg": 1.04,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "HAM",
+    "destination": "DEL",
+    "transitDays": 4,
+    "minimum": 66.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.21
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.76
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.06
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.59
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.45
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.25
+     }
+    ],
+    "fuelPerKg": 0.65,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "HAM",
+    "destination": "DFW",
+    "transitDays": 1,
+    "minimum": 83.74,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.84
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.76
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.35
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.14
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.78
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.57
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.3
+     }
+    ],
+    "fuelPerKg": 1.37,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "HAM",
+    "destination": "PEK",
+    "transitDays": 4,
+    "minimum": 126.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.16
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.49
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.07
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.79
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.65
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.22
+     }
+    ],
+    "fuelPerKg": 0.9,
+    "securityPerKg": 0.1
+   },
+   {
+    "origin": "HAM",
+    "destination": "SYD",
+    "transitDays": 6,
+    "minimum": 56.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 6.2
+     },
+     {
+      "fromKg": 45,
+      "rate": 5.15
+     },
+     {
+      "fromKg": 100,
+      "rate": 4.53
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.49
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.79
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.04
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.82
+     }
+    ],
+    "fuelPerKg": 0.76,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "MUC",
+    "destination": "LIM",
+    "transitDays": 3,
+    "minimum": 124.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.3
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.56
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.56
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.24
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.09
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.65
+     }
+    ],
+    "fuelPerKg": 1.2,
+    "securityPerKg": 0.19
+   },
+   {
+    "origin": "MUC",
+    "destination": "NBO",
+    "transitDays": 4,
+    "minimum": 140.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.64
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.08
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.35
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.51
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.91
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.53
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.39
+     }
+    ],
+    "fuelPerKg": 1.2,
+    "securityPerKg": 0.12
+   },
+   {
+    "origin": "MUC",
+    "destination": "ORD",
+    "transitDays": 1,
+    "minimum": 144.16,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.07
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.79
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.04
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.86
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.4
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.02
+     }
+    ],
+    "fuelPerKg": 1.16,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "STR",
+    "destination": "MIA",
+    "transitDays": 6,
+    "minimum": 117.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.69
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.28
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.53
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.18
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.77
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.27
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.16
+     }
+    ],
+    "fuelPerKg": 0.68,
+    "securityPerKg": 0.15
+   },
+   {
+    "origin": "STR",
+    "destination": "YYZ",
+    "transitDays": 5,
+    "minimum": 122.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.93
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.4
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.06
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.77
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.49
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.36
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.24
+     }
+    ],
+    "fuelPerKg": 1.19,
+    "securityPerKg": 0.18
+   }
+  ]
+ },
+ {
+  "airlineName": "Wayzata Air Cargo",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "DEL",
+    "transitDays": 2,
+    "minimum": 87.98,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.69
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.67
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.02
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.38
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.09
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.64
+     }
+    ],
+    "fuelPerKg": 1.15,
+    "securityPerKg": 0.26
+   },
+   {
+    "origin": "CGN",
+    "destination": "EZE",
+    "transitDays": 4,
+    "minimum": 80.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.99
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.27
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.65
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.09
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.61
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.19
+     }
+    ],
+    "fuelPerKg": 0.8,
+    "securityPerKg": 0.19
+   },
+   {
+    "origin": "CGN",
+    "destination": "LIM",
+    "transitDays": 5,
+    "minimum": 62.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.59
+     },
+     {
+      "fromKg": 45,
+      "rate": 5.09
+     },
+     {
+      "fromKg": 100,
+      "rate": 4.48
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.9
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.81
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.5
+     }
+    ],
+    "fuelPerKg": 0.77,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "CGN",
+    "destination": "SCL",
+    "transitDays": 6,
+    "minimum": 131.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.54
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.27
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.29
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.04
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.61
+     }
+    ],
+    "fuelPerKg": 1.05,
+    "securityPerKg": 0.16
+   },
+   {
+    "origin": "DUS",
+    "destination": "BOG",
+    "transitDays": 3,
+    "minimum": 125.08,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.46
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.84
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.26
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.0
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.46
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.02
+     }
+    ],
+    "fuelPerKg": 0.73,
+    "securityPerKg": 0.2
+   },
+   {
+    "origin": "DUS",
+    "destination": "NBO",
+    "transitDays": 4,
+    "minimum": 119.78,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.55
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.96
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.6
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.59
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.36
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.86
+     }
+    ],
+    "fuelPerKg": 1.31,
+    "securityPerKg": 0.17
+   },
+   {
+    "origin": "DUS",
+    "destination": "TLV",
+    "transitDays": 2,
+    "minimum": 81.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.32
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.72
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.34
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.76
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.27
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.98
+     }
+    ],
+    "fuelPerKg": 0.73,
+    "securityPerKg": 0.12
+   },
+   {
+    "origin": "FRA",
+    "destination": "ATL",
+    "transitDays": 5,
+    "minimum": 129.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.27
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.71
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.06
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.73
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.42
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.08
+     }
+    ],
+    "fuelPerKg": 0.78,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "FRA",
+    "destination": "DOH",
+    "transitDays": 1,
+    "minimum": 136.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.44
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.64
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.67
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.48
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.15
+     }
+    ],
+    "fuelPerKg": 1.21,
+    "securityPerKg": 0.19
+   },
+   {
+    "origin": "FRA",
+    "destination": "EZE",
+    "transitDays": 5,
+    "minimum": 121.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.93
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.39
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.47
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.85
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.39
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.03
+     }
+    ],
+    "fuelPerKg": 1.15,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "FRA",
+    "destination": "JFK",
+    "transitDays": 4,
+    "minimum": 93.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.39
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.92
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.22
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.73
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.49
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.25
+     }
+    ],
+    "fuelPerKg": 0.92,
+    "securityPerKg": 0.22
+   },
+   {
+    "origin": "FRA",
+    "destination": "LAX",
+    "transitDays": 4,
+    "minimum": 107.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.85
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.48
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.81
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.45
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.23
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.97
+     }
+    ],
+    "fuelPerKg": 1.19,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "FRA",
+    "destination": "MEX",
+    "transitDays": 4,
+    "minimum": 126.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.49
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.65
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.09
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.88
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.45
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.25
+     }
+    ],
+    "fuelPerKg": 1.0,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "FRA",
+    "destination": "NRT",
+    "transitDays": 3,
+    "minimum": 136.74,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.29
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.64
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.31
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.75
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.45
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.04
+     }
+    ],
+    "fuelPerKg": 0.61,
+    "securityPerKg": 0.15
+   },
+   {
+    "origin": "HAM",
+    "destination": "EZE",
+    "transitDays": 6,
+    "minimum": 56.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.81
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.56
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.67
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.98
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.62
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.2
+     }
+    ],
+    "fuelPerKg": 0.72,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "HAM",
+    "destination": "HKG",
+    "transitDays": 4,
+    "minimum": 130.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.78
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.95
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.66
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.18
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.7
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.36
+     }
+    ],
+    "fuelPerKg": 1.16,
+    "securityPerKg": 0.18
+   },
+   {
+    "origin": "HAM",
+    "destination": "TLV",
+    "transitDays": 1,
+    "minimum": 135.68,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.89
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.63
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.35
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.02
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.7
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.3
+     }
+    ],
+    "fuelPerKg": 1.2,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "MUC",
+    "destination": "CAI",
+    "transitDays": 2,
+    "minimum": 144.16,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.49
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.46
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.09
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.41
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.96
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.49
+     }
+    ],
+    "fuelPerKg": 0.97,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "MUC",
+    "destination": "DXB",
+    "transitDays": 2,
+    "minimum": 106.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 2.76
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.51
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.86
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.67
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.2
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.0
+     }
+    ],
+    "fuelPerKg": 0.56,
+    "securityPerKg": 0.19
+   },
+   {
+    "origin": "MUC",
+    "destination": "EZE",
+    "transitDays": 4,
+    "minimum": 121.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.94
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.35
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.87
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.33
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.83
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.04
+     }
+    ],
+    "fuelPerKg": 1.23,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "MUC",
+    "destination": "ICN",
+    "transitDays": 5,
+    "minimum": 111.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.73
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.02
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.3
+     },
+     {
+      "fromKg": 300,
+      "rate": 1.75
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.31
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.94
+     }
+    ],
+    "fuelPerKg": 1.08,
+    "securityPerKg": 0.2
+   },
+   {
+    "origin": "MUC",
+    "destination": "MIA",
+    "transitDays": 5,
+    "minimum": 55.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.77
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.17
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.47
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.1
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.93
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.51
+     }
+    ],
+    "fuelPerKg": 0.74,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "MUC",
+    "destination": "NRT",
+    "transitDays": 2,
+    "minimum": 140.98,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.2
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.53
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.61
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.25
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.85
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.52
+     }
+    ],
+    "fuelPerKg": 1.26,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "MUC",
+    "destination": "PEK",
+    "transitDays": 6,
+    "minimum": 112.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.27
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.63
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.16
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.84
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.22
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.75
+     }
+    ],
+    "fuelPerKg": 1.3,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "MUC",
+    "destination": "SCL",
+    "transitDays": 4,
+    "minimum": 138.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.61
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.88
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.57
+     },
+     {
+      "fromKg": 300,
+      "rate": 3.17
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.76
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.4
+     }
+    ],
+    "fuelPerKg": 1.11,
+    "securityPerKg": 0.2
+   },
+   {
+    "origin": "STR",
+    "destination": "SGN",
+    "transitDays": 5,
+    "minimum": 71.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.41
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.01
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.29
+     },
+     {
+      "fromKg": 300,
+      "rate": 2.6
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.39
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.82
+     }
+    ],
+    "fuelPerKg": 0.95,
+    "securityPerKg": 0.12
+   }
+  ]
+ },
+ {
+  "airlineName": "Yellowtail Air Freight",
+  "currency": "EUR",
+  "validFrom": "2026-11-01",
+  "validTo": "2026-11-30",
+  "lanes": [
+   {
+    "origin": "CGN",
+    "destination": "SYD",
+    "transitDays": 5,
+    "minimum": 75.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.92
+     },
+     {
+      "fromKg": 45,
+      "rate": 5.03
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.87
+     },
+     {
+      "fromKg": 250,
+      "rate": 3.02
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.33
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.86
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.54
+     }
+    ],
+    "fuelPerKg": 0.76,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "DUS",
+    "destination": "JFK",
+    "transitDays": 5,
+    "minimum": 100.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.96
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.21
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.82
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.34
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.83
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.5
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.25
+     }
+    ],
+    "fuelPerKg": 1.09,
+    "securityPerKg": 0.13
+   },
+   {
+    "origin": "FRA",
+    "destination": "BKK",
+    "transitDays": 2,
+    "minimum": 91.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.19
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.4
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.86
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.26
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.9
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.58
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.26
+     }
+    ],
+    "fuelPerKg": 1.05,
+    "securityPerKg": 0.27
+   },
+   {
+    "origin": "FRA",
+    "destination": "DFW",
+    "transitDays": 2,
+    "minimum": 109.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.76
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.78
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.42
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.69
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.52
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.22
+     }
+    ],
+    "fuelPerKg": 0.85,
+    "securityPerKg": 0.25
+   },
+   {
+    "origin": "FRA",
+    "destination": "LIM",
+    "transitDays": 5,
+    "minimum": 72.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 5.09
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.12
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.63
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.72
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.2
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.58
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.37
+     }
+    ],
+    "fuelPerKg": 1.1,
+    "securityPerKg": 0.19
+   },
+   {
+    "origin": "FRA",
+    "destination": "NBO",
+    "transitDays": 7,
+    "minimum": 91.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.3
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.78
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.87
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.18
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.98
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.54
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.19
+     }
+    ],
+    "fuelPerKg": 0.94,
+    "securityPerKg": 0.16
+   },
+   {
+    "origin": "FRA",
+    "destination": "ORD",
+    "transitDays": 4,
+    "minimum": 110.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.73
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.32
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.42
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.82
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.64
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.46
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.14
+     }
+    ],
+    "fuelPerKg": 0.66,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "HAM",
+    "destination": "BOG",
+    "transitDays": 2,
+    "minimum": 127.2,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.62
+     },
+     {
+      "fromKg": 45,
+      "rate": 4.06
+     },
+     {
+      "fromKg": 100,
+      "rate": 3.53
+     },
+     {
+      "fromKg": 250,
+      "rate": 3.53
+     },
+     {
+      "fromKg": 500,
+      "rate": 2.44
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.76
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.29
+     }
+    ],
+    "fuelPerKg": 1.43,
+    "securityPerKg": 0.23
+   },
+   {
+    "origin": "HAM",
+    "destination": "MEX",
+    "transitDays": 3,
+    "minimum": 81.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.28
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.49
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.17
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.67
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.5
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.38
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.1
+     }
+    ],
+    "fuelPerKg": 0.68,
+    "securityPerKg": 0.21
+   },
+   {
+    "origin": "HAM",
+    "destination": "SGN",
+    "transitDays": 6,
+    "minimum": 68.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.45
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.69
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.77
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.47
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.8
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.46
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.28
+     }
+    ],
+    "fuelPerKg": 0.91,
+    "securityPerKg": 0.11
+   },
+   {
+    "origin": "MUC",
+    "destination": "JNB",
+    "transitDays": 4,
+    "minimum": 117.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 4.02
+     },
+     {
+      "fromKg": 45,
+      "rate": 3.1
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.54
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.33
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.48
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.3
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.3
+     }
+    ],
+    "fuelPerKg": 0.91,
+    "securityPerKg": 0.26
+   },
+   {
+    "origin": "MUC",
+    "destination": "LAX",
+    "transitDays": 5,
+    "minimum": 82.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.12
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.28
+     },
+     {
+      "fromKg": 100,
+      "rate": 1.73
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.4
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.08
+     },
+     {
+      "fromKg": 1000,
+      "rate": 0.98
+     },
+     {
+      "fromKg": 2000,
+      "rate": 0.83
+     }
+    ],
+    "fuelPerKg": 1.17,
+    "securityPerKg": 0.14
+   },
+   {
+    "origin": "STR",
+    "destination": "LAX",
+    "transitDays": 2,
+    "minimum": 137.8,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.81
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.78
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.37
+     },
+     {
+      "fromKg": 250,
+      "rate": 2.37
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.55
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.25
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.25
+     }
+    ],
+    "fuelPerKg": 1.06,
+    "securityPerKg": 0.27
+   },
+   {
+    "origin": "STR",
+    "destination": "MEL",
+    "transitDays": 5,
+    "minimum": 102.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 6.48
+     },
+     {
+      "fromKg": 45,
+      "rate": 5.83
+     },
+     {
+      "fromKg": 100,
+      "rate": 5.01
+     },
+     {
+      "fromKg": 250,
+      "rate": 4.36
+     },
+     {
+      "fromKg": 500,
+      "rate": 3.49
+     },
+     {
+      "fromKg": 1000,
+      "rate": 2.97
+     },
+     {
+      "fromKg": 2000,
+      "rate": 2.38
+     }
+    ],
+    "fuelPerKg": 1.16,
+    "securityPerKg": 0.24
+   },
+   {
+    "origin": "STR",
+    "destination": "MNL",
+    "transitDays": 5,
+    "minimum": 61.0,
+    "breaks": [
+     {
+      "fromKg": 0,
+      "rate": 3.37
+     },
+     {
+      "fromKg": 45,
+      "rate": 2.76
+     },
+     {
+      "fromKg": 100,
+      "rate": 2.35
+     },
+     {
+      "fromKg": 250,
+      "rate": 1.76
+     },
+     {
+      "fromKg": 500,
+      "rate": 1.6
+     },
+     {
+      "fromKg": 1000,
+      "rate": 1.44
+     },
+     {
+      "fromKg": 2000,
+      "rate": 1.17
+     }
+    ],
+    "fuelPerKg": 1.32,
+    "securityPerKg": 0.23
+   }
+  ]
+ }
+]
