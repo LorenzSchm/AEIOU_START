@@ -19,6 +19,25 @@ dependencies {
     // Tika logs through SLF4J; the CLI and tests don't need its log output.
     runtimeOnly 'org.slf4j:slf4j-nop:2.0.17'
 
+    // --- Voice reader (ticket 02) -------------------------------------------
+    // Audio decoding through bundled ffmpeg (JavaCV) and local Whisper
+    // (whisper-jni ships its own native engine). Nothing to install.
+    implementation('org.bytedeco:javacv:1.5.12') {
+        // JavaCV drags in every bytedeco preset; the voice reader needs only ffmpeg.
+        ['opencv', 'openblas', 'flycapture', 'libdc1394', 'libfreenect', 'libfreenect2',
+         'librealsense', 'librealsense2', 'videoinput', 'artoolkitplus', 'flandmark',
+         'leptonica', 'tesseract'].each { exclude group: 'org.bytedeco', module: it }
+    }
+    implementation 'org.bytedeco:ffmpeg:7.1.1-1.5.12'
+    // ffmpeg natives only for the platforms we run on. Intel Mac:
+    //   ./gradlew test -PffmpegPlatforms=macosx-x86_64
+    (findProperty('ffmpegPlatforms') ?: 'macosx-arm64,windows-x86_64').toString().split(',').each { platform ->
+        runtimeOnly "org.bytedeco:javacpp:1.5.12:${platform.trim()}"
+        runtimeOnly "org.bytedeco:ffmpeg:7.1.1-1.5.12:${platform.trim()}"
+    }
+    implementation 'io.github.givimad:whisper-jni:1.7.1'
+    // --- end voice reader ------------------------------------------------------
+
     testImplementation platform('org.junit:junit-bom:5.12.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

@@ -45,3 +45,28 @@ video (`video/*`), container (zip, eml, msg, ...), plain text (`text/plain`), of
 `BackendGuardTest` compares `../backend/` with `origin/feat/bullshitBranch` (changed,
 deleted and new files) and fails on any difference. It skips with a message if git or
 the ref is not available. Run `git fetch` first if Lorenz's branch moved on.
+
+## Voice reader
+
+`audio/*` (mp3, wav, m4a, ogg, opus, flac, aac, audio-only webm) is decoded to 16 kHz mono
+with the ffmpeg bundled in JavaCV, then transcribed locally by Whisper (whisper-jni, which
+ships its own native engine). No gateway cost, nothing to install.
+
+- Model: `base-q5_1` (multilingual, ~57 MB). Downloaded once from Hugging Face into
+  `~/.cache/edgelab/whisper/`, then works offline. Override with `EDGELAB_WHISPER_MODEL`
+  (e.g. `base`, `small-q5_1`) and `EDGELAB_WHISPER_DIR`. `tiny` was too weak for German numbers.
+- Language is detected automatically (German and English tested).
+- Confidence: whisper-jni does not expose token scores, so it is judged from the speaking
+  rate and repetition loops in the transcript (0.85 for normal speech).
+- ffmpeg natives are pulled only for macOS arm64 and Windows x64. Intel Mac:
+  `./gradlew test -PffmpegPlatforms=macosx-x86_64` (comma-separated list also works).
+- Corrupt audio comes back `UNREADABLE` with a note. Over 10 minutes: cut, status `PARTIAL`.
+
+```bash
+./gradlew -q read --args="src/test/resources/voice/rfq-en.mp3"
+```
+
+Voice fixtures (`src/test/resources/voice/`) were made with Windows' built-in voices
+(PowerShell `System.Speech.Synthesis.SpeechSynthesizer`, Zira en-US and Hedda de-DE,
+16 kHz mono wav); the mp3s come from those wavs via `MakeVoiceFixtures` (test sources).
+Voice tests skip with a message if the model cannot be downloaded.

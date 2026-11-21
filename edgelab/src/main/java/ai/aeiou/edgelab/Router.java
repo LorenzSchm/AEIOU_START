@@ -46,7 +46,7 @@ public final class Router {
     public static Router standard() {
         return empty()
                 .withPhoto(FormatReader.notYetSupported("photo"))          // ticket: photo reader
-                .withVoice(FormatReader.notYetSupported("voice"))          // ticket: voice reader
+                .withVoice(ai.aeiou.edgelab.voice.VoiceReader.standard())  // ticket 02: voice reader
                 .withVideo(FormatReader.notYetSupported("video"))          // ticket: video reader
                 .withContainer(FormatReader.notYetSupported("container"))  // ticket: container walker
                 .withPlainText(new PlainTextReader())
