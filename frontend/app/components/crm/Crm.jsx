@@ -192,7 +192,6 @@ function Table({ label, columns, rows, sort, onSort, onRow, rowKey, rowLabel, em
                 ) : c.label}
               </th>
             ))}
-            <th aria-hidden="true" className="th-go" />
           </tr>
         </thead>
         <tbody>
@@ -207,7 +206,6 @@ function Table({ label, columns, rows, sort, onSort, onRow, rowKey, rowLabel, em
               {columns.map((c) => (
                 <td key={c.key} className={(c.align === "end" ? "end " : "") + (c.optional ? "opt" : "")}>{c.render(r)}</td>
               ))}
-              <td className="td-go"><Icon name="chevron" size={14} /></td>
             </tr>
           ))}
         </tbody>
@@ -285,14 +283,14 @@ function Crm({ messages, onOpen }) {
         </span>
       ) },
     { key: "customer", label: "Customer", value: (d) => d.customer,
-      render: (d) => <span className="cell-who"><Avatar name={d.customer} /><span>{d.customer}</span></span> },
+      render: (d) => <span className="cell-who"><Avatar name={d.customer} /><span title={d.customer}>{d.customer}</span></span> },
     { key: "lane", label: "Lane", value: (d) => (d.origin || "") + (d.destination || ""),
       render: (d) => <RouteBadge origin={d.origin} destination={d.destination} size="sm" /> },
     { key: "carrier", label: "Carrier", value: (d) => d.carrier, optional: true,
       render: (d) => (
         <span className="cell-carrier">
           {d.booking.airline_code && <i className="mono">{d.booking.airline_code}</i>}
-          <span>{d.carrier || "—"}</span>
+          <span title={d.carrier || undefined}>{d.carrier || "—"}</span>
         </span>
       ) },
     { key: "weight", label: "Weight", align: "end", value: (d) => d.weightKg, optional: true,
@@ -329,7 +327,7 @@ function Crm({ messages, onOpen }) {
       render: (c) => (
         <span className="cell-who">
           <Avatar name={c.name} />
-          <span className="cell-stack"><b>{c.name}</b><small>{c.email}</small></span>
+          <span className="cell-stack" title={c.name + " · " + c.email}><b>{c.name}</b><small>{c.email}</small></span>
         </span>
       ) },
     { key: "requests", label: "RFQs", align: "end", value: (c) => c.requests, render: (c) => <span className="mono">{c.requests}</span> },
@@ -362,7 +360,7 @@ function Crm({ messages, onOpen }) {
     { key: "id", label: "Request", value: (d) => d.id,
       render: (d) => <span className="cell-stack"><b className="mono">#{d.id}</b><small>{d.quoted ? "quoted" : "not quoted"}</small></span> },
     { key: "customer", label: "Customer", value: (d) => d.customer,
-      render: (d) => <span className="cell-who"><Avatar name={d.customer} /><span>{d.customer}</span></span> },
+      render: (d) => <span className="cell-who"><Avatar name={d.customer} /><span title={d.customer}>{d.customer}</span></span> },
     { key: "lane", label: "Lane", value: (d) => (d.origin || "") + (d.destination || ""),
       render: (d) => (d.origin || d.destination ? <RouteBadge origin={d.origin} destination={d.destination} size="sm" /> : <span className="muted">unknown</span>) },
     { key: "weight", label: "Weight", align: "end", value: (d) => d.weightKg, optional: true,
