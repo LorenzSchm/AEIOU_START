@@ -9,7 +9,7 @@ public final class MailParser {
 
   private static final Pattern STREET_POSTCODE =
       Pattern.compile(
-          "(?iu:\\b(?:PLZ|post\\s*code|postal code|zip(?: code)?)\\s*[:#-]?\\s*)([0-9]{5})\\b"
+          "(?iu:\\b(?:PLZ|post\\s*code|postal code|zip(?: code)?)\\s*(?:is\\s+|ist\\s+|[:#-]\\s*)?)([0-9]{5})\\b"
               + "|(?<![\\p{L}\\d.,])(?:D-)?([0-9]{5})\\h+\\(?(?=\\p{Lu}\\p{Ll})");
 
   public static Optional<String> pickupPostcode(String text, String zone) {
@@ -22,6 +22,29 @@ public final class MailParser {
             .distinct()
             .toList();
     return candidates.size() == 1 ? Optional.of(candidates.getFirst()) : Optional.empty();
+  }
+
+  public static String authoredText(String body) {
+    return body.split(
+        "(?im)^\\h*(?:>|On .+ wrote:|Am .+ schrieb|[- ]{2,}(?:Original|Forwarded) Message[- ]{2,})",
+        2)[0].strip();
+  }
+
+  public static String currentSubject(String subject, String body) {
+    if (has(subject, "^\\s*(?:re:\\s*)*(?:fw|fwd|wg):")
+        && !authoredText(body).equals(body.strip())) return "Air freight RFQ";
+    return subject;
+  }
+
+  private static boolean selfDelivery(String body) {
+    return has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b");
+  }
+
+  public static boolean requestsPickup(String subject, String body) {
+    String text = subject + "\n" + body;
+    if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "");
+    return has(text, "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from|arrange (?:the |a )?truck|door["
+        + " -]to|abhol|vorlauf|ex[ -]?works|\\bEXW\\b");
   }
 
   private static Pattern pattern(String s) {
@@ -168,21 +191,21 @@ public final class MailParser {
   public record Parsed(Shipment shipment, String issue) {}
 
   public static Parsed request(String subject, String body, boolean attachments, Catalog catalog) {
+    return request(subject, body, attachments, catalog, null);
+  }
+
+  public static Parsed request(
+      String subject, String body, boolean attachments, Catalog catalog, String confirmedPostcode) {
+    subject = currentSubject(subject, body);
+    body = authoredText(body);
     String text = subject + "\n" + body;
     var codes = captures(text.toUpperCase(Locale.ROOT), "\\b([A-Z]{3})\\b");
     var origins = codes.stream().filter(catalog.zones::containsValue).distinct().toList();
     var destinations = codes.stream().filter(catalog.destinations::contains).distinct().toList();
     if (origins.isEmpty()) origins = cityCodes(text, catalog.zones.values());
     if (destinations.isEmpty()) destinations = cityCodes(text, catalog.destinations);
-    boolean selfDelivery =
-        has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b");
-    String pickupText =
-        selfDelivery ? text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "") : text;
-    boolean pickup =
-        has(
-            pickupText,
-            "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing)? from|arrange (?:the |a )?truck|door["
-                + " -]to|abhol|vorlauf|ex[ -]?works|\\bEXW\\b");
+    boolean selfDelivery = selfDelivery(body);
+    boolean pickup = requestsPickup(subject, body);
     var zones =
         new ArrayList<>(
             captures(
@@ -190,7 +213,7 @@ public final class MailParser {
                 "\\b(?:zone|PLZ|postal code|post ?code|zip(?:"
                     + " code)?)\\s*[:#-]?\\s*(\\d{2})(?:\\d{3})?\\b"));
     if (pickup) zones.addAll(captures(text, "\\b(\\d{2})\\d{3}\\b"));
-    String zone = only(zones);
+    String zone = confirmedPostcode == null ? only(zones) : confirmedPostcode.substring(0, 2);
     String origin = origins.isEmpty() ? catalog.zones.get(zone) : only(origins);
     boolean fast = has(text, "fastest|quickest|shortest|schnellst|prioriti[sz]e speed");
     boolean cheap =

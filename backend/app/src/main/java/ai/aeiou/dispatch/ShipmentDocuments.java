@@ -60,7 +60,8 @@ final class ShipmentDocuments {
     return documents;
   }
 
-  Decision inspect(Map<String, Object> original, List<Map<String, Object>> followUps) {
+  Decision inspect(Map<String, Object> original, List<Map<String, Object>> followUps,
+      String confirmedPostcode) {
     var latestPacking = read(original);
     var followUpDocuments = new ArrayList<PackingSafety.Document>();
     latestPacking.stream()
@@ -100,7 +101,7 @@ final class ShipmentDocuments {
             .replaceAll(
                 "(?iu)\\b(?:non[- ]dangerous|not (?:dangerous|hazardous)|non[- ]hazardous)\\b",
                 "general cargo");
-    var parsed = MailParser.request(subject, body, false, catalog);
+    var parsed = MailParser.request(subject, body, false, catalog, confirmedPostcode);
     var terms = parsed.shipment();
     var destinations = new HashSet<String>();
     var weights = new HashSet<BigDecimal>();
@@ -116,7 +117,8 @@ final class ShipmentDocuments {
     if (destinations.size() == 1
         && weights.size() == 1
         && volumes.size() == 1
-        && (parsed.issue() == null || parsed.issue().equals(catalog.problem(terms)))) {
+        && (parsed.issue() == null || parsed.issue().equals(catalog.problem(terms))
+            || CustomerClarifications.PICKUP_ISSUE.equals(parsed.issue()))) {
       var verified =
           new Shipment(
               terms.origin(),
@@ -128,6 +130,8 @@ final class ShipmentDocuments {
               null,
               0);
       if (catalog.problem(verified) == null) return new Decision(null, null, null, verified);
+      if (CustomerClarifications.PICKUP_ISSUE.equals(parsed.issue()))
+        return new Decision(null, null, null, null);
     }
     return new Decision(
         "packing-correction",

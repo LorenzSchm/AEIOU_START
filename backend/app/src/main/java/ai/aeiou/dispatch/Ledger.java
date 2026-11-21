@@ -75,6 +75,8 @@ class Ledger {
         CREATE TABLE IF NOT EXISTS tender(request_id INTEGER,email TEXT,leg TEXT,reply_id INTEGER,euros TEXT,days INTEGER,
         issue TEXT, terms TEXT, PRIMARY KEY(request_id,email))
         """);
+    ensureColumn("tender", "bid_action", "TEXT");
+    ensureColumn("wave_case", "customer_reply", "INTEGER");
     db.execute(
         "CREATE TABLE IF NOT EXISTS retry(action TEXT PRIMARY KEY, after_epoch INTEGER NOT NULL)");
     db.execute(
@@ -92,6 +94,11 @@ class Ledger {
     db.update(
         "INSERT OR IGNORE INTO wave_case(id,opened,operator,reason) SELECT id,0,1,'Existing"
             + " operator case' FROM mail WHERE kind='request'");
+  }
+
+  private void ensureColumn(String table, String column, String type) {
+    if (!db.queryForList("SELECT name FROM pragma_table_info(?)", String.class, table)
+        .contains(column)) db.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
   }
 
   String write(Object o) {
@@ -159,6 +166,12 @@ class Ledger {
 
   List<Map<String, Object>> tenders(long id) {
     return db.queryForList("SELECT * FROM tender WHERE request_id=? ORDER BY email", id);
+  }
+
+  static String bidAction(Map<String, Object> tender) {
+    return tender.get("bid_action") == null
+        ? "bid:" + tender.get("request_id") + ":" + tender.get("email")
+        : str(tender, "bid_action");
   }
 
   boolean counterAnswered(long request) {
@@ -272,17 +285,19 @@ class Ledger {
     var matches = new HashSet<Long>();
     var tag = CASE_REFERENCE.matcher(subject);
     while (tag.find()) matches.add(Long.parseLong(tag.group(1)));
+    var linked = new HashSet<Long>();
     for (var row :
         db.queryForList(
             """
-            SELECT t.request_id,d.response FROM tender t JOIN deliveries d ON d.action='bid:'||t.request_id||':'||t.email
+            SELECT t.request_id,d.response FROM tender t JOIN deliveries d
+              ON d.action=COALESCE(t.bid_action,'bid:'||t.request_id||':'||t.email)
             WHERE t.email=? AND d.response IS NOT NULL
             """,
             sender)) {
       var receipt = read(row.get("response"), Map.class);
-      if (parents.contains(String.valueOf(receipt.get("id"))))
-        matches.add(id(row.get("request_id")));
+      if (parents.contains(String.valueOf(receipt.get("id")))) linked.add(id(row.get("request_id")));
     }
+    matches.addAll(linked);
     if (matches.size() != 1) return;
     long request = matches.iterator().next();
     var bid = MailParser.bid(body, truck);
@@ -291,7 +306,9 @@ class Ledger {
         db.update(
             """
             UPDATE tender SET reply_id=?,euros=?,days=?,issue=? WHERE request_id=? AND email=? AND
-            EXISTS (SELECT 1 FROM deliveries WHERE action=?)
+            EXISTS (SELECT 1 FROM deliveries WHERE
+              action=COALESCE(tender.bid_action,'bid:'||tender.request_id||':'||tender.email))
+            AND (? OR COALESCE(bid_action,'bid:'||request_id||':'||email)='bid:'||request_id||':'||email)
             """,
             mid,
             price,
@@ -299,7 +316,7 @@ class Ledger {
             bid.isEmpty() ? "No unambiguous EUR total and transit" : null,
             request,
             sender,
-            "bid:" + request + ":" + sender);
+            linked.contains(request));
     if (updated > 0)
       db.update(
           "UPDATE mail SET root=?,stage=? WHERE id=?",
@@ -453,7 +470,7 @@ class Ledger {
             email,
             t.get("reply_id") != null
                 ? t.get("euros") != null ? "priced" : "unreadable"
-                : delivery("bid:" + mid + ":" + email));
+                : delivery(bidAction(t)));
       }
       row.put("bid_requests", bids);
     }

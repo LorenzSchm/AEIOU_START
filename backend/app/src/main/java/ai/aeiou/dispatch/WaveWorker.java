@@ -24,6 +24,7 @@ class WaveWorker {
   private final long waitSeconds;
   private final boolean counteroffers;
   private final ShipmentDocuments documents;
+  private final CustomerClarifications clarifications;
   private volatile Instant lastPoll;
   private volatile String error;
   private Instant pollAfter = Instant.EPOCH;
@@ -48,6 +49,7 @@ class WaveWorker {
     this.waitSeconds = waitSeconds;
     this.counteroffers = counteroffers;
     this.documents = new ShipmentDocuments(ledger, upstream, catalog);
+    this.clarifications = new CustomerClarifications(ledger, catalog);
   }
 
   record Status(
@@ -106,8 +108,12 @@ class WaveWorker {
                 SELECT m.id FROM mail m JOIN wave_case w ON m.id=w.id
                 LEFT JOIN document_check p ON p.request_id=m.id
                 WHERE w.operator=0 AND (
-                  m.stage IN ('new','collecting','waiting for pickup','waiting for air price')
+                  m.stage IN ('new','collecting','waiting for pickup','waiting for air price','waiting for customer')
                   OR (m.stage IN ('review','waiting for documents') AND julianday(m.received)>julianday(?) AND (
+                    w.reason IN ('Pickup requested. Confirm the pickup postcode or zone.',
+                      'Confirm the pickup requirement and postcode.', 'Confirm origin and destination airports.',
+                      'Confirm total gross weight in kg.', 'Confirm total shipment volume in cubic metres.',
+                      'Confirm cheapest or fastest service.', 'Confirm the pickup zone and matching airport.') OR
                     (p.request_id IS NULL AND w.reason IN (
                       'Review the attached shipment specifications.',
                       'Packing attachment could not be checked for dangerous goods.',
@@ -176,6 +182,10 @@ class WaveWorker {
   }
 
   private Shipment checkPacking(long id, Map<String, Object> mail) {
+    return checkPacking(id, mail, clarifications.details(id, mail));
+  }
+
+  private Shipment checkPacking(long id, Map<String, Object> mail, CustomerClarifications.Details details) {
     var replies =
         ledger
             .jdbc()
@@ -192,7 +202,8 @@ class WaveWorker {
                 "dg-incomplete:" + id,
                 "packing-copy:" + id,
                 "packing-correction:" + id);
-    var decision = documents.inspect(mail, replies);
+    var decision = documents.inspect(details.message(), replies,
+        details.postcodeReply() == null ? null : details.postcode());
     if (!decision.holdsQuote()) return decision.shipment();
     if (automatic
         && !Ledger.str(mail, "sender").isBlank()
@@ -237,6 +248,41 @@ class WaveWorker {
       throw new Conflict("Shipment differs from the verified packing documents.");
   }
 
+  private void askCustomer(long id, Map<String, Object> mail, CustomerClarifications.Details details,
+      String question, boolean missingPostcode) {
+    String action = (missingPostcode ? "pickup-postcode:" : "rfq-info:") + id;
+    if (details.latestReply() != null) action += ":" + details.latestReply();
+    boolean alreadyClaimed = ledger.delivery(action) != null;
+    if (alreadyClaimed && CustomerClarifications.WAITING.equals(mail.get("stage"))) return;
+    ledger.stage(id, CustomerClarifications.WAITING, question);
+    if (alreadyClaimed) return;
+    try {
+      send(action, Map.of(
+          "to", mail.get("sender"), "in_reply_to", details.latestReply() == null ? id : details.latestReply(),
+          "subject", "Re: " + mail.get("subject"),
+          "body", "Hi,\n\n" + question + "\n\nBest regards,\nTeam AEIOU"));
+    } catch (RetryLater retry) {
+      throw retry;
+    } catch (Conflict ex) {
+      ledger.stage(id, CustomerClarifications.WAITING, ex.getMessage());
+    }
+  }
+
+  private void applyCustomerReply(long id, long replyId, MailParser.Parsed parsed) {
+    ledger.transactions().executeWithoutResult(tx -> {
+      ledger.jdbc().update("UPDATE mail SET fields=?,stage='new',proposal=NULL WHERE id=?",
+          ledger.write(parsed.shipment()), id);
+      ledger.jdbc().update(
+          "UPDATE wave_case SET customer_reply=?,reason=?,offers=NULL,queried=0 WHERE id=?",
+          replyId, parsed.issue(), id);
+      if (parsed.issue() == null)
+        ledger.jdbc().update("""
+            INSERT INTO rfq_parse(request_id,state,model) VALUES(?,'done','java')
+            ON CONFLICT(request_id) DO UPDATE SET state='done',model='java',result=NULL
+            """, id);
+    });
+  }
+
   private void advance(long id) {
     var m = ledger.mail(id);
     var received = Ledger.instant(m.get("received"));
@@ -256,9 +302,27 @@ class WaveWorker {
           id, delivery.equals("sent") ? "sent" : "review", "Check the recorded quote delivery.");
       return;
     }
-    var verified = checkPacking(id, m);
-    if (verified == null) gateway.ensure(id, m, true);
-    else if (List.of("new", "review", "waiting for documents").contains(m.get("stage"))) {
+    var details = clarifications.details(id, m);
+    var local = MailParser.request(Ledger.str(details.message(), "subject"), Ledger.str(details.message(), "body"),
+        false, catalog, details.postcodeReply() == null ? null : details.postcode());
+    var verified = checkPacking(id, m, details);
+    var w = ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id);
+    boolean missingPostcode = clarifications.needsPostcode(details,
+        ledger.read(m.get("fields"), Shipment.class), local.issue());
+    if (missingPostcode) {
+      String question = clarifications.question(local.shipment(), local.issue(), true);
+      if (question != null) { askCustomer(id, m, details, question, true); return; }
+    }
+    if (details.latestReply() != null && (w.get("customer_reply") == null
+        || Ledger.id(w.get("customer_reply")) != details.latestReply())) {
+      applyCustomerReply(id, details.latestReply(),
+          verified == null ? local : new MailParser.Parsed(verified, null));
+      m = ledger.mail(id);
+    }
+    if (verified == null) {
+      if (details.latestReply() == null && !CustomerClarifications.WAITING.equals(m.get("stage")))
+        gateway.ensure(id, details.message(), true);
+    } else if (List.of("new", "review", "waiting for documents").contains(m.get("stage"))) {
       ledger
           .transactions()
           .executeWithoutResult(
@@ -279,16 +343,20 @@ class WaveWorker {
               });
     }
     m = target(id);
-    var w = ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id);
+    w = ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id);
     var s = ledger.read(m.get("fields"), Shipment.class);
-    if ("new".equals(m.get("stage")) && w.get("reason") != null) {
-      ledger.stage(id, "review", w.get("reason").toString());
+    String issue = catalog.problem(s);
+    if (Set.of("new", "review").contains(m.get("stage")) && w.get("reason") != null)
+      issue = w.get("reason").toString();
+    if (CustomerClarifications.WAITING.equals(m.get("stage"))) issue = local.issue();
+    missingPostcode = clarifications.needsPostcode(details, s, issue);
+    if (issue != null || missingPostcode) {
+      String question = clarifications.question(s, issue, missingPostcode);
+      if (question != null) askCustomer(id, m, details, question, missingPostcode);
+      else ledger.stage(id, "review", issue);
       return;
     }
-    if (catalog.problem(s) != null) {
-      ledger.stage(id, "review", catalog.problem(s));
-      return;
-    }
+    if (details.postcodeReply() != null) sendInvitations(id, s, details, deadline, true);
     long queried = Ledger.id(w.get("queried"));
     boolean completePortal = queried == -1;
     if (queried == 0
@@ -326,17 +394,7 @@ class WaveWorker {
         return;
       }
     }
-    for (var c : catalog.invitations(s)) {
-      if (clock.instant().isAfter(deadline.minusSeconds(8))) break;
-      String key = "bid:" + id + ":" + c.email();
-      if (ledger.delivery(key) == null) {
-        try {
-          invite(id, s, c);
-        } catch (Conflict ex) {
-          log.info("RFQ {} bid to {}: {}", id, c.name(), ex.getMessage());
-        }
-      }
-    }
+    sendInvitations(id, s, details, deadline, false);
     var tenders = ledger.tenders(id);
     boolean allAnswered =
         !tenders.isEmpty() && tenders.stream().allMatch(t -> t.get("reply_id") != null);
@@ -436,6 +494,46 @@ class WaveWorker {
     return w.get("offers") == null ? new Offer[0] : ledger.read(w.get("offers"), Offer[].class);
   }
 
+  private List<Catalog.Carrier> invitations(long id, Shipment shipment, boolean confirmedPickup) {
+    var selected = catalog.invitations(shipment);
+    if (!confirmedPickup || shipment.pickupZone() == null) return selected;
+    var airlines = selected.stream().filter(c -> !c.truck()).toList();
+    var trucks = new LinkedHashSet<Catalog.Carrier>();
+    for (var tender : ledger.tenders(id))
+      catalog.contact(Ledger.str(tender, "email"))
+          .filter(c -> c.truck() && c.serves(shipment.pickupZone())).ifPresent(trucks::add);
+    selected.stream().filter(Catalog.Carrier::truck).forEach(trucks::add);
+    var result = new ArrayList<>(airlines);
+    result.addAll(trucks.stream().limit(5 - airlines.size()).toList());
+    return result;
+  }
+
+  private void sendInvitations(long id, Shipment shipment, CustomerClarifications.Details details,
+      Instant deadline, boolean trucksOnly) {
+    for (var carrier : invitations(id, shipment, details.postcodeReply() != null)) {
+      if (clock.instant().isAfter(deadline.minusSeconds(8))) return;
+      if (trucksOnly && !carrier.truck()) continue;
+      try {
+        invite(id, shipment, carrier, details);
+      } catch (Conflict ex) {
+        log.info("RFQ {} bid to {}: {}", id, carrier.name(), ex.getMessage());
+      }
+    }
+  }
+
+  private boolean sameAirShipment(Shipment first, Shipment second) {
+    return first != null && Objects.equals(first.origin(), second.origin())
+        && Objects.equals(first.destination(), second.destination())
+        && sameNumber(first.weightKg(), second.weightKg())
+        && sameNumber(first.volumeCbm(), second.volumeCbm());
+  }
+
+  private boolean bidHasPostcode(String action, String postcode) {
+    return !ledger.jdbc().queryForList(
+        "SELECT 1 FROM deliveries WHERE action=? AND instr(json_extract(payload,'$.subject'),?)>0",
+        Integer.class, action, "postcode " + postcode).isEmpty();
+  }
+
   record ManualBid(String airline, BigDecimal airTotalEur, int transitDays) {}
 
   record Draft(
@@ -465,21 +563,17 @@ class WaveWorker {
         .filter(
             o -> o.validUntil() != null && o.validUntil().isAfter(clock.instant().plusSeconds(4)))
         .forEach(offers::add);
+    var details = clarifications.details(id, m);
     var airBids = new ArrayList<Offer>();
     var trucks = new ArrayList<Offer>();
     var missingTruckTransit = new HashSet<String>();
     for (var t : ledger.tenders(id)) {
       var original = ledger.read(t.get("terms"), Shipment.class);
-      boolean sameCargo =
-          original != null
-              && Objects.equals(original.origin(), s.origin())
-              && Objects.equals(original.destination(), s.destination())
-              && sameNumber(original.weightKg(), s.weightKg())
-              && sameNumber(original.volumeCbm(), s.volumeCbm());
-      if (!sameCargo || t.get("euros") == null) continue;
+      if (!sameAirShipment(original, s) || t.get("euros") == null) continue;
       var c = catalog.contact(Ledger.str(t, "email")).orElseThrow();
       if (c.truck()
-          && (!Objects.equals(s.pickupZone(), original.pickupZone()) || s.pickupZone() == null))
+          && (s.pickupZone() == null || !Objects.equals(s.pickupZone(), original.pickupZone())
+              || (details.postcodeReply() != null && !bidHasPostcode(Ledger.bidAction(t), details.postcode()))))
         continue;
       if (t.get("days") == null) {
         if (!c.truck() || "fastest".equals(s.preference())) continue;
@@ -516,7 +610,7 @@ class WaveWorker {
     var plan = QuotePlanner.plan(s, offers, airBids, trucks, missingTruckTransit);
     var best = plan.best();
     var pickupDays = plan.pickupDays();
-    String body = best == null ? "" : quoteBody(m, s, best, pickupDays);
+    String body = best == null ? "" : quoteBody(details, s, best, pickupDays);
     return new Draft(
         UUID.randomUUID().toString(),
         best,
@@ -528,15 +622,8 @@ class WaveWorker {
         pickupDays);
   }
 
-  private static String pickupLocation(Map<String, Object> mail, String zone) {
-    String text = Ledger.str(mail, "subject") + "\n" + Ledger.str(mail, "body");
-    return MailParser.pickupPostcode(text, zone)
-        .map(code -> "postcode " + code)
-        .orElse("pickup zone " + zone);
-  }
-
   private static String quoteBody(
-      Map<String, Object> mail, Shipment s, Offer offer, Double pickupDays) {
+      CustomerClarifications.Details details, Shipment s, Offer offer, Double pickupDays) {
     String weight = s.weightKg().stripTrailingZeros().toPlainString() + " kg shipment";
     String priority = "fastest".equals(s.preference()) ? "quickest option" : "lowest rate";
     String route = s.origin() + " to " + s.destination();
@@ -544,7 +631,7 @@ class WaveWorker {
     String transit = offer.transitLabel();
     String service = "Allow about " + transit + " from airport to airport.";
     if (s.pickupZone() != null) {
-      String location = pickupLocation(mail, s.pickupZone());
+      String location = details.location(s.pickupZone());
       service =
           "That includes collection from "
               + location
@@ -736,29 +823,55 @@ class WaveWorker {
   synchronized Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c) {
     var m = target(id);
     checkPacking(id, m, s);
+    return invite(id, s, c, clarifications.details(id, m));
+  }
+
+  private Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c,
+      CustomerClarifications.Details details) {
     if (catalog.problem(s) != null || !c.serves(c.truck() ? s.pickupZone() : s.destination()))
       throw new IllegalArgumentException("Check shipment and carrier coverage.");
+    var previous = ledger.tenders(id).stream().filter(t -> c.email().equals(t.get("email"))).findFirst();
+    String base = "bid:" + id + ":" + c.email();
+    String action = base;
+    if (details.latestReply() != null) {
+      var tender = previous.orElse(null);
+      var prior = tender == null ? null : ledger.read(tender.get("terms"), Shipment.class);
+      if (sameAirShipment(prior, s) && (!c.truck() || (Objects.equals(prior.pickupZone(), s.pickupZone())
+          && (details.postcodeReply() == null || bidHasPostcode(Ledger.bidAction(tender), details.postcode()))))) {
+        action = Ledger.bidAction(tender);
+      } else if (tender != null || (c.truck() && details.postcodeReply() != null)) {
+        action = base + ":" + details.latestReply();
+      }
+    }
+    String state = ledger.delivery(action);
+    if (state != null) return Map.of("state", state);
+    String location = c.truck() ? details.location(s.pickupZone()) : "";
     String leg =
         c.truck()
-            ? "pickup from " + pickupLocation(m, s.pickupZone()) + " to " + s.origin()
+            ? "pickup from " + location + " to " + s.origin()
             : s.origin() + " to " + s.destination();
     ledger
         .jdbc()
         .update(
-            "INSERT OR IGNORE INTO tender(request_id,email,leg,terms) VALUES(?,?,?,?)",
+            """
+            INSERT INTO tender(request_id,email,leg,terms,bid_action) VALUES(?,?,?,?,?)
+            ON CONFLICT(request_id,email) DO UPDATE SET terms=excluded.terms, bid_action=excluded.bid_action,
+              reply_id=NULL,euros=NULL,days=NULL,issue=NULL
+            WHERE COALESCE(tender.bid_action,'bid:'||tender.request_id||':'||tender.email)<>excluded.bid_action
+            """,
             id,
             c.email(),
             c.kind(),
-            ledger.write(s));
+            ledger.write(s), action);
     String service =
         c.truck()
             ? "collection from "
-                + pickupLocation(m, s.pickupZone())
+                + location
                 + " and delivery to "
                 + s.origin()
             : "air freight from " + leg;
     return send(
-        "bid:" + id + ":" + c.email(),
+        action,
         Map.of(
             "to",
             c.email(),

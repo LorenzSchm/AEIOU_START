@@ -226,6 +226,89 @@ class WaveWorkerTest {
   }
 
   @Test
+  void asksImmediatelyAndRequotesTruckPickupFromTheConfirmedPostcode() throws Exception {
+    receive(7, "buyer@hackloop.mail", "RE: FW: Old RFQ to HKG",
+        "Please quote the cheapest air freight to SGN for 100 kg and 0.2 cbm, including collection"
+            + " from our warehouse.\n\nBest greetings from Regensburg"
+            + "\n\n-----Original Message-----\nOld pickup postcode 93047 and destination HKG.", null);
+    var prior = new Shipment("MUC", "SGN", new java.math.BigDecimal("100"),
+        new java.math.BigDecimal("0.2"), "cheapest", "93", null, 0);
+    var trucker = catalog.contact("isarwelle-spedition@hackloop.mail").orElseThrow();
+    var stale = worker.invite(7, prior, trucker);
+    worker.work();
+    var question = outbound.getLast();
+    assertEquals("buyer@hackloop.mail", question.get("to"));
+    assertTrue(question.get("body").toString().contains("full five-digit pickup postcode"));
+    assertEquals("waiting for customer", ledger.mail(7).get("stage"));
+    verify(upstream, never()).rates(any(), any());
+
+    long parent = Ledger.id(question.get("id"));
+    receive(2001, "someone-else@hackloop.mail", "Re: RFQ", "Pickup postcode 60311.", parent);
+    worker.work();
+    assertEquals(2, outbound.size());
+    restart();
+    clock.current = START.plusSeconds(10);
+    receive(2002, "buyer@hackloop.mail", "Re: RFQ", "Sorry, it is 80287 Munich, Germany.", parent);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 2,
+        new java.math.BigDecimal("50.00"), new java.math.BigDecimal("100"), "portal", "TEST",
+        START.plusSeconds(900))), true));
+    worker.work();
+    var retry = outbound.stream().filter(m -> trucker.email().equals(m.get("to"))).toList().getLast();
+    assertTrue(retry.get("body").toString().contains("postcode 80287"));
+    var updated = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("80", updated.pickupZone());
+    assertEquals("MUC", updated.origin());
+    assertEquals("SGN", updated.destination());
+    int count = outbound.size();
+    restart();
+    worker.work();
+    assertEquals(count, outbound.size());
+    receive(2003, trucker.email(), "Re: Rate request AEIOU-7", "All-in EUR 1.00, transit 1 day.",
+        Ledger.id(stale.get("id")));
+    clock.current = START.plusSeconds(80);
+    worker.work();
+    assertNull(ledger.delivery("quote:7"));
+    receive(2004, trucker.email(), "Re: Rate request AEIOU-7", "All-in EUR 25.00, transit 1 day.",
+        Ledger.id(retry.get("id")));
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 75.00 all in"));
+  }
+
+  @Test
+  void asksForMissingFreightDetailsAndContinuesWithTheCustomerAnswer() {
+    var missing = """
+        {"origin":null,"destination":"LAX","weight_kg":null,"volume_cbm":null,
+        "preference":"cheapest","pickup_required":false,"pickup_zone":null,"needs_review":false}
+        """;
+    when(upstream.parseRfq(anyMap())).thenReturn(mapper.valueToTree(Map.of("choices", List.of(
+        Map.of("finish_reason", "stop", "message", Map.of("content", missing))))));
+    receive(7, "buyer@hackloop.mail", "RFQ to LAX", "Please quote the cheapest air freight.", null);
+    worker.work();
+    var question = outbound.getFirst();
+    assertTrue(question.get("body").toString().contains("departure airport"));
+    assertTrue(question.get("body").toString().contains("total gross weight"));
+    assertTrue(question.get("body").toString().contains("total volume"));
+    worker.work();
+    assertEquals(1, outbound.size());
+    receive(2001, "buyer@hackloop.mail", "Re: RFQ", "Departure airport FRA. The shipment is 100 kg gross.",
+        Ledger.id(question.get("id")));
+    worker.work();
+    var followUp = outbound.getLast();
+    assertEquals(2001L, followUp.get("in_reply_to"));
+    assertTrue(followUp.get("body").toString().contains("total volume"));
+    assertFalse(followUp.get("body").toString().contains("departure airport"));
+    assertFalse(followUp.get("body").toString().contains("gross weight"));
+    worker.work();
+    assertEquals(2, outbound.size());
+    receive(2002, "buyer@hackloop.mail", "Re: RFQ", "The volume is 0.2 cbm.",
+        Ledger.id(followUp.get("id")));
+    worker.work();
+    assertEquals(7, outbound.size());
+    verify(upstream, times(1)).parseRfq(anyMap());
+  }
+
+  @Test
   void acceptsAnImprovedCounterofferAndQuotesOnceAcrossRestart() throws Exception {
     var counter = startCounterofferRound();
     restart(true);
@@ -390,7 +473,7 @@ class WaveWorkerTest {
   }
 
   @Test
-  void failClosedForUncertainOrExpiredRequests() {
+  void asksForMissingPostcodeAndLetsUnansweredRequestsExpire() {
     receive(
         7,
         "buyer@hackloop.mail",
@@ -398,12 +481,13 @@ class WaveWorkerTest {
         "Cheapest for 100 kg, 0.2 cbm. Pickup needed.",
         null);
     worker.work();
-    assertEquals("review", ledger.mail(7).get("stage"));
+    assertEquals("waiting for customer", ledger.mail(7).get("stage"));
     receive(8, "buyer@hackloop.mail", "RFQ FRA to LAX", "Cheapest for 100 kg, 0.2 cbm.", null);
     clock.current = START.plusSeconds(361);
     worker.work();
+    assertEquals("expired", ledger.mail(7).get("stage"));
     assertEquals("expired", ledger.mail(8).get("stage"));
-    assertTrue(outbound.isEmpty());
+    assertEquals(1, outbound.size());
   }
 
   @Test
