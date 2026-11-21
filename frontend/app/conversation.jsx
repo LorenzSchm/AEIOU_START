@@ -28,6 +28,7 @@ const timestamp = new Intl.DateTimeFormat(undefined, {
 function timeline(messages, selected) {
   const events = [];
   const threadId = selected.thread_id ?? selected.root ?? selected.id;
+  const fields = messages.find((message) => message.id === threadId)?.fields ?? selected.fields;
   for (const message of messages) {
     if ((message.thread_id ?? message.root ?? message.id) !== threadId) continue;
     events.push({
@@ -52,6 +53,7 @@ function timeline(messages, selected) {
         state: item.state,
         subject: item.subject,
         body: item.body,
+        fields,
         outgoing: true,
         time: item.time,
         expanded: item.kind !== "bid",
@@ -85,7 +87,7 @@ export default function Conversation({ messages, selected }) {
               </summary>
               {entry.subject && <strong className="thread-subject">{entry.subject}</strong>}
               {entry.outgoing && entry.body != null ? (
-                <EmailPreview body={entry.body} />
+                <EmailPreview body={entry.body} fields={entry.fields} />
               ) : (
                 <pre className="mail-body">{entry.body ?? "The original message text was not recorded."}</pre>
               )}

@@ -264,7 +264,7 @@ class Ledger {
                   now.getEpochSecond(),
                   parsed.issue());
             if (carrier.isPresent())
-              recordBid(mid, m, sender, subject, body, refs, carrier.get().truck(), now);
+              recordBid(mid, m, sender, subject, body, refs, carrier.get().truck(), catalog, now);
           }
           db.update("UPDATE cursor SET value=max(value,?) WHERE id=1", page.get("next_since_id"));
         });
@@ -278,6 +278,7 @@ class Ledger {
       String body,
       List<?> refs,
       boolean truck,
+      Catalog catalog,
       Instant now) {
     var parents = new HashSet<>(refs.stream().map(Object::toString).toList());
     if (m.get("in_reply_to") != null) parents.add(str(m, "in_reply_to"));
@@ -290,7 +291,8 @@ class Ledger {
         db.queryForList(
             """
             SELECT t.request_id,d.response FROM tender t JOIN deliveries d
-              ON d.action=COALESCE(t.bid_action,'bid:'||t.request_id||':'||t.email)
+              ON d.action IN (COALESCE(t.bid_action,'bid:'||t.request_id||':'||t.email),
+                COALESCE(t.bid_action,'bid:'||t.request_id||':'||t.email)||':transit')
             WHERE t.email=? AND d.response IS NOT NULL
             """,
             sender)) {
@@ -300,7 +302,8 @@ class Ledger {
     matches.addAll(linked);
     if (matches.size() != 1) return;
     long request = matches.iterator().next();
-    var bid = MailParser.bid(body, truck);
+    var parsed = parseCarrierBid(request, sender, body, truck, catalog);
+    var bid = parsed.terms();
     var price = bid.map(b -> b.euros().toPlainString()).orElse(null);
     int updated =
         db.update(
@@ -313,7 +316,7 @@ class Ledger {
             mid,
             price,
             bid.map(MailParser.Bid::days).orElse(null),
-            bid.isEmpty() ? "No unambiguous EUR total and transit" : null,
+            parsed.issue(),
             request,
             sender,
             linked.contains(request));
@@ -323,6 +326,53 @@ class Ledger {
           request,
           bid.isPresent() ? "bid received" : "bid unreadable",
           mid);
+  }
+
+  private record CarrierBid(Optional<MailParser.Bid> terms, String issue) {}
+
+  private CarrierBid parseCarrierBid(long request, String sender, String body, boolean truck,
+      Catalog catalog) {
+    var bid = MailParser.bid(body, truck);
+    if (bid.isEmpty()) return new CarrierBid(bid, "No unambiguous EUR total and transit");
+    if (truck) {
+      var zones = db.queryForList("""
+          SELECT json_extract(terms,'$.pickup_zone') FROM tender
+          WHERE request_id=? AND email=? AND bid_action LIKE '%:area'
+          """, String.class, request, sender);
+      if (!zones.isEmpty()) {
+        String area = catalog.pickupAreas.get(zones.getFirst());
+        if (area == null || !MailParser.confirmsPickupArea(body, area))
+          return new CarrierBid(Optional.empty(), "Carrier did not confirm citywide coverage");
+      }
+    }
+    return new CarrierBid(bid, null);
+  }
+
+  void recheckOpenTruckBids(Instant receivedAfter, Catalog catalog) {
+    var candidates = db.queryForList("""
+        SELECT t.request_id,t.email,t.reply_id,t.euros,f.body
+        FROM tender t JOIN mail r ON r.id=t.request_id JOIN wave_case w ON w.id=r.id
+          JOIN mail f ON f.id=t.reply_id AND f.root=r.id AND f.sender=t.email
+        WHERE w.operator=0 AND t.leg='trucker' AND (t.euros IS NULL OR t.days IS NULL)
+          AND f.kind='carrier' AND f.stage IN ('bid received','bid unreadable')
+          AND r.stage IN ('new','collecting','waiting for pickup','waiting for air price','waiting for customer')
+          AND julianday(r.received)>julianday(?)
+          AND NOT EXISTS (SELECT 1 FROM deliveries WHERE action='quote:'||r.id)
+        """, receivedAfter.toString());
+    for (var row : candidates) {
+      long request = id(row.get("request_id"));
+      String sender = str(row, "email");
+      var parsed = parseCarrierBid(request, sender, str(row, "body"), true, catalog);
+      var bid = parsed.terms().orElse(null);
+      if (bid == null || (bid.days() == null && row.get("euros") != null)) continue;
+      tx.executeWithoutResult(t -> {
+        int updated = db.update("""
+            UPDATE tender SET euros=?,days=?,issue=NULL WHERE request_id=? AND email=? AND reply_id=?
+              AND (euros IS NULL OR days IS NULL)
+            """, bid.euros().toPlainString(), bid.days(), request, sender, row.get("reply_id"));
+        if (updated > 0) db.update("UPDATE mail SET stage='bid received' WHERE id=?", row.get("reply_id"));
+      });
+    }
   }
 
   private boolean recordCounterReply(
@@ -407,7 +457,7 @@ class Ledger {
     for (var row : db.queryForList("SELECT * FROM deliveries ORDER BY rowid")) {
       String action = str(row, "action");
       String[] parts = action.split(":", 3);
-      if (parts.length < 2 || !Set.of("quote", "bid", "counter", "reply").contains(parts[0]))
+      if (parts.length < 2 || !Set.of("quote", "bid", "counter", "reply", "airport-delivery").contains(parts[0]))
         continue;
       long owner = Long.parseLong(parts[1]);
       Map<?, ?> receipt = read(row.get("response"), Map.class);
@@ -424,7 +474,7 @@ class Ledger {
       var item =
           new Outgoing(
               action,
-              parts[0],
+              "airport-delivery".equals(parts[0]) ? "reply" : parts[0],
               str(row, "state"),
               messageId,
               recipient,

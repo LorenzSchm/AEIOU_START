@@ -308,7 +308,7 @@ function Case({ m, messages, directory, refresh }) {
                       </tbody>
                     </table>
                   </details>
-                  {!m.delivery && <EmailPreview body={proposal.body} />}
+                  {!m.delivery && <EmailPreview body={proposal.body} fields={fields} />}
                   <button
                     className="primary"
                     disabled={busy || closed || dirty}
@@ -360,7 +360,7 @@ function Case({ m, messages, directory, refresh }) {
             onChange={(e) => setReply(e.target.value)}
             aria-label="Reply body"
           />
-          {reply.trim() && <EmailPreview body={reply} />}
+          {reply.trim() && <EmailPreview body={reply} fields={fields} />}
           <button
             className="primary"
             disabled={busy || !reply.trim() || Boolean(m.reply_delivery)}

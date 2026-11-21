@@ -50,6 +50,7 @@ public final class Catalog {
   private final List<Tariff> tariffs = new ArrayList<>();
   public final List<Carrier> carriers;
   public final Map<String, String> zones = new LinkedHashMap<>();
+  public final Map<String, String> pickupAreas = new LinkedHashMap<>();
   public final Set<String> destinations = new HashSet<>();
 
   public Catalog(Reader tariffFile, Reader carrierFile, Reader zoneFile) {
@@ -57,7 +58,10 @@ public final class Catalog {
     carriers.stream()
         .filter(c -> !c.truck())
         .forEach(c -> destinations.addAll(List.of(c.serves.split(" "))));
-    rows(zoneFile).forEach(r -> zones.put(r[0], r[2]));
+    for (var r : rows(zoneFile)) {
+      zones.put(r[0], r[2]);
+      pickupAreas.put(r[0], r[1]);
+    }
     int[] breaks = {0, 45, 100, 250, 300, 500, 1000, 2000};
     for (var r : rows(tariffFile)) {
       var prices = new TreeMap<Integer, BigDecimal>();

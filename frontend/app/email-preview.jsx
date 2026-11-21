@@ -25,12 +25,19 @@ function fitEmail(frame) {
   };
 }
 
-export default function EmailPreview({ body }) {
+const escape = (text) => text.replace(/[&<>]/g, (character) => htmlEntities[character]);
+
+function laneOf(fields) {
+  const ends = [fields?.origin, fields?.destination].map((code) => code?.trim().toUpperCase());
+  return ends.every(Boolean) ? ends.join(" → ") : ends.find(Boolean) || "Air freight";
+}
+
+export default function EmailPreview({ body, fields }) {
   const template = useContext(EmailTemplate);
-  const escapedBody = body.replace(/[&<>]/g, (character) => htmlEntities[character]);
   const html = template
     .replace("$language", "en")
-    .replace("$message_html", () => `<div style="white-space: pre-wrap;">${escapedBody}</div>`);
+    .replace("$lane", () => escape(laneOf(fields)))
+    .replace("$message_html", () => `<div style="white-space: pre-wrap;">${escape(body)}</div>`);
 
   return (
     <figure className="email-preview">
