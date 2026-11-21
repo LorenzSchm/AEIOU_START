@@ -1,6 +1,7 @@
 package ai.aeiou.freight;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.*;
 
 /** Rank complete door-to-port or airport-to-airport options with confirmed prices. */
@@ -11,7 +12,8 @@ public final class QuotePlanner {
       List<String> notes,
       String trucker,
       BigDecimal pickupEur,
-      Double pickupDays) {}
+      Double pickupDays,
+      Instant pickupValidUntil) {}
 
   public static Plan plan(
       Shipment s,
@@ -20,7 +22,7 @@ public final class QuotePlanner {
       List<Offer> trucks,
       Set<String> missingTruckTransit) {
     var offers = new ArrayList<>(published);
-    if (!airBids.isEmpty()) offers.add(Offer.balancedBid(airBids, s.preference()));
+    offers.addAll(airBids);
     var truck =
         trucks.stream()
             .filter(
@@ -57,6 +59,6 @@ public final class QuotePlanner {
     var best = ranked.isEmpty() ? null : ranked.getFirst();
     if (best == null && notes.isEmpty())
       notes.add("Waiting for a confirmed air price and transit time.");
-    return new Plan(best, ranked, notes, trucker, priced.pickupEur(), pickupDays);
+    return new Plan(best, ranked, notes, trucker, priced.pickupEur(), pickupDays, pickupExpiry);
   }
 }
