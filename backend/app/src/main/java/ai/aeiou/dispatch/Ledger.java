@@ -2,6 +2,7 @@ package ai.aeiou.dispatch;
 
 import ai.aeiou.freight.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.file.*;
@@ -38,7 +39,11 @@ class Ledger {
     return tx;
   }
 
-  final ObjectMapper json;
+  private final ObjectMapper json;
+
+  JsonNode tree(Object value) {
+    return json.valueToTree(value);
+  }
 
   Ledger(@Value("${dispatch.db}") String file, ObjectMapper json) throws Exception {
     this.json = json;
@@ -50,6 +55,7 @@ class Ledger {
     db.execute("PRAGMA journal_mode=WAL");
     db.execute("CREATE TABLE IF NOT EXISTS cursor(id INTEGER PRIMARY KEY,value INTEGER NOT NULL)");
     db.update("INSERT OR IGNORE INTO cursor VALUES(1,0)");
+    db.execute("CREATE TABLE IF NOT EXISTS mailbox_push(id INTEGER PRIMARY KEY, payload TEXT NOT NULL)");
     db.execute(
         """
         CREATE TABLE IF NOT EXISTS mail(id INTEGER PRIMARY KEY,root INTEGER,sender TEXT,subject TEXT,body TEXT,
@@ -83,6 +89,12 @@ class Ledger {
         "CREATE TABLE IF NOT EXISTS retry(action TEXT PRIMARY KEY, after_epoch INTEGER NOT NULL)");
     db.execute(
         "CREATE TABLE IF NOT EXISTS board_result(received TEXT PRIMARY KEY, result TEXT NOT NULL)");
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS portal_rate_history(
+          origin TEXT NOT NULL, destination TEXT NOT NULL, airline TEXT NOT NULL, bracket TEXT NOT NULL,
+          total TEXT NOT NULL, kg TEXT NOT NULL, days REAL NOT NULL, seen INTEGER NOT NULL,
+          PRIMARY KEY(origin,destination,airline,bracket))
+        """);
     db.execute(
         "CREATE TABLE IF NOT EXISTS truck_bid_parse(reply_id INTEGER PRIMARY KEY, state TEXT NOT NULL,"
             + " result TEXT, verified_days REAL)");
@@ -221,6 +233,25 @@ class Ledger {
         });
   }
 
+  void queuePush(long id, JsonNode message) {
+    db.update("""
+        INSERT OR IGNORE INTO mailbox_push(id,payload)
+        SELECT ?,? WHERE NOT EXISTS (SELECT 1 FROM mail WHERE id=?)
+        """, id, write(message), id);
+  }
+
+  void ingestPushes(Catalog catalog, Instant now) {
+    var pending = db.queryForList("SELECT id,payload FROM mailbox_push ORDER BY id LIMIT 200");
+    if (pending.isEmpty()) return;
+    var messages = pending.stream().map(row -> read(row.get("payload"), Map.class)).toList();
+    var ids = pending.stream().map(row -> row.get("id")).toArray();
+    var placeholders = String.join(",", Collections.nCopies(ids.length, "?"));
+    tx.executeWithoutResult(t -> {
+      ingest(Map.of("messages", messages), catalog, now);
+      db.update("DELETE FROM mailbox_push WHERE id IN (" + placeholders + ")", ids);
+    });
+  }
+
   void ingest(Map<String, Object> page, Catalog catalog, Instant now) {
     tx.executeWithoutResult(
         t -> {
@@ -297,7 +328,8 @@ class Ledger {
             if (carrier.isPresent())
               recordBid(mid, m, sender, subject, body, refs, carrier.get().truck(), catalog, now);
           }
-          db.update("UPDATE cursor SET value=max(value,?) WHERE id=1", page.get("next_since_id"));
+          if (page.containsKey("next_since_id"))
+            db.update("UPDATE cursor SET value=max(value,?) WHERE id=1", page.get("next_since_id"));
         });
   }
 
@@ -339,7 +371,8 @@ class Ledger {
     int updated =
         db.update(
             """
-            UPDATE tender SET reply_id=?,euros=?,days=?,issue=? WHERE request_id=? AND email=? AND
+            UPDATE tender SET reply_id=?,euros=?,days=?,issue=? WHERE request_id=? AND email=?
+            AND (reply_id IS NULL OR reply_id<?) AND
             EXISTS (SELECT 1 FROM deliveries WHERE
               action=COALESCE(tender.bid_action,'bid:'||tender.request_id||':'||tender.email))
             AND (? OR COALESCE(bid_action,'bid:'||request_id||':'||email)='bid:'||request_id||':'||email)
@@ -350,6 +383,7 @@ class Ledger {
             parsed.issue(),
             request,
             sender,
+            mid,
             linked.contains(request));
     if (updated > 0)
       db.update(

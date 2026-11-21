@@ -4,12 +4,12 @@
 
 ## The 16:00 wave
 
-The Spring Boot worker polls every second. Automatic activity starts at **16:00 Europe/Berlin on 21 November 2026**. The browser can be closed. Open the [wave desk](http://127.0.0.1:3000) for the exception queue and select **All mail** to inspect bids, quoted amounts, and deliveries.
+The Spring Boot worker checks pending work every second. Automatic activity starts at **16:00 Europe/Berlin on 21 November 2026**. The browser can be closed. Open the [wave desk](http://127.0.0.1:3000) for the exception queue and select **All mail** to inspect bids, quoted amounts, and deliveries.
 
 1. Java extracts the airports, priority, weight, volume and pickup zone. Ambiguous RFQs go to the 5U gateway for one structured parse. Java validates the result. For text PDFs, XLSX, CSV and text packing lists, Java checks the cargo classification and reconciles the destination, weight and volume with the email. Consistent general-cargo documents can proceed to pricing. The worker asks for corrected or missing documents and checks customer replies automatically. When matching dangerous goods documents arrive and no dangerous goods service is available, it closes the request with a reply.
 2. The worker invites up to five carriers before querying the portal. For door-to-port it invites up to three airlines and fills the remaining slots with truckers serving the pickup zone. It prioritizes airlines whose latest route list before the RFQ includes the exact lane and falls back to the directory for airlines without a route list. It compares portal rates at actual weight and the next published chargeable-weight break, alongside all ten [kit tariffs](start-kit/).
 3. Replies must come from an invited address and match the outgoing mail ID or RFQ reference. The worker compares confirmed, unexpired EUR bids, converts portal USD offers using their supplied FX, and checks the local weight breaks, minimum, fuel and security. Among airline email bids it weights price and transit equally. It ranks complete options by the customer’s requested preference.
-4. The worker waits until all invited carriers answer or **40 seconds after the last invitation**, whichever comes first, within the six-minute deadline. An incomplete portal lookup gets time to retry until 95 seconds after arrival. Door-to-port requires a confirmed truck price. Fastest also requires the time from collection to airport delivery. If existing bids only give the wait until collection, the worker asks the truckers for transit and can try up to two alternatives. For cheapest, a firm truck price without transit is usable and the email states that pickup timing is pending.
+4. The worker waits until all invited carriers answer or **40 seconds after the last invitation**, whichever comes first, within the six-minute deadline. An incomplete portal lookup gets time to retry until 95 seconds after arrival. Portal rates observed within the last hour for the same route, carrier and weight bracket help prioritize live lookups. Every carrier stays in the lookup plan, with base rates ahead of buy-ups. Door-to-port requires a confirmed truck price. Fastest also requires the time from collection to airport delivery. If existing bids only give the wait until collection, the worker asks the truckers for transit and can try up to two alternatives. For cheapest, a firm truck price without transit is usable and the email states that pickup timing is pending.
 5. The worker asks the original customer to confirm missing shipment details in the RFQ thread. For warehouse pickup it asks for the full five-digit postcode. If the customer supplies only a pickup town that uniquely matches a start-kit zone, the worker requests a firm citywide rate and verifies the trucker's coverage before quoting. When collection remains unpriced, it offers airport delivery as an alternative and switches the service only after the customer explicitly approves it in the same thread. The confirmed postcode or town determines the departure airport when the RFQ leaves it open. The six-minute deadline and a persisted send claim guard each first quote. Unpriced legs and uncertain deliveries appear under **Needs attention**. A lost acknowledgment is held for inspection.
 
 With `DISPATCH_COUNTEROFFERS=true`, the worker can ask for a 5% reduction on one winning email bid per request. It targets the airline when the selected air rate came by email, or the selected trucker when the air rate came from the portal or tariffs. It waits up to 20 seconds for a lower all-in EUR rate with no slower transit, confirmed in the reply format requested in the email. It keeps the original bid when the response is missing or unusable. The worker skips this round when a complete quote arrives well after the initial bid window or when a portal rate would expire too soon. The 5U challenge brief documents initial bids. Carrier support for revised offers is unverified.
@@ -21,6 +21,8 @@ For fastest door-to-port requests, the worker can ask the 5U gateway to interpre
 The desk shows the official verdict, reason and available points from the 5U board alongside the RFQ. The worker polls the board once a minute and matches results using the original RFQ timestamp.
 
 When a customer confirms the packing document in the original thread, the worker can apply documented corrections to destination airport, total gross weight and total volume independently. Matching corrections can arrive in one reply or across replies about the same document. Conflicting totals keep the quote on hold.
+
+Before its first dangerous-goods document request, the worker can ask the 5U gateway to cross-check the UN numbers and missing documents. The check is advisory and recorded once per RFQ. Java applies the hold and sends the appropriate document request even if the gateway is unavailable.
 
 ## Architecture
 
@@ -58,6 +60,7 @@ npm start -- --hostname 127.0.0.1 --port 3000
 | `DISPATCH_DB` | `backend/state/dispatch.sqlite3`. Preserve this file across restarts so the worker remembers sent quotes and pending bids. |
 | `FIVEU_GATEWAY_MODEL` | `gpt-4o-mini`. The worker sends up to 8,000 characters of email. Structured extraction allows up to 240 completion tokens and the quote check allows up to 24. |
 | `FIVEU_BASE_URL` | `https://api.start-hack.5u.ai`. Integration tests use an isolated local HTTP fixture and temporary database. |
+| `DISPATCH_WEBHOOK_SECRET` | Unset. Configure the 5U webhook signing secret here to receive pushes and reconcile once per minute. Without a webhook, the worker polls every six seconds and honors the server's retry delay. |
 | `DISPATCH_API_URL` | `http://127.0.0.1:8000`. Set before building Next.js to point the desk to another backend. |
 | `SUPABASE_URL` | Unset. With `SUPABASE_SECRET_KEY`, the backend mirrors the carrier directory and every carrier invitation and bid to Supabase every 5 seconds. Apply [the migration](backend/supabase/migrations/) first. SQLite stays the worker's source of truth, and a failed sync never blocks the wave. |
 | `SUPABASE_SECRET_KEY` | Unset. The project's secret (or legacy `service_role`) key. Keep it in the Git-ignored root `.env`. |
@@ -109,6 +112,10 @@ Keep the key within the team. Everything sent with it counts as team AEIOU activ
 | --- | --- | --- |
 | Poll for messages | GET | `/v1/mailbox/messages?since_id=0` |
 | Send a message or reply | POST | `/v1/mailbox/messages` |
+| Subscribe a public receiver URL | PUT | `/v1/mailbox/webhook` |
+| Verify signed delivery | POST | `/v1/mailbox/webhook/test` |
+
+Expose only `POST /api/v1/mailbox/webhook` through your public proxy or tunnel. Set `DISPATCH_WEBHOOK_SECRET` to the same secret used to subscribe. The receiver verifies the signature and timestamp before saving each message to SQLite for processing. The reconciliation poll recovers older or missed deliveries.
 
 ## LLM gateway
 

@@ -8,7 +8,12 @@ import javax.xml.stream.XMLStreamException;
 import org.springframework.web.client.RestClientException;
 
 final class ShipmentDocuments {
-  record Decision(String action, String reason, String reply, Shipment shipment) {
+  record Decision(
+      String action, String reason, String reply, Shipment shipment, DangerousGoodsCheck gatewayReview) {
+    Decision(String action, String reason, String reply, Shipment shipment) {
+      this(action, reason, reply, shipment, null);
+    }
+
     String stage() {
       return "dg-unavailable".equals(action) ? "declined" : "waiting for documents";
     }
@@ -17,6 +22,11 @@ final class ShipmentDocuments {
       return reason != null;
     }
   }
+
+  record SubmittedDocument(boolean sdsWithSection14, boolean declaration, Set<String> unNumbers) {}
+
+  record DangerousGoodsCheck(Set<String> classificationEvidence, List<SubmittedDocument> submitted,
+      Set<String> unNumbers, boolean missingSds, boolean missingDeclaration) {}
 
   private record Attachment(long messageId, long attachmentId) {}
 
@@ -69,20 +79,19 @@ final class ShipmentDocuments {
         .filter(doc -> doc.safetyDataSheet() || doc.declaration())
         .forEach(followUpDocuments::add);
     var originalText = new PackingSafety.Document(Ledger.str(original, "body"));
-    var dangerous = new HashSet<>(originalText.unNumbers());
-    boolean dg =
-        addDangerous(latestPacking, dangerous)
-            || originalText.type() == PackingSafety.DocumentType.DANGEROUS
-            || ledger.delivery("dg-docs:" + Ledger.id(original.get("id"))) != null;
+    var dangerous = new HashSet<String>();
+    var evidence = new LinkedHashSet<String>();
+    boolean dg = addDangerous(latestPacking, dangerous, evidence);
+    dg |= addDangerous(List.of(originalText), dangerous, evidence);
+    dg |= ledger.delivery("dg-docs:" + Ledger.id(original.get("id"))) != null;
     var emptyCorrection = new MailParser.PackingCorrection(Set.of(), Set.of(), Set.of());
     var correction = emptyCorrection;
     for (var message : followUps) {
       var body = new PackingSafety.Document(Ledger.str(message, "body"));
-      dangerous.addAll(body.unNumbers());
-      dg |= body.type() == PackingSafety.DocumentType.DANGEROUS;
+      dg |= addDangerous(List.of(body), dangerous, evidence);
       var attachments = read(message);
       if (!attachments.isEmpty()) {
-        dg |= addDangerous(attachments, dangerous);
+        dg |= addDangerous(attachments, dangerous, evidence);
         attachments.stream().filter(Objects::nonNull).forEach(followUpDocuments::add);
         latestPacking = attachments;
         correction = emptyCorrection;
@@ -90,7 +99,7 @@ final class ShipmentDocuments {
       correction = correction.followedBy(
           MailParser.confirmedPackingCorrection(body.text()).orElse(emptyCorrection));
     }
-    if (dg) return dangerousGoods(dangerous, followUpDocuments);
+    if (dg) return dangerousGoods(dangerous, followUpDocuments, evidence);
     if (latestPacking.isEmpty()) return new Decision(null, null, null, null);
     if (latestPacking.stream().anyMatch(Objects::isNull)
         || latestPacking.stream()
@@ -168,18 +177,22 @@ final class ShipmentDocuments {
     documented.addAll(correction);
   }
 
-  private static boolean addDangerous(List<PackingSafety.Document> documents, Set<String> numbers) {
+  private static boolean addDangerous(
+      List<PackingSafety.Document> documents, Set<String> numbers, Set<String> evidence) {
     boolean found = false;
     for (var document : documents) {
       if (document == null || document.type() != PackingSafety.DocumentType.DANGEROUS) continue;
       found = true;
       numbers.addAll(document.unNumbers());
+      document.text().lines().map(String::strip).filter(PackingSafety::declaresDangerousGoods)
+          .map(line -> line.substring(0, Math.min(line.length(), 240)))
+          .limit(4).forEach(evidence::add);
     }
     return found;
   }
 
   private static Decision dangerousGoods(
-      Set<String> unNumbers, List<PackingSafety.Document> followUps) {
+      Set<String> unNumbers, List<PackingSafety.Document> followUps, Set<String> evidence) {
     boolean matchingSds =
         unNumbers.size() == 1
             && followUps.stream()
@@ -195,13 +208,16 @@ final class ShipmentDocuments {
           "Thank you for sending the documents. We don’t have a confirmed dangerous goods service"
               + " for this shipment, so we’re unable to offer a quote.",
           null);
+    var review = new DangerousGoodsCheck(evidence, followUps.stream()
+        .map(doc -> new SubmittedDocument(doc.safetyDataSheet(), doc.declaration(), doc.unNumbers()))
+        .toList(), unNumbers, !matchingSds, !matchingDeclaration);
     if (!followUps.isEmpty())
       return new Decision(
           "dg-incomplete",
           "Waiting for complete, matching dangerous goods documents.",
           "Thank you for the documents. Could you send a safety data sheet with Section 14 and the"
               + " shipper’s dangerous goods declaration, both showing the same UN classification?",
-          null);
+          null, review);
     return new Decision(
         "dg-docs",
         "Dangerous goods indicated. Hold pending documents and carrier review.",
@@ -209,6 +225,6 @@ final class ShipmentDocuments {
             + " sheet, including Section 14, and the dangerous goods declaration if applicable?"
             + " Please also confirm the classification for air transport. We’ll review these before"
             + " we quote.",
-        null);
+        null, review);
   }
 }

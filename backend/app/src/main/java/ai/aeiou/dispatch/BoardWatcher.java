@@ -25,7 +25,7 @@ class BoardWatcher {
   void poll() {
     if (!configured) return;
     try {
-      JsonNode requests = ledger.json.valueToTree(upstream.get("/v1/board/me")).path("requests");
+      JsonNode requests = ledger.tree(upstream.get("/v1/board/me")).path("requests");
       if (!requests.isArray()) {
         log.warn("5U board response is missing its requests array");
         return;

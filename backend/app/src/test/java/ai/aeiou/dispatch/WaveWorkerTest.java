@@ -1233,7 +1233,7 @@ class WaveWorkerTest {
     // Round 8 portal observations. Only the HTTP boundary and rate IDs are fixtures.
     var rateReads = new ArrayList<String>();
     var portal =
-        new FiveU("http://localhost", "fixture") {
+        new FiveU("http://localhost", "fixture", new MarketMemory(ledger)) {
           @Override
           Map<String, Object> get(String uri, Object... args) {
             if (uri.endsWith("/ports"))
@@ -1368,7 +1368,7 @@ class WaveWorkerTest {
     assertEquals(1, outbound.size());
     assertNull(ledger.delivery("quote:7"));
     verify(upstream, never()).rates(any(), any());
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   void receiveDocument(long id, Long parent, String filename, String body, String text) {
@@ -1643,7 +1643,98 @@ class WaveWorkerTest {
   }
 
   @Test
+  void excludesRequestedAirlineFromInvitationsPortalRatesAndFutureQuotesForTheSameSender() {
+    String airway = "Please quote the cheapest air freight from FRA to ULN for 911 kg and 3.27 cbm."
+        + " Include pickup from postcode 65797.";
+    var blockedPortal = new Offer("ZS", 1, new java.math.BigDecimal("1000"),
+        new java.math.BigDecimal("911"), "portal", "BLOCKED-RATE", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(blockedPortal), true));
+    receive(7, "buyer@example.invalid", "RFQ FRA to ULN",
+        airway + " Please do not offer Zephyr Steppe Cargo (ZS) for this shipment or for any of"
+            + " our future inquiries.", null);
+    worker.work();
+    var invites = List.copyOf(outbound);
+    assertTrue(invites.stream().noneMatch(m -> m.get("to").equals("zephyr-steppe-cargo@hackloop.mail")));
+    var lagoon = invites.stream().filter(m -> m.get("to").equals("lagoon-isles-airways@hackloop.mail"))
+        .findFirst().orElseThrow();
+    receive(31, "lagoon-isles-airways@hackloop.mail", "Re: Rate request AEIOU-7",
+        "Our all-in rate is EUR 3210. Transit: 3 days.", Ledger.id(lagoon.get("id")));
+    var truck = invites.stream().filter(m -> m.get("subject").toString().contains("pickup from"))
+        .findFirst().orElseThrow();
+    receive(32, truck.get("to").toString(), "Re: Rate request AEIOU-7",
+        "All-in EUR 118.66. Road transit: 31 hours.", Ledger.id(truck.get("id")));
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("Lagoon Isles Airways", draft.offer().airline());
+    assertEquals("3328.66", draft.offer().totalEur().toPlainString());
+
+    receive(41, "buyer@example.invalid", "RFQ FRA to ULN", airway, null);
+    receive(42, "another@example.invalid", "RFQ FRA to ULN", airway, null);
+    worker.work();
+    assertNull(ledger.delivery("bid:41:zephyr-steppe-cargo@hackloop.mail"));
+    assertEquals("sent", ledger.delivery("bid:42:zephyr-steppe-cargo@hackloop.mail"));
+  }
+
+  @Test
+  void shipmentOnlyCarrierExclusionDoesNotApplyToTheCustomersNextRequest() {
+    receive(7, "buyer@example.invalid", "RFQ FRA to ULN",
+        "Cheapest FRA to ULN for 911 kg and 3.27 cbm. Please exclude ZS for this shipment.", null);
+    receive(8, "buyer@example.invalid", "RFQ FRA to ULN",
+        "Cheapest FRA to ULN for 911 kg and 3.27 cbm.", null);
+    var restrictions = new CarrierRestrictions(ledger);
+    assertTrue(CarrierRestrictions.excludes(restrictions.forRequest(7, ledger.mail(7)), "ZS"));
+    assertTrue(restrictions.forRequest(8, ledger.mail(8)).isEmpty());
+  }
+
+  @Test
+  void verifiesDangerousGoodsBeforeRequestAndKeepsTheJavaHoldOnDisagreement() {
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      var payload = mapper.valueToTree(call.<Map<String, Object>>getArgument(0));
+      assertEquals("dangerous_goods_documents",
+          payload.path("response_format").path("json_schema").path("name").asText());
+      assertTrue(payload.path("messages").path(1).path("content").asText().contains("UN3481"));
+      assertNull(ledger.delivery("dg-docs:7"));
+      return gatewayResponse("""
+          {"un_numbers":["3481"],"missing_sds":false,"missing_declaration":false}
+          """);
+    });
+    receiveDocument(7, null, "packing.txt",
+        "Cheapest air freight from FRA to LAX. See the packing specification.",
+        "Packing Specification\nDangerous goods: UN3481, Class 9");
+    worker.work();
+    worker.work();
+    assertEquals("disagreed", ledger.jdbc().queryForObject(
+        "SELECT state FROM dg_gateway_check WHERE request_id=7", String.class));
+    assertEquals("waiting for documents", ledger.mail(7).get("stage"));
+    assertEquals("sent", ledger.delivery("dg-docs:7"));
+    assertNull(ledger.delivery("quote:7"));
+    verify(upstream).parseRfq(anyMap());
+    verify(upstream, never()).rates(any(), any());
+  }
+
+  @Test
+  void sendsDangerousGoodsDocumentRequestAfterGatewayFailure() {
+    when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("Temporary gateway failure"));
+    receiveDocument(7, null, "packing.txt",
+        "Cheapest air freight from FRA to LAX. See the packing specification.",
+        "Packing Specification\nDangerous goods: UN3481, Class 9");
+    worker.work();
+    worker.work();
+    assertEquals("unavailable", ledger.jdbc().queryForObject(
+        "SELECT state FROM dg_gateway_check WHERE request_id=7", String.class));
+    assertEquals("waiting for documents", ledger.mail(7).get("stage"));
+    assertEquals("sent", ledger.delivery("dg-docs:7"));
+    assertNull(ledger.delivery("quote:7"));
+    verify(upstream).parseRfq(anyMap());
+  }
+
+  @Test
   void followsDangerousGoodsDocumentsAcrossRepliesAndDeclinesOnce() throws Exception {
+    when(upstream.parseRfq(anyMap())).thenReturn(gatewayResponse("""
+        {"un_numbers":["1950"],"missing_sds":true,"missing_declaration":true}
+        """));
     receiveDocument(
         7,
         null,
@@ -1653,6 +1744,8 @@ class WaveWorkerTest {
     worker.work();
     assertEquals("waiting for documents", ledger.mail(7).get("stage"));
     assertEquals("sent", ledger.delivery("dg-docs:7"));
+    assertEquals("agreed", ledger.jdbc().queryForObject(
+        "SELECT state FROM dg_gateway_check WHERE request_id=7", String.class));
     receiveDocument(
         1010,
         Ledger.id(outbound.getFirst().get("id")),
@@ -1675,6 +1768,7 @@ class WaveWorkerTest {
     assertEquals(3, outbound.size());
     assertNull(ledger.delivery("quote:7"));
     verify(upstream, never()).rates(any(), any());
+    verify(upstream).parseRfq(anyMap());
   }
 
   @Test
