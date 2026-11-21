@@ -384,6 +384,23 @@ public final class MailParser {
           + "\\h+(?:before|until)\\h+(?:pickup|collection)\\b");
   private static final Pattern PICKUP_BOOKING_NOT_REQUIRED =
       pattern("\\bno\\h+need\\h+to\\h+book\\h+(?:the\\h+)?(?:pickup|collection)\\h+separately\\b");
+  private static final Pattern PICKUP_WAITING_CHARGE = pattern(
+      "(?m)^\\h*Not\\s+part\\s+of\\s+this\\s+offer:\\s+waiting\\s+time\\s+at\\s+the\\s+pickup"
+          + "\\s+address\\s+after\\s+the\\s+first\\s+([1-9]\\d{0,2})\\s+minutes,\\s+"
+          + "([0-9]+[.,][0-9]{2})\\s+EUR\\s+for\\s+each\\s+hour\\.\\h*$");
+
+  public static String withoutPickupWaitingCharge(String body) {
+    return PICKUP_WAITING_CHARGE.matcher(body).replaceAll("");
+  }
+
+  public static String pickupWaitingDisclosure(String body) {
+    return PICKUP_WAITING_CHARGE.matcher(authoredText(body)).results()
+        .findFirst()
+        .map(charge -> "The first " + charge.group(1) + " minutes of waiting at pickup are included."
+            + " Longer waits incur a charge of EUR " + number(charge.group(2)).toPlainString()
+            + " per hour.")
+        .orElse(null);
+  }
 
   public static boolean confirmsPickupArea(String body, String area) {
     String text = EXCLUDES_COLLECTION_WAIT.matcher(authoredText(body)).replaceAll("");
@@ -492,6 +509,10 @@ public final class MailParser {
    */
   public static Optional<Bid> bid(String body, boolean truck) {
     String text = authoredText(body);
+    if (truck) {
+      if (PICKUP_WAITING_CHARGE.matcher(text).results().limit(2).count() > 1) return Optional.empty();
+      text = withoutPickupWaitingCharge(text);
+    }
     String priceTerms = text;
     if (truck) {
       priceTerms = UNCONFIRMED_TRUCK_TIMING.matcher(priceTerms).replaceAll("");
@@ -505,7 +526,8 @@ public final class MailParser {
             + (!truck ? "estimate|" : "")
             + "indicative|provisional|unconfirmed|unavailable|unable|cannot|can[’']t|decline|separately|additional"
             + " charges|starting at|extras"
-            + " apply)\\b|\\+\\s*(?:VAT|fuel|security)|(?:per|/)\\s*(?:kg|km|pallet)|\\bsubject"
+            + " apply)\\b|\\+\\s*(?:VAT|fuel|security)|(?:per|/)\\s*(?:kg|km|pallet)|"
+            + "\\bnot\\s+(?:part\\s+of\\s+(?:this\\s+offer|the\\s+total)|included)\\b|\\bsubject"
             + " to\\b|\\b(?:rate|price|cost|total) (?:is )?(?:not (?:yet )?confirmed|pending confirmation)\\b"))
       return Optional.empty();
     var amounts = new ArrayList<>(captures(text, "(?:\\bEUR\\s*|€\\s*)" + NUM));

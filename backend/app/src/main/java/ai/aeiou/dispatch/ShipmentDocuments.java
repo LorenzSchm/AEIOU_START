@@ -12,17 +12,28 @@ import javax.xml.stream.XMLStreamException;
 import org.springframework.web.client.RestClientException;
 
 final class ShipmentDocuments {
+  private static final Pattern FIRM_PICKUP_TOTAL = Pattern.compile(
+      "(?iu)\\bThis\\s+price\\s+is\\s+all-in\\.");
   private static final Pattern PICKUP_BREAKDOWN = Pattern.compile(
       "(?iu)\\bIt\\s+has\\s+a\\s+base\\s+charge\\s+of\\s+[0-9]+[.,][0-9]{2}\\s+EUR"
           + "\\s+and\\s+a\\s+weight\\s+charge\\s+of\\s+[0-9]+[.,][0-9]{2}\\s+EUR\\.");
   private static final Pattern OFFER_TOTAL = Pattern.compile(
-      "(?im)^\\h*Total\\h+([0-9]+[.,][0-9]{2})\\h*$");
+      "(?im)^\\h*Total(?:\\h+|\\h*\\R(?:\\h*\\R){0,3}\\h*)([0-9]+[.,][0-9]{2})\\h*$");
   private static final Pattern OPEN_OFFER_TERMS = Pattern.compile(
       "(?iu)\\b(?:not part of this offer|not part of the total|not included|subject to|fees apply|charged separately|provisional)\\b");
   private static final Pattern SPOKEN_KILOS = Pattern.compile(
       "(?iu)\\b([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+(?:\\.[0-9]+)?)\\h+kilos?\\b");
   private static final Pattern SPOKEN_EUROS = Pattern.compile(
       "(?iu)\\b([0-9]+)\\h+euros?\\h+and\\h+([0-9]{1,2})\\h+cents\\b");
+  private static final String SPOKEN_AMOUNT = "EUR\\h+([0-9]+(?:[.,][0-9]{1,2})?)";
+  private static final Pattern SPOKEN_PICKUP_BREAKDOWN = Pattern.compile(
+      "(?iu)\\bthe\\s+base\\s+charge\\s+is\\s+" + SPOKEN_AMOUNT
+          + ",\\s+the\\s+weight\\s+charge\\s+is\\s+" + SPOKEN_AMOUNT
+          + ",\\s+so\\s+the\\s+total\\s+is\\s+" + SPOKEN_AMOUNT + "\\.(?=\\s|$)");
+  private static final Pattern SPOKEN_PICKUP_WAIT = Pattern.compile(
+      "(?iu)\\bwaiting\\s+time\\s+after\\s+the\\s+first\\s+([1-9]\\d{0,2})\\s+minutes\\s+is\\s+"
+          + SPOKEN_AMOUNT + "\\s+for\\s+each\\s+hour,\\s+and\\s+that\\s+is\\s+not\\s+part\\s+of"
+          + "\\s+the\\s+total\\.(?=\\s|$)");
   private static final Pattern SPOKEN_EXPIRY = Pattern.compile(
       "(?iu)\\b(?:valid until|(?:I|we) keep (?:this|the) price until)\\h+(?:the\\h+)?"
           + "([0-9]{1,2})(?:st|nd|rd|th)?\\h+of\\h+([a-z]{3,})(?:\\h+([0-9]{4}))?"
@@ -183,15 +194,17 @@ final class ShipmentDocuments {
         ? text : null;
   }
 
-  String attachedOffer(Map<String, Object> message) {
+  String attachedOffer(Map<String, Object> message, boolean truck) {
     if (hasAttachment(message, "voice-message.mp3")) {
       var transcript = voiceTranscript(message);
       var received = Ledger.instant(message.get("received"));
-      if (transcript.isBlank() || received == null || OPEN_OFFER_TERMS.matcher(transcript).find())
-        return null;
+      if (transcript.isBlank() || received == null) return null;
       int year = received.atZone(java.time.ZoneOffset.UTC).getYear();
       var costs = SPOKEN_EUROS.matcher(transcript).replaceAll(match ->
           String.format(Locale.ROOT, "%s.%02d EUR", match.group(1), Integer.parseInt(match.group(2))));
+      if (truck) costs = normalizeSpokenPickup(costs);
+      if (OPEN_OFFER_TERMS.matcher(truck ? MailParser.withoutPickupWaitingCharge(costs) : costs).find())
+        return null;
       return SPOKEN_EXPIRY.matcher(costs).replaceAll(match ->
           "Valid until " + match.group(1) + " " + match.group(2).substring(0, 3) + " "
               + (match.group(3) == null ? year : match.group(3)) + " " + match.group(4) + " UTC");
@@ -204,12 +217,30 @@ final class ShipmentDocuments {
     var files = read(message);
     if (files.size() != 1 || files.getFirst() == null) return null;
     var text = files.getFirst().text();
-    if (OPEN_OFFER_TERMS.matcher(text).find()) return null;
-    if (text.contains("This price is all-in."))
+    if (OPEN_OFFER_TERMS.matcher(truck ? MailParser.withoutPickupWaitingCharge(text) : text).find())
+      return null;
+    if (FIRM_PICKUP_TOTAL.matcher(text).find())
       text = PICKUP_BREAKDOWN.matcher(text).replaceAll("");
     if (text.contains("Amount (EUR)"))
       text = OFFER_TOTAL.matcher(text).replaceAll("Total EUR $1");
     return text;
+  }
+
+  private static String normalizeSpokenPickup(String text) {
+    var prices = text.replaceAll("€\\h*", "EUR ")
+        .replaceAll("(?iu)(?<![\\w.,])([0-9]+(?:[.,][0-9]{1,2})?)\\h+EUR(?:os?)?\\b", "EUR $1");
+    var totals = SPOKEN_PICKUP_BREAKDOWN.matcher(prices).replaceAll(match -> {
+      var base = new BigDecimal(match.group(1).replace(',', '.'));
+      var weight = new BigDecimal(match.group(2).replace(',', '.'));
+      var total = new BigDecimal(match.group(3).replace(',', '.'));
+      return base.add(weight).compareTo(total) == 0
+          ? "Total EUR " + total.toPlainString() + "." : match.group();
+    });
+    return SPOKEN_PICKUP_WAIT.matcher(totals).replaceAll(match -> {
+      var fee = new BigDecimal(match.group(2).replace(',', '.')).setScale(2);
+      return "\nNot part of this offer: waiting time at the pickup address after the first "
+          + match.group(1) + " minutes, " + fee.toPlainString() + " EUR for each hour.\n";
+    });
   }
 
   Decision inspect(Map<String, Object> original, List<Map<String, Object>> followUps,

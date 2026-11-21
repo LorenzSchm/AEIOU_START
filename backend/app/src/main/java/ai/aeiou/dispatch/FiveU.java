@@ -73,14 +73,16 @@ class FiveU {
       throw new IOException("Voice transcription unavailable");
     String token = Files.readString(Path.of(transcriptionKeyFile)).strip();
     if (token.isEmpty()) throw new IOException("Voice transcription key unavailable");
-    var form = new org.springframework.http.client.MultipartBodyBuilder();
-    form.part("file", audio, org.springframework.http.MediaType.parseMediaType("audio/mpeg"))
-        .filename("voice-message.mp3");
-    form.part("model", "gpt-4o-mini-transcribe");
+    var audioHeaders = new HttpHeaders();
+    audioHeaders.setContentType(org.springframework.http.MediaType.parseMediaType("audio/mpeg"));
+    audioHeaders.setContentDispositionFormData("file", "voice-message.mp3");
+    var form = new org.springframework.util.LinkedMultiValueMap<String, Object>();
+    form.add("file", new org.springframework.http.HttpEntity<>(audio, audioHeaders));
+    form.add("model", "gpt-4o-mini-transcribe");
     var result = transcription.post().uri("/v1/audio/transcriptions")
         .headers(headers -> headers.setBearerAuth(token))
         .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA)
-        .body(form.build()).retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
+        .body(form).retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
     String text = result == null ? "" : result.path("text").asText("").strip();
     if (text.isBlank() || text.length() > 12_000) throw new IOException("No usable voice transcript");
     return text;

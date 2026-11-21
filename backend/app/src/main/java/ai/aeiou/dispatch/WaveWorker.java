@@ -746,7 +746,14 @@ class WaveWorker {
       String trucker,
       BigDecimal pickupEur,
       Double pickupDays,
-      Instant pickupValidUntil) {
+      Instant pickupValidUntil,
+      String pickupWaitingDisclosure) {
+    Draft(String revision, Offer offer, List<Offer> alternatives, List<String> notes, String body,
+        String trucker, BigDecimal pickupEur, Double pickupDays, Instant pickupValidUntil) {
+      this(revision, offer, alternatives, notes, body, trucker, pickupEur, pickupDays,
+          pickupValidUntil, null);
+    }
+
     Offer allIn(Shipment shipment, Offer air) {
       if (shipment.pickupZone() == null) return air;
       return air.addPickup(shipment.withPickup(pickupEur, pickupDays == null ? 0 : pickupDays),
@@ -755,7 +762,7 @@ class WaveWorker {
 
     Draft withOffer(Offer current, List<Offer> options, String quote) {
       return new Draft(revision, current, List.copyOf(options), notes, quote, trucker,
-          pickupEur, pickupDays, pickupValidUntil);
+          pickupEur, pickupDays, pickupValidUntil, pickupWaitingDisclosure);
     }
 
     boolean matchesQuotedTerms(Offer current) {
@@ -786,10 +793,11 @@ class WaveWorker {
         WHERE t.request_id=? AND t.euros IS NULL AND r.kind='carrier'
           AND json_array_length(r.attachments)=1
         """, id)) {
-      var text = documents.attachedOffer(reply);
+      boolean truck = "trucker".equals(reply.get("leg"));
+      var text = documents.attachedOffer(reply, truck);
       if (text != null)
         ledger.recoverAttachedBid(id, Ledger.id(reply.get("id")), Ledger.str(reply, "sender"),
-            text, "trucker".equals(reply.get("leg")), catalog, clock.instant());
+            text, truck, catalog, clock.instant());
       else awaitingVoice |= documents.awaitingVoice(reply);
     }
     return awaitingVoice;
@@ -818,6 +826,7 @@ class WaveWorker {
     var airBids = new ArrayList<Offer>();
     var trucks = new ArrayList<Offer>();
     var truckReviews = new ArrayList<TruckBidReview>();
+    var pickupWaitingDisclosures = new HashMap<String, String>();
     boolean fastest = "fastest".equals(s.preference());
     var missingTruckTransit = new HashSet<String>();
     for (var t : ledger.jdbc().queryForList("""
@@ -828,9 +837,10 @@ class WaveWorker {
       var c = catalog.contact(Ledger.str(t, "email")).orElseThrow();
       if (carrierRestrictions.excludes(excluded, c.name())) continue;
       if (!matchesTender(t, s, details, c.truck())) continue;
+      String body = Ledger.str(t, "reply_body");
       Instant validUntil;
       try {
-        validUntil = MailParser.bidValidUntil(Ledger.str(t, "reply_body"));
+        validUntil = MailParser.bidValidUntil(body);
       } catch (java.time.format.DateTimeParseException ex) {
         continue;
       }
@@ -844,11 +854,14 @@ class WaveWorker {
               "carrier bid",
               null,
               validUntil);
+      if (c.truck()) {
+        String disclosure = MailParser.pickupWaitingDisclosure(body);
+        if (disclosure != null) pickupWaitingDisclosures.put(c.name(), disclosure);
+      }
       if (t.get("days") == null) {
         if (!c.truck()) continue;
         if (fastest) {
           if (cachedPortal && s.pickupEur() == null && t.get("parse_state") == null) {
-            String body = Ledger.str(t, "reply_body");
             var evidence = MailParser.roadTransitEvidence(body);
             if (!evidence.isEmpty())
               truckReviews.add(new TruckBidReview(Ledger.id(t.get("reply_id")), c.email(), body,
@@ -883,7 +896,8 @@ class WaveWorker {
     var plan = QuotePlanner.plan(s, offers, airBids, trucks, missingTruckTransit);
     var best = plan.best();
     var pickupDays = plan.pickupDays();
-    String body = best == null ? "" : quoteBody(details, s, best, pickupDays);
+    String disclosure = pickupWaitingDisclosures.get(plan.trucker());
+    String body = best == null ? "" : quoteBody(details, s, best, pickupDays, disclosure);
     return new Draft(
         UUID.randomUUID().toString(),
         best,
@@ -893,7 +907,8 @@ class WaveWorker {
         plan.trucker(),
         plan.pickupEur(),
         pickupDays,
-        plan.pickupValidUntil());
+        plan.pickupValidUntil(),
+        disclosure);
   }
 
   private void resolveCompetitiveTruckBids(
@@ -921,7 +936,8 @@ class WaveWorker {
   }
 
   private String quoteBody(
-      CustomerClarifications.Details details, Shipment s, Offer offer, Double pickupDays) {
+      CustomerClarifications.Details details, Shipment s, Offer offer, Double pickupDays,
+      String pickupWaitingDisclosure) {
     String weight = s.weightKg().stripTrailingZeros().toPlainString() + " kg shipment";
     String priority = "fastest".equals(s.preference()) ? "quickest option" : "lowest rate";
     String route = s.origin() + " to " + s.destination();
@@ -953,6 +969,7 @@ class WaveWorker {
         + price
         + ".\n\n"
         + service
+        + (pickupWaitingDisclosure == null ? "" : " " + pickupWaitingDisclosure)
         + "\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU";
   }
 
@@ -1176,7 +1193,8 @@ class WaveWorker {
         }
       } else if (candidate.validUntil() == null
           || candidate.validUntil().isAfter(clock.instant().plusSeconds(4))) {
-        return draft.withOffer(candidate, options, quoteBody(details, shipment, candidate, draft.pickupDays()));
+        return draft.withOffer(candidate, options, quoteBody(details, shipment, candidate,
+            draft.pickupDays(), draft.pickupWaitingDisclosure()));
       } else {
         options.removeFirst();
       }
