@@ -125,11 +125,23 @@ class LiveWorkflowTest {
                           "destination",
                           "LAX",
                           "airlines",
-                          arr(obj("code", "YT", "name", "Yellowtail Air Freight")))));
+                          arr(obj("code", "YT", "name", "Yellowtail Air Freight"))),
+                      obj(
+                          "origin",
+                          "MUC",
+                          "destination",
+                          "CAI",
+                          "airlines",
+                          arr(obj("code", "BX", "name", "Borealis Freight Airways")))));
       case "/v1/portal/brackets" ->
-          result = obj("airline_code", "YT", "breaks_kg", arr(0, 45, 100));
+          result =
+              ex.getRequestURI().getQuery().contains("airline=BX")
+                  ? obj("airline_code", "BX", "breaks_kg", arr(1000, 300, 500))
+                  : obj("airline_code", "YT", "breaks_kg", arr(0, 45, 100));
       case "/v1/gateway/chat/completions" -> {
         gateway.incrementAndGet();
+        String prompt = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        if (prompt.contains("simulate gateway timeout")) status = 504;
         result =
             obj(
                 "choices",
@@ -137,7 +149,35 @@ class LiveWorkflowTest {
                 "usage",
                 obj("prompt_tokens", 75, "completion_tokens", 10));
       }
-      case "/v1/portal/rates" ->
+      case "/v1/portal/rates" -> {
+        if (ex.getRequestURI().getQuery().contains("destination=CAI")) {
+          if (!ex.getRequestURI().getQuery().contains("weight_kg=486&"))
+            violations.add("Incorrect gross weight in portal");
+          result =
+              obj(
+                  "origin",
+                  "MUC",
+                  "destination",
+                  "CAI",
+                  "airline",
+                  "Borealis Freight Airways",
+                  "airline_code",
+                  "BX",
+                  "weight_kg",
+                  "486",
+                  "chargeable_weight_kg",
+                  "486",
+                  "currency",
+                  "EUR",
+                  "total",
+                  "1642.68",
+                  "transit_days",
+                  4,
+                  "rate_id",
+                  "R-cai486",
+                  "valid_until",
+                  START.plusSeconds(1500).toString());
+        } else
           result =
               obj(
                   "origin",
@@ -164,6 +204,7 @@ class LiveWorkflowTest {
                   START.plusSeconds(900).toString(),
                   "dataset_version",
                   "stub");
+      }
       case "/v1/portal/bookings" -> {
         var b = parse(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
         if (!str(b, "rate_id").equals("R-test12345") || !str(b, "team_reference").equals("AE-1"))
@@ -529,6 +570,107 @@ class LiveWorkflowTest {
         0,
         store.db.queryForObject(
             "select count(*) from mail where id in ('m_801','m_802')", Integer.class));
+  }
+
+  @Test
+  @Order(9)
+  void buysConfirmedBillingBreakForRealManifestAndBooksOnceByReference() {
+    int calls = gateway.get(), portalBookings = bookings.get();
+    String buyer = "break-buyer@hackloop.mail", airline = "borealis-freight-airways@hackloop.mail";
+    inbox.add(
+        inbound(
+            900,
+            buyer,
+            "Cheapest airport-to-airport MUC to CAI. We will deliver it to MUC ourselves.\n"
+                + "Lot 1: 9 pieces, 345 kg gross, 0.58 cbm\n"
+                + "Lot 2: 2 pieces, 141 kg gross, 2.04 cbm\n"
+                + "One all-in price for both lots under one air waybill.",
+            null));
+    waitFor(
+        () ->
+            sent.stream()
+                .anyMatch(
+                    m ->
+                        str(m, "to").equals(airline)
+                            && str(m, "body").contains("billing at 500 kg")));
+    var inquiry =
+        sent.stream()
+            .filter(m -> str(m, "body").contains("billing at 500 kg"))
+            .findFirst()
+            .orElseThrow();
+    long thread = inquiry.path("id").asLong();
+    assertTrue(str(inquiry, "body").contains("gross weight 486 kg"));
+    inbox.add(
+        inbound(
+            901,
+            airline,
+            "500 kg gross, 486 kg billed. All-in 1200 EUR, 4 days. R-WRONG.",
+            thread));
+    inbox.add(
+        inbound(
+            902,
+            airline,
+            "Confirmed: 486 kg gross, 500 kg billed. All-in 1475.00 EUR, 4 days. Book with"
+                + " R-BUY500.",
+            thread));
+    waitFor(
+        () ->
+            store
+                .shipment("s_900")
+                .path("candidates")
+                .valueStream()
+                .anyMatch(c -> str(c, "carrierReference").equals("R-BUY500")));
+    assertFalse(
+        store
+            .shipment("s_900")
+            .path("candidates")
+            .valueStream()
+            .anyMatch(c -> str(c, "carrierReference").equals("R-WRONG")));
+    waitFor(() -> sent.stream().anyMatch(m -> str(m, "to").equals(buyer)));
+    var quote = sent.stream().filter(m -> str(m, "to").equals(buyer)).findFirst().orElseThrow();
+    assertTrue(str(quote, "body").contains("1475.00 EUR"));
+    inbox.add(inbound(903, buyer, "Please go ahead and book.", quote.path("id").asLong()));
+    waitFor(() -> sent.stream().anyMatch(m -> str(m, "body").contains("Please book R-BUY500")));
+    var booked =
+        sent.stream().filter(m -> str(m, "body").contains("Please book R-BUY500")).toList();
+    assertEquals(1, booked.size());
+    assertEquals(902, booked.getFirst().path("in_reply_to").asInt());
+    assertTrue(str(booked.getFirst(), "body").contains("gross 486 kg, billed 500 kg"));
+    assertEquals(portalBookings, bookings.get());
+    assertEquals("486", store.shipment("s_900").at("/inputs/grossKg").asText());
+    assertEquals(calls + 1, gateway.get());
+    assertTrue(violations.isEmpty(), violations.toString());
+  }
+
+  @Test
+  @Order(10)
+  void gatewayTimeoutDoesNotRepeatPaidExtractionAndStandardPriceStillWorks() {
+    int calls = gateway.get();
+    String buyer = "fallback-buyer@hackloop.mail";
+    inbox.add(
+        inbound(
+            950,
+            buyer,
+            "Cheapest airport-to-airport MUC to CAI. 486 kg gross, 2.62 cbm. Please simulate"
+                + " gateway timeout.",
+            null));
+    waitFor(
+        () ->
+            "UNCERTAIN"
+                .equals(
+                    store
+                        .db
+                        .queryForList(
+                            "select state from job where id='s_950:extract:1'", String.class)
+                        .stream()
+                        .findFirst()
+                        .orElse("")));
+    waitFor(() -> store.shipment("s_950").at("/upstreamRates/R-cai486").isObject());
+    offset.addAndGet(46);
+    waitFor(() -> sent.stream().anyMatch(m -> str(m, "to").equals(buyer)));
+    assertEquals("1642.68", store.shipment("s_950").at("/quote/total/amount").asText());
+    assertEquals(calls + 1, gateway.get());
+    assertTrue(violations.isEmpty(), violations.toString());
   }
 
   JsonNode solicitation(String to) {

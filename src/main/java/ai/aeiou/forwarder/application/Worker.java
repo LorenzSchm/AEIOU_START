@@ -175,7 +175,11 @@ public class Worker implements ApplicationRunner {
       var d = flow.store.shipment(j.id);
       boolean quote = str(j.payload, "category").equals("QUOTE");
       if (str(j.payload, "category").equals("BID_REQUEST")
-          && (!at.isBefore(deadline(d)) || d.has("quote"))) {
+          && (!at.isBefore(deadline(d))
+              || d.has("quote")
+              || (j.key.startsWith(j.id + ":break-r")
+                  && !j.key.startsWith(
+                      j.id + ":break-r" + d.path("requestRevision").asInt() + "-")))) {
         state(j, "CANCELLED", at);
         return j;
       }
@@ -308,7 +312,9 @@ public class Worker implements ApplicationRunner {
   private void fail(Job j, RuntimeException error, Instant at) {
     int code = error instanceof Organizer.Failure f ? f.status : 0;
     int wait = error instanceof Organizer.Failure f ? f.retryAfter : 3;
-    boolean ambiguous = j.action.equals("SEND") && (code == 0 || code >= 500);
+    boolean ambiguous =
+        (j.action.equals("SEND") || j.action.equals("EXTRACT"))
+            && (code == 0 || code == 408 || code >= 500);
     boolean retry = !ambiguous && j.attempt < 5 && (code == 429 || code == 0 || code >= 500);
     if (j.action.equals("TARIFF")) {
       state(j, retry ? "READY" : "FAILED", at.plusSeconds(wait));

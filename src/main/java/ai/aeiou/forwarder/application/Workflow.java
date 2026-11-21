@@ -699,6 +699,13 @@ public class Workflow {
                           + str(s, "origin")
                           + " to "
                           + str(s, "destination")
+                          + (c.has("manifestGrossKg")
+                              ? ", gross "
+                                  + str(c, "manifestGrossKg")
+                                  + " kg, billed "
+                                  + str(c, "billedKg")
+                                  + " kg"
+                              : "")
                           + " as quoted: "
                           + str(
                               c.has("airTotal") ? c.get("airTotal") : c.get("quotedTotal"),

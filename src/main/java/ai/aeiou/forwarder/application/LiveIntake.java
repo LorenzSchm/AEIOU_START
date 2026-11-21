@@ -301,7 +301,9 @@ public class LiveIntake {
                       str(entry.getValue(), "category").equals("BID_REQUEST")
                           && str(entry.getValue(), "to").equals(from))
               .toList();
-      if (pending.size() == 1) {
+      if (pending.size() == 1
+          && !str(pending.getFirst().getValue(), "id")
+              .startsWith(pending.getFirst().getKey() + "_break-r")) {
         matches.add(pending.getFirst().getKey());
         localParent = str(pending.getFirst().getValue(), "id");
       }
@@ -651,7 +653,22 @@ public class LiveIntake {
     if (amount.find() || !currency.equals("EUR")) return;
     var parent = str(m, "parentId");
     int revision = d.get("requestRevision").asInt();
-    if (!parent.startsWith(sid(d) + "_r" + revision + "-")
+    String breakKey = "break-r" + revision + "-" + contact.get().email();
+    var billing = d.path("breakRequests").path(breakKey);
+    boolean breakReply = !desk && parent.equals(sid(d) + "_" + breakKey) && billing.isObject();
+    if (breakReply) {
+      if (!terms.has("carrierReference")
+          || !confirmsWeight(body, "gross|actual", str(billing, "grossKg"))
+          || !confirmsWeight(body, "billed|billing|chargeable", str(billing, "billedKg"))
+          || Pattern.compile("(?i)\\b(?:cannot|unable|not|unavailable|only if|subject to)\\b")
+              .matcher(body)
+              .find()) return;
+      terms.set("billedKg", billing.get("billedKg"));
+      terms.set("manifestGrossKg", billing.get("grossKg"));
+      ((ObjectNode) billing).put("confirmed", true);
+    }
+    if (!breakReply
+        && !parent.startsWith(sid(d) + "_r" + revision + "-")
         && !(desk && parent.equals(sid(d) + "_rate-desk-r" + revision))) return;
     if (contact.get().kind().equals("trucker")) {
       String zone = str(d.get("inputs"), "zone");
@@ -769,16 +786,21 @@ public class LiveIntake {
     for (var field : List.of("origin", "destination", "airline", "weight_kg", "volume_cbm"))
       query.add(field + "=" + URLEncoder.encode(str(payload, field), StandardCharsets.UTF_8));
     try {
-      brackets.computeIfAbsent(
-          str(payload, "airline"),
-          airline ->
-              api.call(
-                  "GET",
-                  "/v1/portal/brackets?airline="
-                      + URLEncoder.encode(airline, StandardCharsets.UTF_8),
-                  null));
       var rate = api.call("GET", "/v1/portal/rates?" + String.join("&", query), null);
       if (rate.path("_quotaRemaining").asInt(-1) == 0) rateAfter = flow.clock.now().plusSeconds(1);
+      if (action.equals("PORTAL"))
+        try {
+          brackets.computeIfAbsent(
+              str(payload, "airline"),
+              airline ->
+                  api.call(
+                      "GET",
+                      "/v1/portal/brackets?airline="
+                          + URLEncoder.encode(airline, StandardCharsets.UTF_8),
+                      null));
+        } catch (Organizer.Failure unavailable) {
+          // Break data is optional. Keep the binding rate for the actual manifest.
+        }
       return rate;
     } catch (Organizer.Failure e) {
       if (e.status == 429) rateAfter = flow.clock.now().plusSeconds(e.retryAfter);
@@ -1056,6 +1078,7 @@ public class LiveIntake {
       scheduleFast(d);
       return;
     }
+    if (d.has("quote") || !p.path("revision").equals(d.path("requestRevision"))) return;
     if (!str(r, "origin").equals(str(p, "origin"))
         || !str(r, "destination").equals(str(p, "destination"))
         || !r.hasNonNull("rate_id")) return;
@@ -1073,6 +1096,7 @@ public class LiveIntake {
     var evidence =
         arr(evidence("PORTAL", str(r, "rate_id"), "rate response", r.toString(), at.toString()));
     var total = Pricing.money(value, currency);
+    requestWeightBreak(d, p, r, at);
     flow.offer(
         d,
         obj(
@@ -1119,6 +1143,84 @@ public class LiveIntake {
     scheduleFast(d);
   }
 
+  private static boolean confirmsWeight(String text, String role, String kg) {
+    String label = "\\b(?:" + role + ")(?: weight)?\\b";
+    String amount = "(?<![\\d.,-])(\\d+(?:[.,]\\d+)?)\\s*kg\\b";
+    var weights =
+        Pattern.compile(
+                "(?i)(?:"
+                    + label
+                    + "\\s*(?:(?:of|at|is)\\s+|:\\s*)?"
+                    + amount
+                    + "|"
+                    + amount
+                    + "\\s+"
+                    + label
+                    + ")")
+            .matcher(text);
+    var expected = new BigDecimal(kg);
+    return weights
+        .results()
+        .anyMatch(
+            m ->
+                new BigDecimal((m.group(1) != null ? m.group(1) : m.group(2)).replace(',', '.'))
+                        .compareTo(expected)
+                    == 0);
+  }
+
+  private void requestWeightBreak(ObjectNode d, ObjectNode p, JsonNode rate, Instant at) {
+    if (!str(session(d), "objective").equals("CHEAPEST")
+        || !str(session(d), "phase").equals("SOURCING")
+        || !at.isBefore(deadline(d))) return;
+    var table = brackets.get(str(p, "airline"));
+    var carrier = flow.catalog.byName(str(rate, "airline"));
+    if (table == null
+        || !table.path("breaks_kg").isArray()
+        || carrier.isEmpty()
+        || !rate.path("chargeable_weight_kg").asText().matches("\\d+(?:\\.\\d+)?")) return;
+    var basis = Pricing.decimal(rate, "chargeable_weight_kg").max(Pricing.decimal(p, "weight_kg"));
+    var next =
+        table
+            .path("breaks_kg")
+            .valueStream()
+            .map(JsonNode::asText)
+            .filter(v -> v.matches("\\d+(?:\\.\\d+)?"))
+            .map(BigDecimal::new)
+            .filter(kg -> kg.compareTo(basis) > 0)
+            .min(BigDecimal::compareTo);
+    if (next.isEmpty()) return;
+    String email = carrier.get().email(), key = "break-r" + str(p, "revision") + "-" + email;
+    var requests = d.withObject("/breakRequests");
+    if (requests.has(key)) return;
+    String gross = str(p, "weight_kg"), billed = next.get().stripTrailingZeros().toPlainString();
+    requests.set(key, obj("grossKg", gross, "billedKg", billed, "revision", p.get("revision")));
+    if (d.path("breakWindowRevision").asInt(-1) != p.path("revision").asInt()) {
+      d.set("breakWindowRevision", p.get("revision"));
+      d.put("breakWindowUntil", at.plusSeconds(6).toString());
+    }
+    flow.queueMail(
+        d,
+        key,
+        "BID_REQUEST",
+        email,
+        null,
+        "Can you offer a lower all-in rate for "
+            + str(session(d), "reference")
+            + ", "
+            + str(p, "origin")
+            + " to "
+            + str(p, "destination")
+            + ", gross weight "
+            + gross
+            + " kg, "
+            + str(p, "volume_cbm")
+            + " cbm, by billing at "
+            + billed
+            + " kg? Please confirm both weights, one bookable EUR total, transit and your booking"
+            + " reference.",
+        at);
+  }
+
   private boolean fastReady(ObjectNode d, Instant now) {
     var session = session(d);
     int revision = d.path("requestRevision").asInt();
@@ -1154,8 +1256,19 @@ public class LiveIntake {
     if (!fastReady(d, now)) return;
     int revision = d.get("requestRevision").asInt();
     Instant due = str(session(d), "scope").equals("DOOR_TO_PORT") ? now.plusSeconds(2) : now;
-    flow.store.schedule(
-        sid(d) + ":fast:" + revision, sid(d), "FAST_DECIDE", due, obj("revision", revision));
+    String key = sid(d) + ":fast:" + revision;
+    if (d.path("breakWindowRevision").asInt(-1) == revision) {
+      boolean pending =
+          d.path("breakRequests")
+              .valueStream()
+              .anyMatch(
+                  r -> r.path("revision").asInt() == revision && !r.path("confirmed").asBoolean());
+      if (pending) {
+        var until = Instant.parse(str(d, "breakWindowUntil"));
+        if (until.isAfter(due) && until.isBefore(deadline(d))) due = until;
+      } else key += ":confirmed";
+    }
+    flow.store.schedule(key, sid(d), "FAST_DECIDE", due, obj("revision", revision));
   }
 
   public void fastDecide(ObjectNode d, JsonNode p, Instant at) {

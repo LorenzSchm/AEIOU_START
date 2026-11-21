@@ -35,7 +35,9 @@ Das Skript liest die PostgreSQL-JDBC-URL (mit dem vereinbarten `currentSchema`),
 
 ## Version 1.1
 
-Version 1.1.4 reconciles numbered cargo lots before pricing, requests missing dangerous-goods documents when a packing list identifies a UN number, and replaces carriers that explicitly decline the lane. Tracking requests can identify a booking by pickup postcode, destination and gross weight when the match is unique.
+For cheapest requests, version 1.1.5 checks the next airline billing break above the actual chargeable weight. The portal receives the real gross weight. The airline can confirm an alternative by email with both weights, an all-in EUR price, transit and a booking reference. Confirmed terms can be booked in that thread. The fast path allows up to six seconds for this comparison once it starts. A gateway timeout or ambiguous server error records an uncertain extraction attempt to avoid paying twice.
+
+The forwarder reconciles numbered cargo lots before pricing, requests missing dangerous-goods documents when a packing list identifies a UN number, and replaces carriers that explicitly decline the lane. Tracking requests can identify a booking by pickup postcode, destination and gross weight when the match is unique.
 
 The forwarder sends complete airport quotes as soon as the gateway has reviewed the current shipment and all listed portal airlines on the lane have returned rates. A complete pickup itinerary gets a two-second window for other replies. These decisions use the evidence available at dispatch. Slower email bids can still improve on an early quote. The regular 45-second decision (`DECISION_SECONDS`) covers cases outside the fast path. An incomplete itinerary waits for evidence within the existing six-minute deadline. Air and pickup prices use the earlier expiry of both components. The customer objective determines the pickup option for each air bid before the existing carrier-bid scoring rule. One gateway extraction per ordinary RFQ checks missing fields or special cargo constraints. Customer wording uses local templates.
 
@@ -51,7 +53,7 @@ From this repository with JDK 21 installed, run `./mvnw spring-boot:run` on Linu
 .\mvnw.cmd spring-boot:run
 ```
 
-The API listens at `http://127.0.0.1:8080`. The local demo uses a file-backed H2 database under `var/`, a public demo bearer value of `demo`, and a simulated clock starting on 21 November 2026. Once Maven has cached the dependencies and plug-ins, add `-o` for an offline build. The packaged JAR runs offline with `java -jar target/forwarder-1.1.4.jar` from the repository root. For a fresh PostgreSQL demo, run `docker compose --profile demo up --build`. Compose uses a persistent database volume.
+The API listens at `http://127.0.0.1:8080`. The local demo uses a file-backed H2 database under `var/`, a public demo bearer value of `demo`, and a simulated clock starting on 21 November 2026. Once Maven has cached the dependencies and plug-ins, add `-o` for an offline build. The packaged JAR runs offline with `java -jar target/forwarder-1.1.5.jar` from the repository root. For a fresh PostgreSQL demo, run `docker compose --profile demo up --build`. Compose uses a persistent database volume.
 
 Five simulated seconds pass per real second by default. In session `s_100`, 100 kg from MUC to LAX costs EUR 304.00 with Yellowtail. The worker issues its first offer at virtual second 90, then processes acceptance, carrier confirmation and a tracking question. Session `s_101` arrives while the first booking awaits confirmation. Its EUR 270 air-only offer lacks pickup. The complete EUR 330 option wins, and the cheaper bid arrives after the quote. Session events also show shadow timing estimates. The demo uses synthetic customers and organizer replies with the actual starter tariffs.
 
