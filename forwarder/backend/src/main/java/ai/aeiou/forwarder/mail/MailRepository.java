@@ -125,6 +125,12 @@ public class MailRepository {
                 .params(routeType, confidence, mailId).update();
     }
 
+    /** True for an airline or trucker on the carrier list. */
+    public boolean isCarrierAddress(String address) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM carrier WHERE lower(email) = lower(:a))")
+                .param("a", address.trim()).query(Boolean.class).single();
+    }
+
     public long nextDryRunId() {
         return jdbc.sql("SELECT nextval('dry_run_mail_seq')").query(Long.class).single();
     }

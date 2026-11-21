@@ -38,7 +38,7 @@ class GatewayLlmClientTest {
 
     @BeforeEach
     void setUp() {
-        RestClient.Builder builder = RestClient.builder().baseUrl("http://gw.test");
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://gw.test/v1/gateway");
         server = MockRestServiceServer.bindTo(builder).build();
         recorder = mock(LlmCallRecorder.class);
         client = new GatewayLlmClient(builder.build(), JsonMapper.builder().build(), recorder);

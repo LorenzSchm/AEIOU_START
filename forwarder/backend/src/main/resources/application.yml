@@ -35,7 +35,12 @@ app:
     interval-ms: ${POLLER_INTERVAL_MS:1000}
   mail:
     send-enabled: ${SEND_ENABLED:false}
+    # false: mails to customers and tracking@ are dry runs; carriers and the rate desk still get real mail.
+    customer-replies-enabled: ${CUSTOMER_REPLIES_ENABLED:false}
   llm:
+    # Empty = 5U gateway (scored cost). Set both to call OpenAI directly for testing.
+    base-url: ${LLM_BASE_URL:}
+    api-key: ${LLM_API_KEY:}
     model-router: ${LLM_MODEL_ROUTER:gpt-4o-mini}
     model-writer: ${LLM_MODEL_WRITER:gpt-4o-mini}
     model-extract: ${LLM_MODEL_EXTRACT:gpt-4o-mini}

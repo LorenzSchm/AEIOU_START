@@ -21,6 +21,8 @@ import org.springframework.web.client.RestClient;
 @EnableConfigurationProperties(AppProperties.class)
 public class CoreConfig {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CoreConfig.class);
+
     /** Qualifier of the RestClient for mailbox, portal and board ({@code X-API-Key} auth). */
     public static final String FIVEU_REST_CLIENT = "fiveuRestClient";
     /** Qualifier of the RestClient for the LLM gateway (Bearer auth, long read timeout). */
@@ -39,10 +41,14 @@ public class CoreConfig {
 
     @Bean(LLM_REST_CLIENT)
     RestClient llmRestClient(AppProperties props) {
+        boolean direct = !props.llm().baseUrl().isBlank() && !props.llm().apiKey().isBlank();
+        String baseUrl = direct ? props.llm().baseUrl() : props.fiveu().baseUrl() + "/v1/gateway";
+        String apiKey = direct ? props.llm().apiKey() : props.fiveu().apiKey();
+        log.info("LLM calls go to {}", direct ? baseUrl + " (direct, not counted at the 5U gateway)" : "the 5U gateway");
         return RestClient.builder()
-                .baseUrl(props.fiveu().baseUrl())
+                .baseUrl(baseUrl)
                 .requestFactory(requestFactory(Duration.ofSeconds(90)))
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + props.fiveu().apiKey())
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .build();
     }
 

@@ -63,7 +63,7 @@ public class JdbcMailGateway implements MailGateway {
         List<Long> references = parent.map(JdbcMailGateway::referencesForReply).orElse(List.of());
         Long threadRoot = parent.map(p -> p.threadRootExt() != null ? p.threadRootExt() : p.externalId()).orElse(null);
 
-        if (!props.mail().sendEnabled()) {
+        if (!props.mail().sendEnabled() || !mayReach(mail.to())) {
             long externalId = -mails.nextDryRunId();
             String raw = json.writeValueAsString(Map.of("dryRun", true));
             return store(sessionId, mail, externalId, references, threadRoot == null ? externalId : threadRoot,
@@ -75,6 +75,17 @@ public class JdbcMailGateway implements MailGateway {
         long root = threadRoot != null ? threadRoot : sent.threadRootId();
         return store(sessionId, mail, sent.id(), refs, root, sent.sentAt(), json.writeValueAsString(sent.raw()), false);
     }
+
+    /**
+     * With customer replies disabled only carriers and the rate desk are written to for real; customers and
+     * tracking@ get a dry run, so the scored requests are never answered by this instance.
+     */
+    private boolean mayReach(String to) {
+        if (props.mail().customerRepliesEnabled()) return true;
+        return RATEDESK.equalsIgnoreCase(to.trim()) || mails.isCarrierAddress(to);
+    }
+
+    private static final String RATEDESK = "ratedesk@hackloop.mail";
 
     @Override
     public Optional<StoredMail> findByExternalId(long externalId) {

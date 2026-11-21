@@ -30,6 +30,11 @@ services:
       # Only this instance polls and sends. Never run a second live instance at the same time.
       POLLER_ENABLED: ${POLLER_ENABLED:-false}
       SEND_ENABLED: ${SEND_ENABLED:-false}
+      # false = carriers and the rate desk get real mail, customers and tracking@ only dry runs (test mode).
+      CUSTOMER_REPLIES_ENABLED: ${CUSTOMER_REPLIES_ENABLED:-false}
+      # Both set = LLM calls go directly to OpenAI instead of the scored 5U gateway (test mode).
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       START_KIT_DIR: /start-kit
     volumes:
       - ../start-kit:/start-kit:ro

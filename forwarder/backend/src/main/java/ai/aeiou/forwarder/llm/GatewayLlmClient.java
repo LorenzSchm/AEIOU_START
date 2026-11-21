@@ -29,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class GatewayLlmClient implements LlmClient {
 
     private static final Logger log = LoggerFactory.getLogger(GatewayLlmClient.class);
-    private static final String PATH = "/v1/gateway/chat/completions";
+    private static final String PATH = "/chat/completions";  // relative to the LLM base url (gateway or direct)
     private static final int MAX_ATTEMPTS = 2;
 
     private final RestClient http;
