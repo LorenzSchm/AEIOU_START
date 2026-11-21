@@ -138,7 +138,9 @@ fieldset:disabled { opacity: 0.6; }
 .queue { display: flex; flex-direction: column; min-height: 0; max-height: calc(100dvh - 120px); margin-right: 0; transition: margin-right 240ms cubic-bezier(0.4, 0, 0.2, 1); }
 .view-queue.has-case .queue { margin-right: min(560px, 46vw); transition: margin-right 340ms cubic-bezier(0.32, 0.72, 0, 1); }
 .queue-head { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; padding: var(--s-3); border-bottom: 1px solid var(--hairline); }
-.queue-list { list-style: none; margin: 0; padding: var(--s-2); overflow: auto; display: grid; gap: 2px; align-content: start; }
+/* One column pinned to the list's width: rows can never size the track, even when off-screen rows
+   report a remembered (stale) width after the view was hidden or the case panel opened. */
+.queue-list { list-style: none; margin: 0; padding: var(--s-2); overflow: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; align-content: start; }
 /* Selection is a plain CSS state (Mail-style), not a Motion shared-layout element: it always matches
    the row's real size, even while the queue narrows for the case panel. */
 .row { position: relative; width: 100%; display: flex; gap: var(--s-3); align-items: center; padding: 10px 12px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; transition: background-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out); }
@@ -445,5 +447,5 @@ fieldset:disabled { opacity: 0.6; }
 
 /* Rendering budget: skip layout/paint for queue rows outside the viewport, and for the hidden
    queue view entirely (the hidden overview must stay laid out so its globe can pre-build). */
-.queue-list > li { content-visibility: auto; contain-intrinsic-size: auto 86px; }
+.queue-list > li { min-width: 0; content-visibility: auto; contain-intrinsic-block-size: auto 86px; }
 .view[data-hidden][data-view="queue"] { content-visibility: hidden; }
