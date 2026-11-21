@@ -2379,6 +2379,10 @@
             "type": "string",
             "pattern": "^[0-9]+(\\.[0-9]+)?$"
           },
+          "humanityPoints": { "type": "string" },
+          "bookingPoints": { "type": "string" },
+          "adjustmentPoints": { "type": "string" },
+          "totalPoints": { "type": "string" },
           "at": {
             "type": "string",
             "format": "date-time"

@@ -2,9 +2,40 @@
 
 Java 21 and Spring Boot service for air export requests. A persistent worker sources offers, quotes the customer, books accepted shipments and answers tracking questions. The browser application consumes the [frontend contract](docs/forwarder.openapi.json).
 
+## Schnellstart für die Übergabe
+
+Voraussetzung sind Git, ein JDK ab 21 und PowerShell ab 7.1. Beim ersten Build benötigt der Maven Wrapper Internetzugang für die Build-Abhängigkeiten. Der Start funktioniert aus einem frischen Checkout.
+
+```powershell
+git clone --single-branch --branch feat/autonomous-air-freight-forwarder https://github.com/LorenzSchm/AEIOU_START.git
+cd AEIOU_START
+pwsh -File ./Start.ps1
+```
+
+Der Standardstart baut die Anwendung und simuliert das Postfach mit einer eigenen Datenbank im Arbeitsspeicher. Unter `http://127.0.0.1:18092/health` meldet sie `DEMO_OFFLINE`. In einem zweiten Fenster zeigt der folgende Befehl die Testsendungen. Mit Strg+C im Startfenster endet die Demo. Falls der Port schon belegt ist, wähle z. B. `pwsh -File ./Start.ps1 -Port 18093`.
+
+```powershell
+Invoke-RestMethod 'http://127.0.0.1:18092/api/v1/dashboard' -Headers @{Authorization='Bearer demo'}
+```
+
+**Live-Übernahme:** Den bisherigen Worker samt automatischem Neustart zum vereinbarten Zeitpunkt stoppen. Diese Version braucht dessen kompatiblen PostgreSQL-Stand mit Schema V4, Postfachcursor, Versandnachweisen und offenen Aufträgen. Bei einem Wechsel von einem anderen Datenmodell müssen diese Daten zuerst zugeordnet und übernommen werden.
+
+```powershell
+pwsh -File ./Start.ps1 -CheckDatabase
+```
+
+Die Prüfung liest die übergebene Datenbank und zeigt den gespeicherten Cursor. Der folgende Befehl startet den echten Worker auf Port 18091. Ab dann kann er senden und buchen.
+
+```powershell
+$cursor = [long](Read-Host 'Finalen Mail-Cursor des gestoppten Workers eingeben')
+pwsh -File ./Start.ps1 -Live -ExpectedCursor $cursor
+```
+
+Das Skript liest die PostgreSQL-JDBC-URL (mit dem vereinbarten `currentSchema`), Benutzer und Passwort aus `DATABASE_URL`, `DATABASE_USER` und `DATABASE_PASSWORD`. Für den Live-Start kommen `TEAM_API_KEY`, `GATEWAY_MODEL` und der private `UI_TOKEN` hinzu. Fehlende Werte fragt es im Terminal ab.
+
 ## Version 1.1
 
-Version 1.1.2 sends complete airport quotes as soon as the gateway has reviewed the current shipment and all listed portal airlines on the lane have returned rates. A complete pickup itinerary gets a two-second window for other replies. These decisions use the evidence available at dispatch. Slower email bids can still improve on an early quote. The regular 45-second decision (`DECISION_SECONDS`) covers cases outside the fast path. An incomplete itinerary waits for evidence within the existing six-minute deadline. Air and pickup prices use the earlier expiry of both components. The customer objective determines the pickup option for each air bid before the existing carrier-bid scoring rule. One gateway extraction per ordinary RFQ checks missing fields or special cargo constraints. Customer wording uses local templates.
+Version 1.1.3 sends complete airport quotes as soon as the gateway has reviewed the current shipment and all listed portal airlines on the lane have returned rates. A complete pickup itinerary gets a two-second window for other replies. These decisions use the evidence available at dispatch. Slower email bids can still improve on an early quote. The regular 45-second decision (`DECISION_SECONDS`) covers cases outside the fast path. An incomplete itinerary waits for evidence within the existing six-minute deadline. Air and pickup prices use the earlier expiry of both components. The customer objective determines the pickup option for each air bid before the existing carrier-bid scoring rule. One gateway extraction per ordinary RFQ checks missing fields or special cargo constraints. Customer wording uses local templates.
 
 Tracking requests from the organizer's tracking mailbox are matched to one booking using the thread, exact references, or an unambiguous airport pair. Replies stay in the tracking thread and use the booked price, manifest and carrier reports where available.
 
@@ -18,7 +49,7 @@ From this repository with JDK 21 installed, run `./mvnw spring-boot:run` on Linu
 .\mvnw.cmd spring-boot:run
 ```
 
-The API listens at `http://127.0.0.1:8080`. The local demo uses a file-backed H2 database under `var/`, a public demo bearer value of `demo`, and a simulated clock starting on 21 November 2026. Once Maven has cached the dependencies and plug-ins, add `-o` for an offline build. The packaged JAR runs offline with `java -jar target/forwarder-1.1.2.jar` from the repository root. For a fresh PostgreSQL demo, run `docker compose --profile demo up --build`. Compose uses a persistent database volume.
+The API listens at `http://127.0.0.1:8080`. The local demo uses a file-backed H2 database under `var/`, a public demo bearer value of `demo`, and a simulated clock starting on 21 November 2026. Once Maven has cached the dependencies and plug-ins, add `-o` for an offline build. The packaged JAR runs offline with `java -jar target/forwarder-1.1.3.jar` from the repository root. For a fresh PostgreSQL demo, run `docker compose --profile demo up --build`. Compose uses a persistent database volume.
 
 Five simulated seconds pass per real second by default. In session `s_100`, 100 kg from MUC to LAX costs EUR 304.00 with Yellowtail. The worker issues its first offer at virtual second 90, then processes acceptance, carrier confirmation and a tracking question. Session `s_101` arrives while the first booking awaits confirmation. Its EUR 270 air-only offer lacks pickup. The complete EUR 330 option wins, and the cheaper bid arrives after the quote. Session events also show shadow timing estimates. The demo uses synthetic customers and organizer replies with the actual starter tariffs.
 

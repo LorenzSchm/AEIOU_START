@@ -42,6 +42,8 @@ class LiveWorkflowTest {
       sent = new CopyOnWriteArrayList<>();
   private static final AtomicInteger bookings = new AtomicInteger(), gateway = new AtomicInteger();
   private static final Queue<String> violations = new ConcurrentLinkedQueue<>();
+  private static final AtomicReference<JsonNode> board =
+      new AtomicReference<>(obj("requests", arr()));
   private static final HttpServer upstream = start();
   @Autowired Worker worker;
   @Autowired LiveIntake intake;
@@ -191,7 +193,7 @@ class LiveWorkflowTest {
                   messages.isEmpty() ? cursor : messages.getLast().get("id").asLong());
         }
       }
-      case "/v1/board/me" -> result = obj("rounds", arr());
+      case "/v1/board/me" -> result = board.get();
       default -> {
         violations.add("Unexpected path " + path);
         status = 404;
@@ -369,6 +371,38 @@ class LiveWorkflowTest {
     assertEquals("CLOSED", store.shipment("s_500").at("/session/phase").asText());
     assertEquals(before, gateway.get());
     assertFalse(sent.stream().anyMatch(m -> str(m, "to").equals("late-buyer@hackloop.mail")));
+  }
+
+  @Test
+  @Order(5)
+  void importsOrganizerRoundsAndRefreshesDelayedCost() {
+    var row =
+        obj(
+            "round_no",
+            10,
+            "verdict",
+            "accepted",
+            "sent_at",
+            START.toString(),
+            "points",
+            obj("accuracy", 42.5, "time", 15, "tracking", 0),
+            "total",
+            57.5);
+    board.set(obj("requests", arr(row)));
+    intake.board();
+    var score = store.read("select data from score_row where round_id='10'").getFirst();
+    assertEquals("42.5", str(score, "accuracyPoints"));
+    assertEquals("0", str(score, "trackingPoints"));
+    assertFalse(score.has("costPoints"));
+    row.withObject("/points").put("cost", 32).put("adjustment", -1);
+    row.put("total", 88.5);
+    board.set(obj("requests", arr(row)));
+    intake.board();
+    var scores = store.read("select data from score_row where round_id='10'");
+    assertEquals(1, scores.size());
+    assertEquals("32", str(scores.getFirst(), "costPoints"));
+    assertEquals("-1", str(scores.getFirst(), "adjustmentPoints"));
+    assertEquals("88.5", str(scores.getFirst(), "totalPoints"));
   }
 
   JsonNode solicitation(String to) {

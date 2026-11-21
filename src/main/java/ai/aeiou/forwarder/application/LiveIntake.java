@@ -1089,14 +1089,14 @@ public class LiveIntake {
   public void board() {
     if (!online) return;
     var board = api.call("GET", "/v1/board/me", null);
-    var rows = board.has("rounds") ? board.path("rounds") : board.path("requests");
+    var rows = board.path("requests").isArray() ? board.get("requests") : board.path("rounds");
     if (!rows.isArray()) return;
     tx.executeWithoutResult(
         t -> {
           flow.store.lock();
           var at = flow.clock.now();
           for (var row : rows) {
-            String round = str(row, "round");
+            String round = first(row, "round_no", "round");
             if (round.isBlank()) continue;
             String verdict = str(row, "verdict").toUpperCase(Locale.ROOT).replace(' ', '_');
             if (!Set.of("OPEN", "PENDING", "ACCEPTED", "REJECTED", "NO_ANSWER", "VOIDED")
@@ -1125,9 +1125,15 @@ public class LiveIntake {
                 }
               }
             }
-            for (String kind : List.of("accuracy", "time", "cost", "tracking"))
-              if (row.hasNonNull(kind + "_points"))
+            for (String kind :
+                List.of(
+                    "accuracy", "time", "cost", "humanity", "booking", "tracking", "adjustment")) {
+              var points = row.path("points");
+              if (points.hasNonNull(kind)) s.put(kind + "Points", str(points, kind));
+              else if (row.hasNonNull(kind + "_points"))
                 s.put(kind + "Points", str(row, kind + "_points"));
+            }
+            if (row.hasNonNull("total")) s.put("totalPoints", str(row, "total"));
             if (flow.store.db.update(
                     "update score_row set data=? where round_id=?", s.toString(), round)
                 == 0)
