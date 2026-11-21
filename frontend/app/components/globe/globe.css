@@ -132,3 +132,8 @@
 /* overview: one hub label is enough */
 .cg-root--compact .cg-code--origin:not(.cg-code--fra) { display: none; }
 .cg-root--compact .cg-code--fra { transform: translate(6px, -50%); }
+
+/* Layering: CSS2DRenderer gives every airport label its own z-index (1…n). Isolate that layer so
+   the labels stack only among themselves, below the hover tooltip and the legend. */
+.cg-root canvas + div { position: absolute; z-index: 1; isolation: isolate; }
+.cg-root .float-tooltip-kap { z-index: 50 !important; }

@@ -53,7 +53,6 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
   const closeRef = useRef(null);
 
   useEffect(() => {
-    closeRef.current?.focus({ preventScroll: true });
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

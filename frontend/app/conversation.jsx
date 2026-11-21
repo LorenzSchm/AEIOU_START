@@ -261,7 +261,6 @@ function Reader({ entries, initialKey, onClose }) {
               initial={reduce ? false : { opacity: 0.7 }}
               animate={{ opacity: 1, transition: { duration: 0.14, ease: "easeOut" } }}
             >
-              <h2 className="rd-subject">{entry.subject || entry.label}</h2>
               <div className="rd-from">
                 <Avatar entry={entry} name={name} />
                 <div>
@@ -274,6 +273,7 @@ function Reader({ entries, initialKey, onClose }) {
                 </div>
                 {full && <time className="rd-time" dateTime={entry.time}>{full}</time>}
               </div>
+              <h2 className="rd-subject">{entry.subject || entry.label}</h2>
               <EntryContent entry={entry} />
             </motion.article>
           </div>

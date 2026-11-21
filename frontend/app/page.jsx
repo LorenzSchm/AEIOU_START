@@ -51,14 +51,15 @@ export default function Page() {
   navRef.current = nav;
   // History is updated outside the state updater: Next patches pushState and would
   // otherwise update its Router while React renders Page.
-  const go = useCallback((patch) => {
+  const go = useCallback((patch, { replace = false } = {}) => {
     const next = { ...navRef.current, ...patch };
     const p = new URLSearchParams();
     if (next.view !== "overview") p.set("view", next.view);
     if (next.caseId) p.set("case", next.caseId);
     if (next.scope !== "attention") p.set("scope", next.scope);
     const url = window.location.pathname + (p.size ? "?" + p : "");
-    if (url !== window.location.pathname + window.location.search) window.history.pushState(null, "", url);
+    if (url !== window.location.pathname + window.location.search)
+      window.history[replace ? "replaceState" : "pushState"](null, "", url);
     navRef.current = next;
     setNav(next);
   }, []);
@@ -135,7 +136,7 @@ export default function Page() {
                 <Overview messages={messages} now={now} onOpen={(id) => go({ caseId: id })} />
               ) : (
                 <Queue messages={messages} now={now} selectedId={nav.caseId} scope={nav.scope}
-                       setScope={(scope) => go({ scope })} onSelect={(id) => go({ caseId: id })} />
+                       setScope={(scope) => go({ scope })} onSelect={(id, opts) => go({ caseId: id }, opts)} />
               )}
             </motion.div>
           </AnimatePresence>

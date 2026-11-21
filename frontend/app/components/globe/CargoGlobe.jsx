@@ -95,10 +95,13 @@ const warned = new Set();
 // there is never an empty phase or visible restart. Ends fade (see arcColor) so dashes
 // ease in at the origin and dissolve at the destination instead of popping.
 const DASH_PERIOD = 0.25;
-const dashLength = (a) => (a.kind === "track" ? 1 : 0.07);
-const dashGap = (a) => (a.kind === "track" ? 0 : DASH_PERIOD - 0.07);
-const dashInitialGap = (a) => (a.kind === "track" ? 0 : ((a.id * 0.37) % 1) * DASH_PERIOD);
-const dashAnimate = (a) => (a.kind === "track" ? 0 : 6000);
+// "hit" arcs are wide invisible tubes that only exist to make hovering/clicking easy. Their dash
+// pattern discards every fragment (initial gap > arc length), so they never draw or write depth
+// and can't hide other arcs — but the raycaster still hits their geometry.
+const dashLength = (a) => (a.kind === "track" ? 1 : a.kind === "hit" ? 0.0001 : 0.07);
+const dashGap = (a) => (a.kind === "track" ? 0 : a.kind === "hit" ? 10 : DASH_PERIOD - 0.07);
+const dashInitialGap = (a) => (a.kind === "track" ? 0 : a.kind === "hit" ? 2 : ((a.id * 0.37) % 1) * DASH_PERIOD);
+const dashAnimate = (a) => (a.kind === "dash" ? 6000 : 0);
 const noDashAnimate = () => 0;
 const landColor = () => "rgba(71,85,105,0.42)";
 const pointRadius = (p) => (p.isOrigin ? 0.42 : 0.26);
@@ -161,8 +164,17 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
   );
 
   // --- data
-  const arcs = useMemo(() => {
+  // The dashboard polls every 2 s and hands us brand-new route objects each time. globe.gl joins
+  // data by object identity, so new objects would rebuild every arc and restart its dash animation
+  // (the visible "loop reset"). Reuse the previous objects for routes whose content is unchanged.
+  const [hoverId, setHoverId] = useState(null);
+  const cache = useRef(new Map());
+  const signature = routes
+    .map((r) => [r.id, r.origin, r.destination, r.state, r.airline, r.totalEur, r.days, r.label].join("|"))
+    .join(";");
+  const arcEntries = useMemo(() => {
     const out = [];
+    const nextCache = new Map();
     for (const r of routes) {
       const o = airport(r.origin);
       const d = airport(r.destination);
@@ -174,16 +186,26 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
         }
         continue;
       }
-      out.push({ ...r, origin: o.code, destination: d.code, startLat: o.lat, startLng: o.lng, endLat: d.lat, endLng: d.lng });
+      const sig = [r.origin, r.destination, r.state, r.airline, r.totalEur, r.days, r.label].join("|");
+      const prev = cache.current.get(r.id);
+      const entry =
+        prev && prev.sig === sig
+          ? prev
+          : (() => {
+              const arc = { ...r, origin: o.code, destination: d.code, startLat: o.lat, startLng: o.lng, endLat: d.lat, endLng: d.lng };
+              // Each route renders twice: a faint solid "track" + animated dashes travelling origin → destination.
+              return { sig, arc, track: { ...arc, kind: "track" }, dash: { ...arc, kind: "dash" }, hit: { ...arc, kind: "hit" } };
+            })();
+      nextCache.set(r.id, entry);
+      out.push(entry);
     }
+    cache.current = nextCache;
     return out;
-  }, [routes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
 
-  // Each route renders twice: a faint solid "track" + an animated dash travelling origin → destination.
-  const arcLayers = useMemo(
-    () => arcs.flatMap((a) => [{ ...a, kind: "track" }, { ...a, kind: "dash" }]),
-    [arcs]
-  );
+  const arcs = useMemo(() => arcEntries.map((e) => e.arc), [arcEntries]);
+  const arcLayers = useMemo(() => arcEntries.flatMap((e) => [e.track, e.dash, e.hit]), [arcEntries]);
 
   const airportsInUse = useMemo(() => {
     const m = new Map();
@@ -219,6 +241,7 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
       const c = stateOf(a.state).rgb;
       const lit = isLit(a);
       const hi = lit ? 1 : 0.35;
+      if (a.kind === "hit") return "rgba(0,0,0,0)";
       if (a.kind === "track") return rgba(c, hi * (lit && dimming ? 0.55 : 0.3));
       // transparent at both ends → dashes fade in at the origin and out at the destination
       return [rgba(c, 0), rgba(c, hi * 0.9), rgba(c, hi), rgba(c, hi), rgba(c, 0)];
@@ -228,10 +251,12 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
   const arcStroke = useCallback(
     (a) => {
       const sel = hasSel && a.id === selectedId;
-      if (a.kind === "track") return sel ? 0.5 : compact ? 0.22 : 0.28;
-      return sel ? 1.1 : compact ? 0.5 : 0.65;
+      const hov = a.id === hoverId;
+      if (a.kind === "hit") return compact ? 2.2 : 2.8;
+      if (a.kind === "track") return sel ? 0.5 : hov ? 0.42 : compact ? 0.22 : 0.28;
+      return sel ? 1.1 : hov ? 0.95 : compact ? 0.5 : 0.65;
     },
-    [hasSel, selectedId, compact]
+    [hasSel, selectedId, compact, hoverId]
   );
 
   const pointColor = useCallback(
@@ -324,6 +349,7 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
   }, [selectedId, hasSel, ready, arcs, reducedMotion, autoRotate]);
 
   const handleArcClick = useCallback((a) => onSelect?.(a.id), [onSelect]);
+  const handleArcHover = useCallback((a) => setHoverId(a ? a.id : null), []);
   const handlePointClick = useCallback((p) => setFocusCode((cur) => (cur === p.code ? null : p.code)), []);
   const handleGlobeClick = useCallback(() => setFocusCode(null), []);
 
@@ -376,6 +402,7 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
           arcsTransitionDuration={0}
           arcLabel={tooltip}
           onArcClick={handleArcClick}
+          onArcHover={handleArcHover}
           // airports
           pointsData={airportsInUse}
           pointLat="lat"
