@@ -23,6 +23,7 @@ class WaveWorker {
   private final Instant start;
   private final long waitSeconds;
   private final boolean counteroffers;
+  private final Map<Long, String> packingChecks = new HashMap<>();
   private volatile Instant lastPoll;
   private volatile String error;
   private Instant pollAfter = Instant.EPOCH;
@@ -147,6 +148,66 @@ class WaveWorker {
     return m;
   }
 
+  private static final String DG_DOCS =
+      "Dangerous goods indicated. Hold pending documents and carrier review.";
+  private static final String UNVERIFIED_PACKING =
+      "Packing attachment could not be checked for dangerous goods.";
+
+  private void checkPacking(long id, Map<String, Object> mail) {
+    if (ledger.delivery("dg-docs:" + id) != null) throw new Conflict(DG_DOCS);
+    String issue = packingChecks.get(id);
+    if (issue == null) {
+      boolean dg = PackingSafety.declaresDangerousGoods(Ledger.str(mail, "body"));
+      boolean unreadable = false;
+      List<?> attachments = ledger.read(mail.get("attachments"), List.class);
+      if (attachments != null) {
+        for (var raw : attachments) {
+          if (dg) break;
+          var attachment = (Map<?, ?>) raw;
+          try {
+            long attachmentId = Ledger.id(attachment.get("id"));
+            var name = Objects.toString(attachment.get("filename"), "");
+            dg =
+                PackingSafety.declaresDangerousGoods(
+                    PackingSafety.extract(name, upstream.bytes(id, attachmentId)));
+          } catch (java.io.IOException
+              | javax.xml.stream.XMLStreamException
+              | RestClientException ex) {
+            unreadable = true;
+          }
+        }
+      }
+      issue = dg ? DG_DOCS : unreadable ? UNVERIFIED_PACKING : "";
+      if (!unreadable || dg) packingChecks.put(id, issue);
+    }
+    if (DG_DOCS.equals(issue)
+        && automatic
+        && ledger.delivery("quote:" + id) == null
+        && !Ledger.instant(mail.get("received")).isBefore(start)) {
+      send(
+          "dg-docs:" + id,
+          Map.of(
+              "to",
+              mail.get("sender"),
+              "in_reply_to",
+              id,
+              "subject",
+              "Re: " + mail.get("subject"),
+              "body",
+              "Hi,\n\n"
+                  + "The shipment details indicate dangerous goods. Could you send the current"
+                  + " safety data sheet, including Section 14, and the dangerous goods declaration"
+                  + " if applicable? Please also confirm the classification for air transport."
+                  + " We’ll review these before we quote.\n\n"
+                  + "Best regards,\n"
+                  + "Team AEIOU"));
+    }
+    if (!issue.isEmpty()) {
+      ledger.stage(id, "review", issue);
+      throw new Conflict(issue);
+    }
+  }
+
   private void advance(long id) {
     var m = ledger.mail(id);
     var received = Ledger.instant(m.get("received"));
@@ -166,6 +227,7 @@ class WaveWorker {
           id, delivery.equals("sent") ? "sent" : "review", "Check the recorded quote delivery.");
       return;
     }
+    checkPacking(id, m);
     gateway.ensure(id, m, true);
     m = target(id);
     var w = ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id);
@@ -178,6 +240,43 @@ class WaveWorker {
       ledger.stage(id, "review", catalog.problem(s));
       return;
     }
+    long queried = Ledger.id(w.get("queried"));
+    boolean completePortal = queried == -1;
+    if (queried == 0
+        || (queried > 0
+            && clock.instant().getEpochSecond() - queried >= 35
+            && clock.instant().isBefore(deadline.minusSeconds(35)))) {
+      var result = upstream.rates(s, clock.instant());
+      completePortal = result.complete();
+      var offers = new ArrayList<Offer>(Arrays.asList(cached(w)));
+      for (var o : result.offers()) {
+        offers.removeIf(
+            old ->
+                old.airline().equals(o.airline()) && old.billedKg().compareTo(o.billedKg()) == 0);
+        offers.add(o);
+      }
+      ledger
+          .jdbc()
+          .update(
+              "UPDATE wave_case SET offers=?,queried=? WHERE id=?",
+              ledger.write(offers),
+              result.complete() ? -1 : clock.instant().getEpochSecond(),
+              id);
+    }
+    if (s.pickupZone() == null && completePortal) {
+      var draft = calculate(id, s, null, true);
+      var offer = draft.offer();
+      if (offer != null
+          && "portal".equals(offer.source())
+          && offer.rateId() != null
+          && !offer.rateId().isBlank()
+          && offer.totalEur().signum() > 0
+          && offer.validUntil().isAfter(clock.instant().plusSeconds(120))) {
+        save(id, s, draft, false);
+        sendQuote(id, draft.revision());
+        return;
+      }
+    }
     for (var c : catalog.invitations(s)) {
       if (clock.instant().isAfter(deadline.minusSeconds(8))) break;
       String key = "bid:" + id + ":" + c.email();
@@ -188,25 +287,6 @@ class WaveWorker {
           log.info("RFQ {} bid to {}: {}", id, c.name(), ex.getMessage());
         }
       }
-    }
-    long queried = Ledger.id(w.get("queried"));
-    if (queried == 0
-        || (queried > 0
-            && clock.instant().getEpochSecond() - queried >= 35
-            && clock.instant().isBefore(deadline.minusSeconds(35)))) {
-      var result = upstream.rates(s, clock.instant());
-      var offers = new ArrayList<Offer>(Arrays.asList(cached(w)));
-      for (var o : result.offers()) {
-        offers.removeIf(old -> old.airline().equals(o.airline()));
-        offers.add(o);
-      }
-      ledger
-          .jdbc()
-          .update(
-              "UPDATE wave_case SET offers=?,queried=? WHERE id=?",
-              ledger.write(offers),
-              result.complete() ? -1 : clock.instant().getEpochSecond(),
-              id);
     }
     var tenders = ledger.tenders(id);
     boolean allAnswered =
@@ -464,6 +544,7 @@ class WaveWorker {
     }
     if (Ledger.instant(message.get("received")).isBefore(start))
       throw new Conflict("Request predates this wave.");
+    checkPacking(id, message);
     gateway.ensure(id, message, false);
     ledger
         .transactions()
@@ -514,7 +595,9 @@ class WaveWorker {
   }
 
   synchronized Draft price(long id, Shipment shipment, ManualBid bid) {
-    gateway.ensure(id, target(id), false);
+    var message = target(id);
+    checkPacking(id, message);
+    gateway.ensure(id, message, false);
     var draft = calculate(id, shipment, bid, false);
     save(id, shipment, draft, true);
     return draft;
@@ -577,6 +660,7 @@ class WaveWorker {
 
   synchronized Map<String, Object> sendQuote(long id, String revision) {
     var m = target(id);
+    checkPacking(id, m);
     var d = ledger.read(m.get("proposal"), Draft.class);
     if (d == null || d.offer() == null || !d.revision().equals(revision))
       throw new Conflict("Calculate a current quote first.");
@@ -602,6 +686,7 @@ class WaveWorker {
 
   synchronized Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c) {
     var m = target(id);
+    checkPacking(id, m);
     if (catalog.problem(s) != null || !c.serves(c.truck() ? s.pickupZone() : s.destination()))
       throw new IllegalArgumentException("Check shipment and carrier coverage.");
     String leg =

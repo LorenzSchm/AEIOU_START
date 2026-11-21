@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Conversation from "./conversation";
+import EmailPreview from "./email-preview";
 
 function transitLabel(days) {
   const hours = Math.round(days * 24);
@@ -307,7 +308,7 @@ function Case({ m, messages, directory, refresh }) {
                       </tbody>
                     </table>
                   </details>
-                  {!m.delivery && <pre className="draft">{proposal.body}</pre>}
+                  {!m.delivery && <EmailPreview body={proposal.body} />}
                   <button
                     className="primary"
                     disabled={busy || closed || dirty}
@@ -359,6 +360,7 @@ function Case({ m, messages, directory, refresh }) {
             onChange={(e) => setReply(e.target.value)}
             aria-label="Reply body"
           />
+          {reply.trim() && <EmailPreview body={reply} />}
           <button
             className="primary"
             disabled={busy || !reply.trim() || Boolean(m.reply_delivery)}

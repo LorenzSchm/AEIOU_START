@@ -118,6 +118,53 @@ public final class MailParser {
         .toList();
   }
 
+  private record LotTotals(BigDecimal kg, BigDecimal cbm) {}
+
+  // Weight and volume have independent scopes: "together" is already a line total.
+  private static final String LOT_NUMBER = "(\\d+(?:[.,]\\d+)?)";
+  private static final Pattern PACKED_LOT =
+      pattern(
+          "Lot \\d+:\\h*([1-9]\\d*)\\h+(?:drums?|cartons?|cases?|pieces?|pallets?|crates?|boxes)\\h*,\\h*"
+              + "(each|together)\\h+"
+              + LOT_NUMBER
+              + "\\h*kg\\h+gross(?:\\h*\\(\\d+(?:[.,]\\d+)?\\h*kg\\h+net\\))?\\h*,\\h*"
+              + "(each|together)\\h+"
+              + LOT_NUMBER
+              + "(?:\\h*(cbm|m3|m³)|\\h*[x×]\\h*"
+              + LOT_NUMBER
+              + "\\h*[x×]\\h*"
+              + LOT_NUMBER
+              + "\\h*(cm|mm|m))\\h*[.]?");
+
+  private static LotTotals lotTotals(String line) {
+    var packed = PACKED_LOT.matcher(line.strip());
+    if (packed.matches()) {
+      var count = new BigDecimal(packed.group(1));
+      var kg = number(packed.group(3));
+      var cbm = number(packed.group(5));
+      if (kg == null || cbm == null) return null;
+      if (packed.group(6) == null) {
+        var width = number(packed.group(7));
+        var height = number(packed.group(8));
+        if (width == null || height == null) return null;
+        int scale =
+            switch (packed.group(9).toLowerCase(Locale.ROOT)) {
+              case "cm" -> 6;
+              case "mm" -> 9;
+              default -> 0;
+            };
+        cbm = cbm.multiply(width).multiply(height).movePointLeft(scale);
+      }
+      return new LotTotals(
+          packed.group(2).equalsIgnoreCase("each") ? kg.multiply(count) : kg,
+          packed.group(4).equalsIgnoreCase("each") ? cbm.multiply(count) : cbm);
+    }
+    if (has(line, "\\b(?:each|per|net)\\b")) return null;
+    var kg = quantity(line, "kg|kgs|kilograms?");
+    var cbm = quantity(line, "cbm|m³|m3|cubic met(?:er|re)s?");
+    return kg == null || cbm == null ? null : new LotTotals(kg, cbm);
+  }
+
   public record Parsed(Shipment shipment, String issue) {}
 
   public static Parsed request(String subject, String body, boolean attachments, Catalog catalog) {
@@ -127,8 +174,15 @@ public final class MailParser {
     var destinations = codes.stream().filter(catalog.destinations::contains).distinct().toList();
     if (origins.isEmpty()) origins = cityCodes(text, catalog.zones.values());
     if (destinations.isEmpty()) destinations = cityCodes(text, catalog.destinations);
+    boolean selfDelivery =
+        has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b");
+    String pickupText =
+        selfDelivery ? text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "") : text;
     boolean pickup =
-        has(text, "pick[ -]?up|collect(?:ion)?\\b|door[ -]to|abhol|vorlauf|ex[ -]?works|\\bEXW\\b");
+        has(
+            pickupText,
+            "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing)? from|arrange (?:the |a )?truck|door["
+                + " -]to|abhol|vorlauf|ex[ -]?works|\\bEXW\\b");
     var zones =
         new ArrayList<>(
             captures(
@@ -146,11 +200,39 @@ public final class MailParser {
                 + " (?:price|cost)");
     var volume = quantity(body, "cbm|m³|m3|cubic met(?:er|re)s?");
     if (volume == null && !has(body, "\\b(?:cbm|m³|m3)\\b")) volume = dimensions(body);
+    var weight = quantity(body, "kg|kgs|kilograms?");
+    var lotLines = pattern("(?m)^\\h*Lot \\d+:[^\\r\\n]*").matcher(body);
+    var lots = lotLines.results().map(m -> m.group()).toList();
+    boolean incompleteLots = false;
+    if (lots.size() >= 2) {
+      weight = null;
+      volume = null;
+      incompleteLots = true;
+      var outside = lotLines.reset().replaceAll("");
+      if (has(body, "together as (?:one|a single) consignment|under (?:one|a single) air waybill")
+          && !has(outside, "\\b(?:kg|kgs|kilograms?|cbm|m3|m³)")) {
+        BigDecimal kg = BigDecimal.ZERO, cbm = BigDecimal.ZERO;
+        for (String line : lots) {
+          var lot = lotTotals(line);
+          if (lot == null || lot.kg().signum() <= 0 || lot.cbm().signum() <= 0) {
+            kg = null;
+            break;
+          }
+          kg = kg.add(lot.kg());
+          cbm = cbm.add(lot.cbm());
+        }
+        if (kg != null) {
+          weight = kg;
+          volume = cbm;
+          incompleteLots = false;
+        }
+      }
+    }
     var shipment =
         new Shipment(
             origin,
             only(destinations),
-            quantity(body, "kg|kgs|kilograms?"),
+            weight,
             volume,
             fast == cheap ? null : fast ? "fastest" : "cheapest",
             zone,
@@ -162,12 +244,16 @@ public final class MailParser {
         text,
         "dangerous|hazardous|lithium|temperature.control|dry ice|gefahrgut|perishable|refrigerat"))
       issue = "Special handling needs a confirmed price.";
+    else if (selfDelivery && (pickup || zone != null))
+      issue = "Confirm whether collection or customer delivery to the airport is required.";
     else if ((pickup || !zones.isEmpty()) && zone == null)
       issue = "Pickup requested. Confirm the pickup postcode or zone.";
-    else if (has(
-        body,
-        "(?:\\d+\\s*[x×]\\s*\\d+(?:[.,]\\d+)?\\s*kg)|(?:kg|kgs)\\s*(?:each|per"
-            + " (?:piece|pallet|crate))|(?:each|per piece)\\s*[:=]?\\s*\\d+[.,\\d]*\\s*kg"))
+    else if (incompleteLots) issue = "Confirm gross weight and volume for every lot.";
+    else if (lots.size() < 2
+        && has(
+            body,
+            "(?:\\d+\\s*[x×]\\s*\\d+(?:[.,]\\d+)?\\s*kg)|(?:kg|kgs)\\s*(?:each|per"
+                + " (?:piece|pallet|crate))|(?:each|per piece)\\s*[:=]?\\s*\\d+[.,\\d]*\\s*kg"))
       issue = "Confirm total gross weight. The request gives a per-piece weight.";
     else if (!has(
         text,

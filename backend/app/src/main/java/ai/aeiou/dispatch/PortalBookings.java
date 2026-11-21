@@ -24,8 +24,9 @@ class PortalBookings {
               + " proceed with (?:the |this )?booking|bitte (?:so |wie angeboten )?buchen)[.! ]*");
   private static final Pattern SIGNOFF =
       Pattern.compile(
-          "(?im)^\\s*(?:best (?:greetings|regards|wishes)|kind regards|regards|bestens|mit"
-              + " freundlichen gr[üu]ssen|viele gr[üu](?:ss|ß)e|--)(?:[,! .]|$).*");
+          "(?im)^\\s*(?:best (?:greetings|regards|wishes)|kind regards|regards|cheers|bestens|mit"
+              + " freundlichen gr(?:ü|ue|u)(?:ss|ß)en|viele gr(?:ü|ue|u)(?:ss|ß)e|--)(?:[,!"
+              + " .]|$).*");
   private static final Pattern NAME_SIGNATURE =
       Pattern.compile(
           "[\\p{Lu}][\\p{L}’'&.-]*(?: [\\p{Lu}][\\p{L}’'&.-]*){0,5}(?:\\R[\\p{Lu}][\\p{L}’'&.-]*(?:"
@@ -44,7 +45,13 @@ class PortalBookings {
   }
 
   static boolean accepted(String body) {
-    String text = SIGNOFF.split(body.strip(), 2)[0].strip();
+    String authored =
+        body.split("(?im)^\\s*(?:>|On .+ wrote:|-----Original Message-----)", 2)[0].strip();
+    if (Pattern.compile(
+            "(?iu)\\b(?:if|unless|until|hold|wait|cancel|not|never|wenn|nicht|stornieren)\\b")
+        .matcher(authored)
+        .find()) return false;
+    String text = SIGNOFF.split(authored, 2)[0].strip();
     String[] blocks = text.split("\\R\\h*\\R", 2);
     if (blocks.length > 1 && NAME_SIGNATURE.matcher(blocks[1].strip()).matches()) text = blocks[0];
     return APPROVAL.matcher(text.replaceAll("\\s+", " ").strip()).matches();
@@ -159,7 +166,7 @@ class PortalBookings {
             s.origin(),
             s.destination(),
             offer.airline(),
-            s.weightKg(),
+            offer.billedKg().compareTo(s.chargeableKg()) > 0 ? offer.billedKg() : s.weightKg(),
             s.volumeCbm());
     var fx =
         switch (Ledger.str(r, "currency")) {

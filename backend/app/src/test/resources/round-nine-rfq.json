@@ -1,0 +1,42 @@
+{
+  "subject": "Air freight quote to LOS",
+  "body": "Hi,\n\nCould you quote the cheapest air freight option to LOS (Lagos, NG) for automotive sensors? Pickup is at our site in 36627 (Fulda), Germany, ready on 2026-11-29. Please arrange the truck to the airport and quote one all-in price in EUR.\n\nLot 1: 4 drums, together 730 kg gross (642 kg net), together 1.68 cbm\nLot 2: 4 cartons, each 48 kg gross (41 kg net), each 110 x 110 x 52 cm\nLot 3: 5 cases, each 206 kg gross (191 kg net), each 120 x 100 x 8 cm\n\nPlease book all lots as a single consignment under one air waybill.\n\nMira Petersen\nNordlicht Audio",
+  "shipment": {
+    "origin": "FRA",
+    "destination": "LOS",
+    "weight_kg": 1952,
+    "volume_cbm": 4.6768,
+    "preference": "cheapest",
+    "pickup_zone": "36",
+    "pickup_eur": null,
+    "pickup_days": 0.0
+  },
+  "offers": [
+    {
+      "airline": "Lumen Air Cargo",
+      "days": 5.0,
+      "total_eur": 4840.96,
+      "billed_kg": 1952,
+      "source": "portal",
+      "rate_id": "TEST-R9-0",
+      "valid_until": "2026-11-21T15:15:00Z"
+    },
+    {
+      "airline": "Tamarind Airways",
+      "days": 3.0,
+      "total_eur": 6714.88,
+      "billed_kg": 1952,
+      "source": "portal",
+      "rate_id": "TEST-R9-1",
+      "valid_until": "2026-11-21T15:15:00Z"
+    }
+  ],
+  "replies": {
+    "bodenseefracht@hackloop.mail": "All-in rate for collection and delivery to FRA: 429.80 EUR.\nEstimated time to pickup: 6 hours.\nRate valid until 21 Nov 2026 16:05 UTC.\nOffer reference: TRK-709. No pickup booking required.\n\nBodenseefracht",
+    "domblick-kurierdienst@hackloop.mail": "Hi Team AEIOU,\n\nThanks for getting in touch! Our all-in rate for collection and delivery to FRA is 361.24 EUR, valid until 21 Nov 2026 16:05 UTC.\n\nWe can collect within 8 hours. That’s the pickup estimate, not the full transit time to FRA. No booking is needed; our offer reference is TRK-705.\n\nBest wishes,\nDomblick Kurierdienst",
+    "elbflug-air-freight@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-LOS.\nWe fly CGN-LOS, DUS-HKG, DUS-TLV, FRA-BOG, FRA-DFW, FRA-DXB, FRA-HKG, FRA-MEL, FRA-MIA, FRA-SGN, FRA-SIN, HAM-DFW, HAM-DXB, HAM-MEX, HAM-TLV, MUC-BOG, MUC-SYD, STR-ORD, STR-PVG.\n\nBest regards\nElbflug Air Freight\nelbflug-air-freight@hackloop.mail",
+    "helix-air-freight@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-LOS.\nWe fly CGN-LOS, CGN-SYD, DUS-RUH, FRA-LAX, FRA-PVG, FRA-SCL, HAM-HKG, MUC-HKG, MUC-PVG, MUC-SGN, STR-ORD, STR-PVG.\n\nBest regards\nHelix Air Freight\nhelix-air-freight@hackloop.mail",
+    "lumen-air-cargo@hackloop.mail": "Dear Team AEIOU,\n\nOur all-in air freight rate from FRA to LOS is 4840.96 EUR. The estimated transit time is 5 days.\n\nThe rate is valid until 21 Nov 2026 16:05 UTC. Please quote reference R-ZDVMv4pPZkNTzP_Z when booking.\n\nKind regards,\nLumen Air Cargo"
+  },
+  "euros": 5270.76
+}

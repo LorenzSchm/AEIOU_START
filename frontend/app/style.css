@@ -484,8 +484,7 @@ pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.mail-body,
-.draft {
+.mail-body {
   background: var(--tint);
   border-radius: 8px;
   padding: 16px 18px;
@@ -493,10 +492,19 @@ pre {
   color: var(--ink-2);
   margin: 0 0 12px;
 }
-.draft {
-  background: var(--card);
-  border: 1px dashed var(--line-2);
-  margin-top: 4px;
+.email-preview {
+  margin: 4px 0 12px;
+}
+.email-preview figcaption {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.email-preview iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
 }
 .attachment {
   display: inline-flex;

@@ -77,6 +77,51 @@ class RfqGateway {
    * including after process restart or operator repricing.
    */
   void ensure(long id, Map<String, Object> mail, boolean applyExtraction) {
+    var states =
+        ledger
+            .jdbc()
+            .queryForList("SELECT state FROM rfq_parse WHERE request_id=?", String.class, id);
+    if (!states.isEmpty()) {
+      if ("done".equals(states.getFirst())) return;
+      throw new WaveWorker.Conflict(
+          "Gateway parse unconfirmed. Check the recorded attempt before retrying.");
+    }
+    var local =
+        MailParser.request(
+            Ledger.str(mail, "subject"),
+            Ledger.str(mail, "body"),
+            !ledger.read(mail.get("attachments"), List.class).isEmpty(),
+            catalog);
+    if (local.issue() == null
+        || local.issue().equals("Review the attached shipment specifications.")
+        || local.issue().equals("Special handling needs a confirmed price.")) {
+      ledger
+          .transactions()
+          .executeWithoutResult(
+              tx -> {
+                int inserted =
+                    ledger
+                        .jdbc()
+                        .update(
+                            "INSERT OR IGNORE INTO rfq_parse(request_id,state,model)"
+                                + " VALUES(?,'done','java')",
+                            id);
+                if (inserted == 0)
+                  throw new WaveWorker.Conflict("Another parse already claimed this RFQ.");
+                if (applyExtraction) {
+                  ledger
+                      .jdbc()
+                      .update(
+                          "UPDATE mail SET fields=? WHERE id=?",
+                          ledger.write(local.shipment()),
+                          id);
+                  ledger
+                      .jdbc()
+                      .update("UPDATE wave_case SET reason=? WHERE id=?", local.issue(), id);
+                }
+              });
+      return;
+    }
     int claimed =
         ledger
             .jdbc()
@@ -84,15 +129,7 @@ class RfqGateway {
                 "INSERT OR IGNORE INTO rfq_parse(request_id,state,model) VALUES(?,'pending',?)",
                 id,
                 model);
-    if (claimed == 0) {
-      String state =
-          ledger
-              .jdbc()
-              .queryForObject("SELECT state FROM rfq_parse WHERE request_id=?", String.class, id);
-      if ("done".equals(state)) return;
-      throw new WaveWorker.Conflict(
-          "Gateway parse unconfirmed. Check the recorded attempt before retrying.");
-    }
+    if (claimed == 0) throw new WaveWorker.Conflict("Another parse already claimed this RFQ.");
     String subject = Ledger.str(mail, "subject"), body = Ledger.str(mail, "body");
     String text = subject + "\n" + body;
     boolean truncated = text.length() > INPUT_CHARS;
@@ -203,7 +240,7 @@ class RfqGateway {
             .queryForList(
                 """
                 SELECT m.*,p.result FROM mail m JOIN wave_case w ON w.id=m.id
-                JOIN rfq_parse p ON p.request_id=m.id WHERE p.state='done' AND w.operator=0
+                JOIN rfq_parse p ON p.request_id=m.id WHERE p.state='done' AND p.result IS NOT NULL AND w.operator=0
                 AND m.stage='review' AND w.reason IN ('Gateway extraction conflicts with shipment details. Confirm the fields.',
                     'Confirm the pickup requirement and postcode.')
                 AND julianday(m.received)>=julianday(?)

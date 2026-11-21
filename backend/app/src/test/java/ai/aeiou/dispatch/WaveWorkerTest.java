@@ -326,7 +326,7 @@ class WaveWorkerTest {
     assertTrue(outbound.getLast().get("body").toString().contains("3 days"));
     assertEquals("sent", ledger.delivery("quote:7"));
     assertEquals(10, ledger.cursor());
-    verify(upstream, times(1)).parseRfq(anyMap());
+    verify(upstream, never()).parseRfq(anyMap());
   }
 
   @Test
@@ -423,6 +423,119 @@ class WaveWorkerTest {
   }
 
   @Test
+  void explicitCustomerApprovalBooksOnceAndTrackingUsesTheCarrierConfirmation() throws Exception {
+    request("");
+    var offer =
+        new Offer(
+            "Fjordline Air Cargo",
+            2,
+            new java.math.BigDecimal("50.00"),
+            new java.math.BigDecimal("100"),
+            "portal",
+            "R-TEST",
+            START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true));
+    worker.work();
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    var bookings = new PortalBookings(ledger, upstream, clock, true);
+    var confirmation =
+        Map.<String, Object>of(
+            "booking_reference",
+            "BK-SMMUWG2S",
+            "rate_id",
+            "R-TEST",
+            "team_reference",
+            "AEIOU-7",
+            "status",
+            "booked",
+            "airline",
+            "Fjordline Air Cargo",
+            "price",
+            "50.00",
+            "currency",
+            "EUR");
+    when(upstream.post(eq("/v1/portal/bookings"), anyMap())).thenReturn(confirmation);
+    receive(2001, "stranger@hackloop.mail", "Re: RFQ", "Please book it.", 7L);
+    receive(
+        2002,
+        "buyer@hackloop.mail",
+        "Re: RFQ",
+        "Your price is too high, so we will not go ahead.",
+        7L);
+    bookings.bookAccepted();
+    verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
+    receive(
+        2003,
+        "buyer@hackloop.mail",
+        "Re: RFQ",
+        "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
+            + "Sara\n"
+            + "Lindqvist Medtech",
+        7L);
+    bookings.bookAccepted();
+    restart();
+    new PortalBookings(ledger, upstream, clock, true).bookAccepted();
+    verify(upstream, times(1))
+        .post("/v1/portal/bookings", Map.of("team_reference", "AEIOU-7", "rate_id", "R-TEST"));
+    receive(
+        2004,
+        "fjordline-air-cargo@hackloop.mail",
+        "Booking BK-SMMUWG2S confirmed",
+        "Booking reference: BK-SMMUWG2S\nStatus: booked and ready to ship",
+        null);
+    receive(
+        2005,
+        "tracking@hackloop.mail",
+        "Where is BK-SMMUWG2S?",
+        "Which airline has our shipment?",
+        null);
+    receive(2006, "tracking@hackloop.mail", "Where is BK-UNKNOWN?", "Please check.", null);
+    var tracking = new TrackingReplies(ledger, worker, catalog, true);
+    tracking.answer();
+    tracking.answer();
+    var replies =
+        outbound.stream().filter(m -> "tracking@hackloop.mail".equals(m.get("to"))).toList();
+    assertEquals(1, replies.size());
+    var reply = replies.getFirst();
+    assertEquals(2005L, ((Number) reply.get("in_reply_to")).longValue());
+    String text = reply.get("body").toString();
+    for (String expected :
+        List.of("Fjordline Air Cargo", "FRA to LAX", "BK-SMMUWG2S", "booked and ready to ship"))
+      assertTrue(text.contains(expected));
+    assertEquals("tracking review", ledger.mail(2006).get("stage"));
+  }
+
+  @Test
+  void conditionalOrQuotedApprovalDoesNotBook() {
+    assertTrue(
+        PortalBookings.accepted(
+            "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
+                + "Best greetings from Regensburg\n"
+                + "Tobias Auer"));
+    assertTrue(
+        PortalBookings.accepted(
+            "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
+                + "Viele Gruesse / Many greetings\n"
+                + "Deniz Yilmaz\n"
+                + "Rheintal Elektronik GmbH"));
+    assertFalse(
+        PortalBookings.accepted(
+            "Please book it.\n\nBest regards,\nSara\nPS: Please hold until Monday."));
+    assertTrue(
+        PortalBookings.accepted(
+            "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
+                + "Cheers,\n"
+                + "Klaus Weidner\n"
+                + "Weidner Spielwaren GmbH, Nuremberg"));
+    assertFalse(PortalBookings.accepted("Please book it if the price falls."));
+    assertFalse(PortalBookings.accepted("Please book it.\n\nOnly if the dates change."));
+    assertFalse(PortalBookings.accepted("Can you book it?"));
+    assertFalse(PortalBookings.accepted("Please hold.\n\n> Please book it."));
+  }
+
+  @Test
   void manualPricingAndSendingReuseTheOriginalExtraction() throws Exception {
     request("");
     var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
@@ -430,19 +543,308 @@ class WaveWorkerTest {
     restart();
     var draft = worker.price(7, s, null);
     worker.sendQuote(7, draft.revision());
-    verify(upstream, times(1)).parseRfq(anyMap());
+    verify(upstream, never()).parseRfq(anyMap());
     assertEquals("sent", ledger.delivery("quote:7"));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest(name = "Recorded wave {0}")
+  @org.junit.jupiter.params.provider.ValueSource(ints = {1, 2, 3, 4, 5, 6, 9})
+  void replaysLiveRfqThroughAutomaticDispatch(int round) throws Exception {
+    var fixture =
+        round == 9
+            ? mapper.readTree(getClass().getResource("/round-nine-rfq.json"))
+            : mapper.readTree(getClass().getResource("/six-wave-rfqs.json")).get(round - 1);
+    var offers = mapper.treeToValue(fixture.get("offers"), Offer[].class);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offers), true));
+    receive(
+        7,
+        "buyer@example.invalid",
+        fixture.get("subject").asText(),
+        fixture.get("body").asText(),
+        null);
+    worker.work();
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    var expected = mapper.treeToValue(fixture.get("shipment"), Shipment.class);
+    assertEquals(expected.origin(), shipment.origin());
+    assertEquals(expected.destination(), shipment.destination());
+    assertEquals(expected.preference(), shipment.preference());
+    assertEquals(expected.pickupZone(), shipment.pickupZone());
+    assertEquals(0, expected.weightKg().compareTo(shipment.weightKg()));
+    assertEquals(0, expected.volumeCbm().compareTo(shipment.volumeCbm()));
+    if (shipment.pickupZone() != null) {
+      assertNull(ledger.delivery("quote:7"));
+      long replyId = 10;
+      for (var invite : List.copyOf(outbound)) {
+        var address = invite.get("to").toString();
+        var reply = fixture.get("replies").required(address);
+        receive(
+            replyId++,
+            address,
+            "Re: " + invite.get("subject"),
+            reply.asText(),
+            Ledger.id(invite.get("id")));
+      }
+      worker.work();
+    } else {
+      assertEquals(1, outbound.size());
+    }
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals(
+        1, outbound.stream().filter(m -> "buyer@example.invalid".equals(m.get("to"))).count());
+    var quote = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals(0, fixture.get("euros").decimalValue().compareTo(quote.offer().totalEur()));
+    if (round == 9) {
+      assertEquals("429.80", quote.pickupEur().toPlainString());
+      assertEquals("1952", quote.offer().billedKg().toPlainString());
+      assertTrue(quote.body().contains("36627"));
+      var bookings = new PortalBookings(ledger, upstream, clock, true);
+      var receipt =
+          Map.of(
+              "booking_reference",
+              "BK-R9-TEST",
+              "team_reference",
+              "AEIOU-7",
+              "rate_id",
+              quote.offer().rateId());
+      when(upstream.post(eq("/v1/portal/bookings"), anyMap())).thenReturn(new HashMap<>(receipt));
+      receive(
+          2005,
+          "buyer@example.invalid",
+          "Re: " + fixture.get("subject").asText(),
+          "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
+              + "Mira Petersen\n"
+              + "Nordlicht Audio",
+          Ledger.id(outbound.getLast().get("id")));
+      bookings.bookAccepted();
+      bookings.bookAccepted();
+      verify(upstream, times(1))
+          .post("/v1/portal/bookings", Map.of("rate_id", "TEST-R9-0", "team_reference", "AEIOU-7"));
+    }
+    verify(upstream, never()).parseRfq(anyMap());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "false, R-TEST, 900, 50",
+    "true, '', 900, 50",
+    "true, R-TEST, 50, 50",
+    "true, R-TEST, 900, 999999"
+  })
+  void continuesToBidsWhenPortalWinnerIsUncertain(
+      boolean complete, String rateId, int validity, long price) {
+    request("");
+    var offer =
+        new Offer(
+            "Portal airline",
+            3,
+            java.math.BigDecimal.valueOf(price),
+            java.math.BigDecimal.valueOf(100),
+            "portal",
+            rateId,
+            START.plusSeconds(validity));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), complete));
+    worker.work();
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals(5, outbound.size());
+  }
+
+  @Test
+  void ambiguousUnitsUseOneGatewayCallAcrossPolls() {
+    receive(
+        7,
+        "buyer@example.invalid",
+        "RFQ FRA to LAX",
+        "Please quote the cheapest service for one tenth of a tonne and 0.2 cbm.",
+        null);
+    worker.work();
+    worker.work();
+    assertEquals("collecting", ledger.mail(7).get("stage"));
+    verify(upstream, times(1)).parseRfq(anyMap());
+  }
+
+  @Test
+  void correctlySumsTwoLabelledLotsForSelfDelivery() {
+    var parsed =
+        MailParser.request(
+            "Fastest air freight MUC to LAX",
+            "The cargo will be ready for pickup on Saturday, and we will deliver it to Munich"
+                + " airport (MUC) ourselves.\n"
+                + "Lot 1: 1 piece, gross weight 618 kg, volume 0.74 cbm\n"
+                + "Lot 2: 1 piece, gross weight 380 kg, volume 1.65 cbm\n"
+                + "Please send both lots together as one consignment.",
+            false,
+            catalog);
+    assertNull(parsed.issue());
+    assertNull(parsed.shipment().pickupZone());
+    assertEquals("998", parsed.shipment().weightKg().toPlainString());
+    assertEquals("2.39", parsed.shipment().volumeCbm().toPlainString());
+  }
+
+  @Test
+  void roundEightUsesTheCheaperBookablePortalWeightBreakOnTheFirstPass() {
+    // Round 8 portal observations. Only the HTTP boundary and rate IDs are fixtures.
+    var rateReads = new ArrayList<String>();
+    var portal =
+        new FiveU("http://localhost", "fixture") {
+          @Override
+          Map<String, Object> get(String uri, Object... args) {
+            if (uri.endsWith("/ports"))
+              return Map.of(
+                  "lanes",
+                  List.of(
+                      Map.of(
+                          "origin",
+                          "MUC",
+                          "destination",
+                          "CAI",
+                          "airlines",
+                          List.of(Map.of("code", "AU"), Map.of("code", "BX")))));
+            if (uri.contains("/brackets"))
+              return Map.of(
+                  "breaks_kg",
+                  List.of(0, 45, 100, args[0].equals("AU") ? 250 : 300, 500, 1000, 2000));
+            assertEquals("MUC", args[0]);
+            assertEquals("CAI", args[1]);
+            assertEquals("2.62", args[4].toString());
+            String key = args[2] + "-" + args[3];
+            rateReads.add(key);
+            String total =
+                Map.of(
+                        "AU-486", "1909.98", "BX-486", "1642.68", "AU-500", "1750.00", "BX-500",
+                        "1475.00")
+                    .get(key);
+            return Map.of(
+                "currency",
+                "EUR",
+                "total",
+                total,
+                "valid_until",
+                START.plusSeconds(900).toString(),
+                "rate_id",
+                key,
+                "chargeable_weight_kg",
+                args[3],
+                "airline",
+                args[2].equals("AU") ? "Aurelia Air Cargo" : "Borealis Freight Airways",
+                "transit_days",
+                args[2].equals("AU") ? 5 : 4);
+          }
+        };
+    when(upstream.rates(any(), any()))
+        .thenAnswer(call -> portal.rates(call.getArgument(0), call.getArgument(1)));
+    receive(
+        7,
+        "buyer@example.invalid",
+        "Air freight quote: MUC to CAI",
+        "Hi,\n\n"
+            + "Could you quote the cheapest air freight option for textile samples from MUC to CAI"
+            + " (Cairo, EG)? The cargo is ready on 2026-11-24, and we’ll deliver it to MUC"
+            + " ourselves.\n\n"
+            + "Lot 1: 9 pieces, 345 kg gross, 0.58 cbm\n"
+            + "Lot 2: 2 pieces, 141 kg gross, 2.04 cbm\n\n"
+            + "Please quote one all-in price in EUR for both lots shipping together as a single"
+            + " consignment under one air waybill.\n\n"
+            + "Mira Petersen\n"
+            + "Nordlicht Audio",
+        null);
+    worker.work();
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals(List.of("AU-486", "BX-486", "AU-500", "BX-500"), rateReads);
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals(1, outbound.size());
+    var quote = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("BX-500", quote.offer().rateId());
+    assertEquals("1475.00", quote.offer().totalEur().toPlainString());
+    assertEquals(4.0, quote.offer().days());
+    assertTrue(quote.body().contains("486 kg shipment"));
+    assertEquals("486", shipment.weightKg().toPlainString());
+    assertEquals("2.62", shipment.volumeCbm().toPlainString());
+    assertNull(shipment.pickupZone());
+    verify(upstream, never()).parseRfq(anyMap());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "ten, xlsx, false",
+    "ten, xlsx, true",
+    "eleven, pdf, false",
+    "eleven, pdf, true"
+  })
+  void dangerousPackingAttachmentsBlockQuotingEvenOnResume(
+      String round, String extension, boolean resumeFirst) throws Exception {
+    var fixture = mapper.readTree(getClass().getResource("/round-" + round + "-rfq.json"));
+    try (var packing =
+        getClass().getResourceAsStream("/round-" + round + "-packing." + extension)) {
+      when(upstream.bytes(7, fixture.get("attachments").get(0).get("id").asLong()))
+          .thenReturn(packing.readAllBytes());
+    }
+    ledger.ingest(
+        Map.of(
+            "messages",
+            List.of(
+                Map.of(
+                    "id",
+                    7,
+                    "from",
+                    "buyer@example.invalid",
+                    "subject",
+                    fixture.get("subject").asText(),
+                    "body",
+                    fixture.get("body").asText(),
+                    "sent_at",
+                    START.toString(),
+                    "attachments",
+                    mapper.convertValue(fixture.get("attachments"), List.class))),
+            "next_since_id",
+            7),
+        catalog,
+        clock.instant());
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    if (resumeFirst) assertThrows(WaveWorker.Conflict.class, () -> worker.resume(7, shipment));
+    else worker.work();
+    assertEquals("review", ledger.mail(7).get("stage"));
+    assertEquals("sent", ledger.delivery("dg-docs:7"));
+    assertEquals(1, outbound.size());
+    var reply = outbound.getFirst();
+    assertEquals(7L, reply.get("in_reply_to"));
+    assertEquals("buyer@example.invalid", reply.get("to"));
+    assertTrue(reply.get("body").toString().contains("Section 14"));
+    assertTrue(reply.get("body").toString().contains("dangerous goods declaration"));
+    restart();
+    assertThrows(WaveWorker.Conflict.class, () -> worker.resume(7, shipment));
+    assertThrows(WaveWorker.Conflict.class, () -> worker.price(7, shipment, null));
+    assertThrows(WaveWorker.Conflict.class, () -> worker.sendQuote(7, "old-draft"));
+    worker.work();
+    assertEquals(1, outbound.size());
+    assertNull(ledger.delivery("quote:7"));
+    verify(upstream, never()).rates(any(), any());
+    verify(upstream, never()).parseRfq(anyMap());
   }
 
   @Test
   void missingGatewayAcknowledgmentHoldsQuoteAcrossRestart() throws Exception {
-    request("");
+    receive(
+        7,
+        "buyer@hackloop.mail",
+        "RFQ FRA to LAX",
+        "Lowest cost for one tenth of a tonne and 0.2 cbm.",
+        null);
     when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("timeout"));
     worker.work();
     assertEquals("review", ledger.mail(7).get("stage"));
     assertTrue(outbound.isEmpty());
     restart();
-    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    var s =
+        new Shipment(
+            "FRA",
+            "LAX",
+            java.math.BigDecimal.valueOf(100),
+            java.math.BigDecimal.valueOf(0.2),
+            "cheapest",
+            null,
+            null,
+            0);
     assertThrows(WaveWorker.Conflict.class, () -> worker.price(7, s, null));
     verify(upstream, times(1)).parseRfq(anyMap());
   }

@@ -1,3 +1,5 @@
+import EmailPreview from "./email-preview";
+
 const inboxLabels = {
   request: "Customer request",
   tracking: "Tracking question",
@@ -50,6 +52,7 @@ function timeline(messages, selected) {
         state: item.state,
         subject: item.subject,
         body: item.body,
+        outgoing: true,
         time: item.time,
         expanded: item.kind !== "bid",
       });
@@ -81,7 +84,11 @@ export default function Conversation({ messages, selected }) {
                 {entry.time && <time dateTime={entry.time}>{timestamp.format(new Date(entry.time))}</time>}
               </summary>
               {entry.subject && <strong className="thread-subject">{entry.subject}</strong>}
-              <pre className="mail-body">{entry.body ?? "The original message text was not recorded."}</pre>
+              {entry.outgoing && entry.body != null ? (
+                <EmailPreview body={entry.body} />
+              ) : (
+                <pre className="mail-body">{entry.body ?? "The original message text was not recorded."}</pre>
+              )}
               {entry.attachments?.map((file) => (
                 <a className="attachment" key={file.id} download={file.filename}
                    href={`/api/v1/messages/${entry.id}/attachments/${file.id}`}>
