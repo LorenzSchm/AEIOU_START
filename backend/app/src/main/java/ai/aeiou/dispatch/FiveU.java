@@ -5,12 +5,15 @@ import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.*;
 
 @Component
 class FiveU {
+  private static final String RATE_URI =
+      "/v1/portal/rates?origin={o}&destination={d}&airline={a}&weight_kg={w}&volume_cbm={v}";
   private final RestClient client;
   private final RestClient gateway;
   private final MarketMemory marketMemory;
@@ -48,7 +51,9 @@ class FiveU {
 
   @SuppressWarnings("unchecked")
   Map<String, Object> get(String uri, Object... variables) {
-    return client.get().uri(uri, variables).retrieve().body(Map.class);
+    var request = client.get().uri(uri, variables);
+    if (RATE_URI.equals(uri)) request.header(HttpHeaders.CACHE_CONTROL, "no-cache, no-store");
+    return request.retrieve().body(Map.class);
   }
 
   @SuppressWarnings("unchecked")
@@ -102,14 +107,17 @@ class FiveU {
   }
 
   private LiveRate rate(Shipment shipment, RateQuery query, Instant now) {
-    var r =
-        get(
-            "/v1/portal/rates?origin={o}&destination={d}&airline={a}&weight_kg={w}&volume_cbm={v}",
-            shipment.origin(),
-            shipment.destination(),
-            query.airline(),
-            query.weight(),
-            shipment.volumeCbm());
+    var r = readRate(shipment, query.airline(), query.weight());
+    return new LiveRate(parseRate(r, now), Ledger.str(r, "dataset_version"));
+  }
+
+  private Map<String, Object> readRate(Shipment shipment, String airline, BigDecimal weight) {
+    var rate = get(RATE_URI, shipment.origin(), shipment.destination(), airline, weight, shipment.volumeCbm());
+    if (rate == null) throw new IllegalArgumentException("Missing portal rate");
+    return rate;
+  }
+
+  private static Offer parseRate(Map<String, Object> r, Instant now) {
     var fx =
         switch (Ledger.str(r, "currency")) {
           case "EUR" -> BigDecimal.ONE;
@@ -120,7 +128,7 @@ class FiveU {
     var price = new BigDecimal(Ledger.str(r, "total")).multiply(fx);
     if (fx.signum() <= 0 || price.signum() <= 0 || expiry == null || !expiry.isAfter(now))
       throw new IllegalArgumentException("Invalid rate");
-    var offer = new Offer(
+    return new Offer(
         Ledger.str(r, "airline"),
         Integer.parseInt(Ledger.str(r, "transit_days")),
         price,
@@ -128,7 +136,37 @@ class FiveU {
         "portal",
         Ledger.str(r, "rate_id"),
         expiry);
-    return new LiveRate(offer, Ledger.str(r, "dataset_version"));
+  }
+
+  synchronized Offer currentRate(Shipment shipment, Offer candidate, Instant now) {
+    if (now.isBefore(retryAt)) throw new WaveWorker.RetryLater("Portal rate limit. Waiting to recheck price.");
+    var weight = candidate.billedKg().compareTo(shipment.chargeableKg()) > 0
+        ? candidate.billedKg() : shipment.weightKg();
+    Map<String, Object> rate;
+    try {
+      rate = readRate(shipment, candidate.airline(), weight);
+    } catch (HttpClientErrorException.TooManyRequests ex) {
+      backOff(ex, now);
+      throw new WaveWorker.RetryLater("Portal rate limit. Waiting to recheck price.");
+    }
+    var live = parseRate(rate, now);
+    if ((!candidate.airline().equalsIgnoreCase(live.airline())
+            && !candidate.airline().equalsIgnoreCase(Ledger.str(rate, "airline_code")))
+        || live.airline().isBlank() || live.rateId().isBlank()
+        || !shipment.origin().equals(Ledger.str(rate, "origin"))
+        || !shipment.destination().equals(Ledger.str(rate, "destination"))
+        || weight.compareTo(new BigDecimal(Ledger.str(rate, "weight_kg"))) != 0
+        || candidate.billedKg().compareTo(live.billedKg()) != 0)
+      throw new IllegalArgumentException("Portal rate does not match the shipment and carrier");
+    return new Offer(candidate.airline(), live.days(), live.totalEur(), live.billedKg(),
+        live.source(), live.rateId(), live.validUntil());
+  }
+
+  private void backOff(HttpClientErrorException.TooManyRequests ex, Instant now) {
+    String seconds = ex.getResponseHeaders() == null ? null
+        : ex.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+    retryAt = now.plusSeconds(seconds != null && seconds.matches("[0-9]{1,9}")
+        ? Math.max(1, Long.parseLong(seconds)) : 60);
   }
 
   private List<?> portalLanes(Instant now) {
@@ -230,13 +268,7 @@ class FiveU {
             confirmed.put(key, offer);
           }
         } catch (HttpClientErrorException.TooManyRequests ex) {
-          String seconds =
-              ex.getResponseHeaders() == null
-                  ? null
-                  : ex.getResponseHeaders().getFirst("Retry-After");
-          retryAt =
-              now.plusSeconds(
-                  seconds != null && seconds.matches("\\d+") ? Long.parseLong(seconds) : 60);
+          backOff(ex, now);
           complete = false;
           break;
         } catch (RestClientException | IllegalArgumentException ex) {

@@ -5,10 +5,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import ai.aeiou.freight.Offer;
 import ai.aeiou.freight.Shipment;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import java.math.BigDecimal;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -84,6 +88,58 @@ class MarketMemoryTest {
     assertTrue(fresh.complete());
     assertEquals("v2", fresh.version());
     assertEquals(6, fresh.offers().size());
+  }
+
+  @Test
+  void currentRateRequestsTheExactWeightBreakAndRespectsThePortalRateLimit() throws Exception {
+    var requests = new ConcurrentLinkedQueue<String>();
+    var cacheHeaders = new ConcurrentLinkedQueue<String>();
+    var fixture = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    fixture.createContext("/v1/portal/rates", ex -> {
+      try (ex) {
+        requests.add(ex.getRequestURI().getQuery());
+        cacheHeaders.add(Objects.toString(ex.getRequestHeaders().getFirst("Cache-Control"), ""));
+        if (requests.size() == 1) {
+          ex.getResponseHeaders().set("Retry-After", "10");
+          ex.sendResponseHeaders(429, -1);
+          return;
+        }
+        String destination = requests.size() == 2 ? "ORD" : "LAX";
+        byte[] body = """
+            {"airline":"Alpha","airline_code":"AA","origin":"CGN","destination":"%s",
+              "currency":"USD","total":"1000","fx_eur_per_usd":"0.9","weight_kg":"1000",
+              "chargeable_weight_kg":"1000","transit_days":2,"valid_until":"%s","rate_id":"R-CURRENT"}
+            """.formatted(destination, START.plusSeconds(900)).getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().set("Content-Type", "application/json");
+        ex.sendResponseHeaders(200, body.length);
+        ex.getResponseBody().write(body);
+      }
+    });
+    fixture.start();
+    try {
+      var ledger = new Ledger(temp.resolve("market.sqlite").toString(), new ObjectMapper());
+      var portal = new FiveU("http://127.0.0.1:" + fixture.getAddress().getPort(), "fixture",
+          new MarketMemory(ledger));
+      var shipment = shipment("cheapest", 700);
+      var candidate = new Offer("Alpha", 2, new BigDecimal("700"), new BigDecimal("1000"),
+          "portal", "R-OLD", START.plusSeconds(900));
+
+      assertThrows(WaveWorker.RetryLater.class, () -> portal.currentRate(shipment, candidate, START));
+      assertThrows(WaveWorker.RetryLater.class,
+          () -> portal.currentRate(shipment, candidate, START.plusSeconds(9)));
+      assertEquals(1, requests.size());
+      var rate = portal.currentRate(shipment, candidate, START.plusSeconds(10));
+      assertEquals("R-CURRENT", rate.rateId());
+      assertEquals(new BigDecimal("900.00"), rate.totalEur());
+      assertThrows(IllegalArgumentException.class,
+          () -> portal.currentRate(shipment, candidate, START.plusSeconds(11)));
+      assertEquals(3, requests.size());
+      assertTrue(requests.stream().allMatch(
+          "origin=CGN&destination=ORD&airline=Alpha&weight_kg=1000&volume_cbm=1"::equals));
+      assertTrue(cacheHeaders.stream().allMatch("no-cache, no-store"::equals));
+    } finally {
+      fixture.stop(0);
+    }
   }
 
   private static final class Portal extends FiveU {

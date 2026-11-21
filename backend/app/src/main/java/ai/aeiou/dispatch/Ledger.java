@@ -110,6 +110,7 @@ class Ledger {
     db.execute(
         "CREATE TABLE IF NOT EXISTS booking_attempt(request_id INTEGER PRIMARY KEY,rate_id TEXT NOT"
             + " NULL,retry_at INTEGER DEFAULT 0,issue TEXT)");
+    ensureColumn("booking_attempt", "submitted", "INTEGER NOT NULL DEFAULT 1");
     // Existing operator drafts are preserved across the Python-to-Java handoff.
     db.update(
         "INSERT OR IGNORE INTO wave_case(id,opened,operator,reason) SELECT id,0,1,'Existing"

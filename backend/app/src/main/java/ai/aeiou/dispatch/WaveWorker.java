@@ -489,7 +489,7 @@ class WaveWorker {
       }
     }
     save(id, s, draft, false);
-    sendQuote(id, draft.revision());
+    sendQuote(id, draft.revision(), true);
   }
 
   private void askAirportDelivery(long id, Map<String, Object> mail,
@@ -701,7 +701,26 @@ class WaveWorker {
       String body,
       String trucker,
       BigDecimal pickupEur,
-      Double pickupDays) {}
+      Double pickupDays,
+      Instant pickupValidUntil) {
+    Offer allIn(Shipment shipment, Offer air) {
+      if (shipment.pickupZone() == null) return air;
+      return air.addPickup(shipment.withPickup(pickupEur, pickupDays == null ? 0 : pickupDays),
+          pickupValidUntil);
+    }
+
+    Draft withOffer(Offer current, List<Offer> options, String quote) {
+      return new Draft(revision, current, List.copyOf(options), notes, quote, trucker,
+          pickupEur, pickupDays, pickupValidUntil);
+    }
+
+    boolean matchesQuotedTerms(Offer current) {
+      return offer.airline().equalsIgnoreCase(current.airline())
+          && offer.totalEur().compareTo(current.totalEur()) == 0
+          && Math.abs(offer.days() - current.days()) < 1e-8
+          && offer.billedKg().compareTo(current.billedKg()) == 0;
+    }
+  }
 
   private record TruckBidReview(
       long replyId, String carrier, String body, BigDecimal euros, Offer offer, Map<String, Double> evidence) {
@@ -730,8 +749,8 @@ class WaveWorker {
     var w = ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id);
     var portal = cachedPortal ? List.of(cached(w)) : upstream.rates(s, clock.instant()).offers();
     portal.stream()
-        .filter(
-            o -> o.validUntil() != null && o.validUntil().isAfter(clock.instant().plusSeconds(4)))
+        .filter(o -> cachedPortal
+            || (o.validUntil() != null && o.validUntil().isAfter(clock.instant().plusSeconds(4))))
         .forEach(offers::add);
     offers.removeIf(offer -> carrierRestrictions.excludes(excluded, offer.airline()));
     var details = clarifications.details(id, m);
@@ -812,7 +831,8 @@ class WaveWorker {
         body,
         plan.trucker(),
         plan.pickupEur(),
-        pickupDays);
+        pickupDays,
+        plan.pickupValidUntil());
   }
 
   private void resolveCompetitiveTruckBids(
@@ -957,11 +977,15 @@ class WaveWorker {
     return draft;
   }
 
-  private Map<String, Object> send(String key, Map<String, Object> mail) {
+  private void checkSendRetry(String key) {
     var retry =
         ledger.jdbc().queryForList("SELECT after_epoch FROM retry WHERE action=?", Long.class, key);
     if (!retry.isEmpty() && retry.getFirst() > clock.instant().getEpochSecond())
       throw new RetryLater();
+  }
+
+  private Map<String, Object> send(String key, Map<String, Object> mail) {
+    checkSendRetry(key);
     if (ledger
             .jdbc()
             .update(
@@ -1013,22 +1037,35 @@ class WaveWorker {
   }
 
   synchronized Map<String, Object> sendQuote(long id, String revision) {
+    return sendQuote(id, revision, false);
+  }
+
+  private Map<String, Object> sendQuote(long id, String revision, boolean rerankPortal) {
     var m = target(id);
+    String key = "quote:" + id;
+    if (ledger.delivery(key) != null)
+      throw new Conflict("This send was already claimed. Check the delivery record.");
+    checkSendRetry(key);
     var shipment = ledger.read(m.get("fields"), Shipment.class);
     checkPacking(id, m, shipment);
     var d = ledger.read(m.get("proposal"), Draft.class);
     if (d == null || d.offer() == null || !d.revision().equals(revision))
       throw new Conflict("Calculate a current quote first.");
     checkCarrierRestrictions(id, m, d);
-    if (d.offer().validUntil() != null && !d.offer().validUntil().isAfter(clock.instant()))
-      throw new Conflict("Quote rate expired.");
-    gateway.checkQuote(id, clarifications.details(id, m).message(), shipment);
+    var details = clarifications.details(id, m);
+    gateway.checkQuote(id, details.message(), shipment);
+    if ("portal".equals(d.offer().source())) {
+      d = rerankPortal
+          ? rankCurrentPortalOffers(ageLimit(m), shipment, details, d)
+          : verifyOperatorDraft(ageLimit(m), shipment, d);
+      save(id, shipment, d, !rerankPortal);
+    }
     checkCarrierRestrictions(id, target(id), d);
     if (d.offer().validUntil() != null && !d.offer().validUntil().isAfter(clock.instant()))
       throw new Conflict("Quote rate expired.");
     var result =
         send(
-            "quote:" + id,
+            key,
             Map.of(
                 "to",
                 m.get("sender"),
@@ -1040,6 +1077,59 @@ class WaveWorker {
                 quoteHtml ? cloudline(d, shipment) : d.body()));
     ledger.stage(id, "sent", null);
     return result;
+  }
+
+  private Draft verifyOperatorDraft(Instant deadline, Shipment shipment, Draft draft) {
+    Offer current;
+    try {
+      current = currentQuoteOffer(deadline, shipment, draft, draft.offer());
+    } catch (RestClientException | IllegalArgumentException ex) {
+      throw new Conflict("The carrier's current rate could not be verified. Compare rates again.");
+    }
+    if (!draft.matchesQuotedTerms(current))
+      throw new Conflict("The carrier's terms changed. Compare rates again.");
+    var options = draft.alternatives().stream()
+        .map(offer -> offer.equals(draft.offer()) ? current : offer).toList();
+    return draft.withOffer(current, options, draft.body());
+  }
+
+  private Draft rankCurrentPortalOffers(Instant deadline, Shipment shipment,
+      CustomerClarifications.Details details, Draft draft) {
+    var options = new ArrayList<>(draft.alternatives());
+    var verified = new HashSet<Offer>();
+    var ranking = Offer.order(shipment.preference());
+    while (!options.isEmpty()) {
+      var candidate = options.getFirst();
+      if ("portal".equals(candidate.source()) && !verified.contains(candidate)) {
+        options.removeFirst();
+        try {
+          var current = currentQuoteOffer(deadline, shipment, draft, candidate);
+          options.add(current);
+          verified.add(current);
+          options.sort(ranking);
+        } catch (RestClientException | IllegalArgumentException ex) {
+          // Advance to the next candidate when the portal cannot verify this one.
+        }
+      } else if (candidate.validUntil() == null
+          || candidate.validUntil().isAfter(clock.instant().plusSeconds(4))) {
+        return draft.withOffer(candidate, options, quoteBody(details, shipment, candidate, draft.pickupDays()));
+      } else {
+        options.removeFirst();
+      }
+    }
+    throw new Conflict("No current rate could be confirmed.");
+  }
+
+  private Offer currentQuoteOffer(Instant deadline, Shipment shipment, Draft draft, Offer candidate) {
+    var now = clock.instant();
+    if (!now.isBefore(deadline.minusSeconds(8)))
+      throw new Conflict("The quote window closed before a live rate could be confirmed.");
+    if (draft.pickupValidUntil() != null && !draft.pickupValidUntil().isAfter(now.plusSeconds(4)))
+      throw new Conflict("The pickup rate expired. Compare rates again.");
+    var current = draft.allIn(shipment, upstream.currentRate(shipment, candidate, now));
+    if (!current.validUntil().isAfter(clock.instant().plusSeconds(4)))
+      throw new IllegalArgumentException("Rate expired during verification");
+    return current;
   }
 
   private void checkCarrierRestrictions(long id, Map<String, Object> mail, Draft draft) {

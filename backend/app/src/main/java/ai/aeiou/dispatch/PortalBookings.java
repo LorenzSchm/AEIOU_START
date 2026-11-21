@@ -1,8 +1,7 @@
 package ai.aeiou.dispatch;
 
+import ai.aeiou.freight.Offer;
 import ai.aeiou.freight.Shipment;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -85,7 +84,7 @@ class PortalBookings {
         book(id);
       } catch (RuntimeException e) {
         long retry = clock.instant().getEpochSecond() + 30;
-        if (e instanceof WaveWorker.Conflict
+        if ((e instanceof WaveWorker.Conflict && !(e instanceof WaveWorker.RetryLater))
             || (e instanceof HttpClientErrorException ex
                 && ex.getStatusCode().value() != 429
                 && ex.getStatusCode().value() != 408)) retry = Long.MAX_VALUE;
@@ -112,38 +111,26 @@ class PortalBookings {
     if (!"sent".equals(ledger.delivery("quote:" + id)))
       throw new WaveWorker.Conflict("Quote must be sent before booking.");
     var draft = ledger.read(m.get("proposal"), WaveWorker.Draft.class);
-    if (draft == null || draft.offer() == null || draft.offer().rateId() == null)
+    if (draft == null || draft.offer() == null || !"portal".equals(draft.offer().source())
+        || draft.offer().rateId() == null || draft.offer().rateId().isBlank())
       throw new WaveWorker.Conflict("Coordinate this booking with the carrier.");
     ledger
         .jdbc()
         .update(
-            "INSERT OR IGNORE INTO booking_attempt(request_id,rate_id) VALUES(?,?)",
+            "INSERT OR IGNORE INTO booking_attempt(request_id,rate_id,submitted) VALUES(?,?,0)",
             id,
             draft.offer().rateId());
-    String rate =
-        ledger
-            .jdbc()
-            .queryForObject(
-                "SELECT rate_id FROM booking_attempt WHERE request_id=?", String.class, id);
+    var attempt = ledger.jdbc().queryForMap("SELECT * FROM booking_attempt WHERE request_id=?", id);
+    var shipment = ledger.read(m.get("fields"), Shipment.class);
+    String rate = Ledger.str(attempt, "rate_id");
+    if (Ledger.id(attempt.get("submitted")) == 0) rate = verifiedBookingRate(id, shipment, draft);
     Map<String, Object> receipt;
     try {
       receipt = reserve(id, rate);
     } catch (HttpClientErrorException.Gone expired) {
       // Only a definitive expired response permits switching to a new rate ID. Otherwise
       // replay the persisted ID and team reference, including after a lost acknowledgment.
-      String fresh = refreshRate(ledger.read(m.get("fields"), Shipment.class), draft);
-      ledger
-          .jdbc()
-          .update(
-              "UPDATE booking_attempt SET rate_id=? WHERE request_id=? AND rate_id=?",
-              fresh,
-              id,
-              rate);
-      rate =
-          ledger
-              .jdbc()
-              .queryForObject(
-                  "SELECT rate_id FROM booking_attempt WHERE request_id=?", String.class, id);
+      rate = verifiedBookingRate(id, shipment, draft);
       receipt = reserve(id, rate);
     }
     if (Ledger.str(receipt, "booking_reference").isBlank()
@@ -159,35 +146,20 @@ class PortalBookings {
         "/v1/portal/bookings", Map.of("rate_id", rate, "team_reference", "AEIOU-" + id));
   }
 
-  private String refreshRate(Shipment s, WaveWorker.Draft d) {
-    var offer = d.offer();
-    var r =
-        upstream.get(
-            "/v1/portal/rates?origin={o}&destination={d}&airline={a}&weight_kg={w}&volume_cbm={v}",
-            s.origin(),
-            s.destination(),
-            offer.airline(),
-            offer.billedKg().compareTo(s.chargeableKg()) > 0 ? offer.billedKg() : s.weightKg(),
-            s.volumeCbm());
-    var fx =
-        switch (Ledger.str(r, "currency")) {
-          case "EUR" -> BigDecimal.ONE;
-          case "USD" -> new BigDecimal(Ledger.str(r, "fx_eur_per_usd"));
-          default -> throw new WaveWorker.Conflict("Unsupported refreshed currency.");
-        };
-    var air = new BigDecimal(Ledger.str(r, "total")).multiply(fx).setScale(2, RoundingMode.HALF_UP);
-    var total = air.add(d.pickupEur() == null ? BigDecimal.ZERO : d.pickupEur());
-    double days =
-        Double.parseDouble(Ledger.str(r, "transit_days"))
-            + (d.pickupDays() == null ? 0 : d.pickupDays());
-    if (!offer.airline().equals(r.get("airline"))
-        || !s.origin().equals(r.get("origin"))
-        || !s.destination().equals(r.get("destination"))
-        || total.compareTo(offer.totalEur()) != 0
-        || Math.abs(days - offer.days()) > 1e-8
-        || Ledger.str(r, "rate_id").isBlank())
+  private String verifiedBookingRate(long id, Shipment shipment, WaveWorker.Draft draft) {
+    Offer current;
+    try {
+      current = draft.allIn(shipment, upstream.currentRate(shipment, draft.offer(), clock.instant()));
+    } catch (IllegalArgumentException ex) {
+      throw new WaveWorker.Conflict("The accepted carrier rate could not be verified.");
+    }
+    if (!draft.matchesQuotedTerms(current))
       throw new WaveWorker.Conflict(
-          "Refreshed rate differs from the accepted price, route or transit.");
-    return Ledger.str(r, "rate_id");
+          "The carrier's price or transit changed. Get customer approval for a new quote.");
+    if (!current.validUntil().isAfter(clock.instant().plusSeconds(4)))
+      throw new WaveWorker.Conflict("The accepted rate or pickup price expired.");
+    ledger.jdbc().update("UPDATE booking_attempt SET rate_id=?,submitted=1 WHERE request_id=?",
+        current.rateId(), id);
+    return current.rateId();
   }
 }
