@@ -43,7 +43,7 @@ class WaveWorker {
       Ledger ledger, Catalog catalog, FiveU upstream, Clock clock, RfqGateway gateway,
       MailboxWebhook webhook, boolean automatic, Instant start, long waitSeconds, boolean counteroffers) {
     this(ledger, catalog, upstream, clock, gateway, webhook, automatic, start, waitSeconds,
-        counteroffers, Runnable::run);
+        counteroffers, Runnable::run, false);
   }
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -58,7 +58,8 @@ class WaveWorker {
       @Value("${dispatch.start-at}") Instant start,
       @Value("${dispatch.bid-wait-seconds}") long waitSeconds,
       @Value("${dispatch.counteroffers}") boolean counteroffers,
-      @org.springframework.beans.factory.annotation.Qualifier("voiceExecutor") Executor voiceExecutor) {
+      @org.springframework.beans.factory.annotation.Qualifier("voiceExecutor") Executor voiceExecutor,
+      @Value("${dispatch.packing-tools:false}") boolean packingTools) {
     this.ledger = ledger;
     this.catalog = catalog;
     this.upstream = upstream;
@@ -69,7 +70,7 @@ class WaveWorker {
     this.start = start;
     this.waitSeconds = waitSeconds;
     this.counteroffers = counteroffers;
-    this.documents = new ShipmentDocuments(ledger, upstream, catalog, clock, voiceExecutor);
+    this.documents = new ShipmentDocuments(ledger, upstream, catalog, clock, voiceExecutor, packingTools);
     this.clarifications = new CustomerClarifications(ledger, catalog);
     this.carrierRestrictions = new CarrierRestrictions(ledger, upstream, clock);
   }

@@ -1746,7 +1746,7 @@ class WaveWorkerTest {
     worker = new WaveWorker(ledger, catalog, upstream, clock,
         new RfqGateway(upstream, ledger, catalog, mapper, clock, "gpt-4o-mini"),
         new MailboxWebhook(ledger, catalog, clock, mapper, ""),
-        true, START, 75, false, voiceJobs::addLast);
+        true, START, 75, false, voiceJobs::addLast, false);
     when(upstream.bytes(7, 1)).thenReturn(new byte[] {1});
     when(upstream.transcribe(any(byte[].class))).thenReturn(
         "Please quote the cheapest air freight from FRA to LAX for 100 kg and 0.2 cbm.");
@@ -1975,12 +1975,19 @@ class WaveWorkerTest {
     assertEquals("1.92", shipment.volumeCbm().toPlainString());
   }
 
-  @Test
-  void cleanPackingListSuppliesMissingTotalsAndQuotesAutomatically() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"packing.txt,false,0", "packing.txt,true,0",
+      "packing.pdf,true,1"})
+  void cleanPackingListSuppliesMissingTotalsAndQuotesAutomatically(
+      String filename, boolean toolsEnabled, int expectedFallbacks) {
+    if (toolsEnabled) worker = new WaveWorker(ledger, catalog, upstream, clock,
+        new RfqGateway(upstream, ledger, catalog, mapper, clock, "gpt-4o-mini"),
+        new MailboxWebhook(ledger, catalog, clock, mapper, ""), true, START, 75, false,
+        Runnable::run, true);
     receiveDocument(
         7,
         null,
-        "packing.txt",
+        filename,
         "Cheapest air freight from FRA to LAX. Please use the packing list.",
         "Packing List\n"
             + "Destination airport: LAX\n"
@@ -2007,6 +2014,8 @@ class WaveWorkerTest {
     assertEquals("sent", ledger.delivery("quote:7"));
     assertTrue(outbound.getLast().get("body").toString().contains("EUR 50.00"));
     verify(upstream, times(1)).parseRfq(anyMap());
+    if (toolsEnabled) assertEquals(expectedFallbacks,
+        ledger.jdbc().queryForObject("SELECT count(*) FROM packing_tool_read", Integer.class));
   }
 
   @Test

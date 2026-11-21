@@ -1,2 +1,4 @@
 rootProject.name = 'aeiou-dispatch'
 include 'core', 'app'
+include 'packing-tools'
+project(':packing-tools').projectDir = file('../edgelab/packing-tools')

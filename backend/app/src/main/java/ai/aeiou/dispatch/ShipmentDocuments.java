@@ -1,5 +1,6 @@
 package ai.aeiou.dispatch;
 
+import ai.aeiou.edgelab.PackingAttachmentTools;
 import ai.aeiou.freight.*;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -9,6 +10,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.regex.Pattern;
 import javax.xml.stream.XMLStreamException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 
 final class ShipmentDocuments {
@@ -58,13 +60,16 @@ final class ShipmentDocuments {
   record DangerousGoodsCheck(Set<String> classificationEvidence, List<SubmittedDocument> submitted,
       Set<String> unNumbers, boolean missingSds, boolean missingDeclaration) {}
 
-  private record Attachment(long messageId, long attachmentId) {}
+  private record Attachment(long messageId, long attachmentId, boolean recoverPacking) {}
+  // Increment when a new reader can change a previous recovery result.
+  private static final int PACKING_READER_VERSION = 1;
 
   private final Ledger ledger;
   private final FiveU upstream;
   private final Catalog catalog;
   private final Clock clock;
   private final Executor voiceExecutor;
+  private final boolean packingTools;
   private final Map<Attachment, PackingSafety.Document> extracted =
       new LinkedHashMap<>(64, 0.75f, true) {
         @Override
@@ -73,35 +78,81 @@ final class ShipmentDocuments {
         }
       };
 
-  ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog, Clock clock, Executor voiceExecutor) {
+  ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog, Clock clock, Executor voiceExecutor,
+      boolean packingTools) {
     this.ledger = ledger;
     this.upstream = upstream;
     this.catalog = catalog;
     this.clock = clock;
     this.voiceExecutor = voiceExecutor;
+    this.packingTools = packingTools;
+    if (packingTools) ledger.jdbc().execute("""
+        CREATE TABLE IF NOT EXISTS packing_tool_read (
+          message_id INTEGER, attachment_id INTEGER, reader_version INTEGER, text TEXT,
+          PRIMARY KEY(message_id, attachment_id, reader_version))
+        """);
   }
 
-  private List<PackingSafety.Document> read(Map<String, Object> message) {
+  private List<PackingSafety.Document> read(Map<String, Object> message, boolean packing) {
     var documents = new ArrayList<PackingSafety.Document>();
     for (Object raw : ledger.read(message.get("attachments"), List.class)) {
       var file = (Map<?, ?>) raw;
-      var key = new Attachment(Ledger.id(message.get("id")), Ledger.id(file.get("id")));
+      var key = new Attachment(Ledger.id(message.get("id")), Ledger.id(file.get("id")), packing && packingTools);
       try {
-        var doc = extracted.get(key);
-        if (doc == null) {
-          doc =
-              new PackingSafety.Document(
-                  PackingSafety.extract(
-                      Objects.toString(file.get("filename"), ""),
-                      upstream.bytes(key.messageId(), key.attachmentId())));
-          extracted.put(key, doc);
+        if (!extracted.containsKey(key)) {
+          String filename = Objects.toString(file.get("filename"), "");
+          extracted.put(key, readAttachment(key, filename));
         }
-        documents.add(doc);
+        documents.add(extracted.get(key));
+      } catch (ResourceAccessException offline) {
+        if (key.recoverPacking() && ledger.jdbc().update(
+            "INSERT OR IGNORE INTO retry(action,after_epoch) VALUES(?,0)",
+            "packing-download:" + key.messageId() + ":" + key.attachmentId()) == 1)
+          throw new WaveWorker.RetryLater("Retrying the packing attachment download.");
+        documents.add(null);
       } catch (IOException | XMLStreamException | RestClientException ex) {
         documents.add(null);
       }
     }
     return documents;
+  }
+
+  private PackingSafety.Document readAttachment(Attachment key, String filename)
+      throws IOException, XMLStreamException {
+    if (key.recoverPacking()) {
+      var prior = ledger.jdbc().queryForList(
+          "SELECT text FROM packing_tool_read WHERE message_id=? AND attachment_id=? AND reader_version=?",
+          String.class, key.messageId(), key.attachmentId(), PACKING_READER_VERSION);
+      if (!prior.isEmpty()) return prior.getFirst() == null ? null : new PackingSafety.Document(prior.getFirst());
+    }
+    // A download error is transient. Let read() retry it on the next pass.
+    byte[] bytes = upstream.bytes(key.messageId(), key.attachmentId());
+    if (!key.recoverPacking()) return new PackingSafety.Document(PackingSafety.extract(filename, bytes));
+    if (bytes == null || bytes.length == 0 || bytes.length > PackingSafety.MAX_BYTES) return null;
+
+    boolean mislabeledPdf = !filename.toLowerCase(Locale.ROOT).endsWith(".pdf")
+        && PackingAttachmentTools.hasPdfHeader(bytes);
+    if (!mislabeledPdf) {
+      try {
+        String text = PackingSafety.extract(filename, bytes);
+        if (!text.isBlank()) return new PackingSafety.Document(text);
+      } catch (IOException | XMLStreamException unreadable) {
+        // Try a complete plain-text packing document; binary containers stay on hold.
+      }
+    }
+    String recovered = null;
+    if (mislabeledPdf) {
+      try {
+        recovered = PackingSafety.extract("packing.pdf", bytes);
+      } catch (IOException | XMLStreamException unreadablePdf) {
+        // Preserve the existing page, size and readability checks.
+      }
+    } else {
+      recovered = PackingAttachmentTools.recoverPackingText(bytes).orElse(null);
+    }
+    ledger.jdbc().update("INSERT OR IGNORE INTO packing_tool_read(message_id,attachment_id,reader_version,text) VALUES(?,?,?,?)",
+        key.messageId(), key.attachmentId(), PACKING_READER_VERSION, recovered);
+    return recovered == null ? null : new PackingSafety.Document(recovered);
   }
 
   Map<String, Object> withAttachedRequest(Map<String, Object> original) {
@@ -114,7 +165,7 @@ final class ShipmentDocuments {
       return message;
     }
     if (!hasRequestAttachment(original)) return original;
-    var text = requestText(read(original));
+    var text = requestText(read(original, false));
     if (text == null) return original;
     return withRequestText(original, text);
   }
@@ -214,7 +265,7 @@ final class ShipmentDocuments {
         || !(attachments.getFirst() instanceof Map<?, ?> file)
         || !Ledger.str(file, "filename").toLowerCase(Locale.ROOT).matches(".*\\.(?:txt|pdf|docx)"))
       return null;
-    var files = read(message);
+    var files = read(message, false);
     if (files.size() != 1 || files.getFirst() == null) return null;
     var text = files.getFirst().text();
     if (OPEN_OFFER_TERMS.matcher(truck ? MailParser.withoutPickupWaitingCharge(text) : text).find())
@@ -248,7 +299,7 @@ final class ShipmentDocuments {
     boolean voiceRequest = hasAttachment(original, "voice-message.mp3")
         && !Ledger.str(original, "voice_transcript").isBlank();
     var latestPacking = voiceRequest
-        ? List.of(new PackingSafety.Document(Ledger.str(original, "voice_transcript"))) : read(original);
+        ? List.of(new PackingSafety.Document(Ledger.str(original, "voice_transcript"))) : read(original, true);
     var originalPacking = latestPacking;
     var followUpDocuments = new ArrayList<PackingSafety.Document>();
     latestPacking.stream()
@@ -266,7 +317,7 @@ final class ShipmentDocuments {
     for (var message : followUps) {
       var body = new PackingSafety.Document(Ledger.str(message, "body"));
       dg |= addDangerous(List.of(body), dangerous, evidence);
-      var attachments = read(message);
+      var attachments = read(message, true);
       if (!attachments.isEmpty()) {
         dg |= addDangerous(attachments, dangerous, evidence);
         attachments.stream().filter(Objects::nonNull).forEach(followUpDocuments::add);

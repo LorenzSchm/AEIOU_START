@@ -11,7 +11,7 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.text.PDFTextStripper;
 
 final class PackingSafety {
-  private static final int MAX_BYTES = 2_000_000;
+  static final int MAX_BYTES = 2_000_000;
   private static final Pattern DG =
       Pattern.compile(
           "(?iu)\\bUN[\\s-]*[0-9]{4}\\b|\\b(?:dangerous\\s+goods|hazmat|gefahrgut)\\s*[:=]?\\s*(?:yes|ja|class\\s+[1-9]|klasse\\s+[1-9])\\b|\\b(?:hazard|DG)\\s+class\\s*[:=]?\\s*[1-9]");

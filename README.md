@@ -58,6 +58,7 @@ npm start -- --hostname 127.0.0.1 --port 3000
 
 | Configuration | Default |
 | --- | --- |
+| `DISPATCH_PACKING_TOOLS` | `false`. Set to `true` to recover packing lists with a wrong file extension or a legacy text encoding. The worker accepts only complete text and reuses the existing PDF, cargo and shipment checks. Tool results are cached locally by message and attachment ID. |
 | `AUTO_SEND` | `true`. Use `false` to disable the automatic worker. |
 | `DISPATCH_COUNTEROFFERS` | `false`. Use `true` to enable the optional counteroffer round. |
 | `DISPATCH_START_AT` | `2026-11-21T15:00:00Z` (16:00 Berlin). The worker handles RFQs arriving from this instant onward. |
