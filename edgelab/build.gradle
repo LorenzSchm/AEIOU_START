@@ -37,6 +37,14 @@ dependencies {
     }
     implementation 'io.github.givimad:whisper-jni:1.7.1'
     // --- end voice reader ------------------------------------------------------
+    // --- ticket 04: office reader (Tika catch-all) ---
+    // All of Tika's parsers: Word, Excel, PowerPoint, OpenOffice, RTF, HTML, CSV,
+    // PDF (PDFBox), mail (eml, msg). Same version as tika-core above. It also brings
+    // Apache POI and PDFBox, which the tests use to build their fixtures.
+    implementation 'org.apache.tika:tika-parsers-standard-package:3.2.3'
+    // POI logs through Log4j; send that to SLF4J (silenced by slf4j-nop). Matches log4j-api.
+    runtimeOnly 'org.apache.logging.log4j:log4j-to-slf4j:2.24.3'
+    // --- end ticket 04 ---
 
     testImplementation platform('org.junit:junit-bom:5.12.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -46,6 +54,9 @@ dependencies {
 tasks.withType(JavaCompile).configureEach { options.compilerArgs.add('-parameters') }
 
 tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+// ticket 04: sources and test fixtures contain umlauts; Windows would compile them as cp1252.
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 
 application {
     mainClass = 'ai.aeiou.edgelab.ReadFile'

@@ -86,14 +86,14 @@ class EdgeReaderTest {
     }
 
     @Test
-    void pdfIsDetectedButNotYetReadable() throws Exception {
+    void pdfIsDetectedFromBytesAndRead() throws Exception {
         byte[] bytes = Files.readAllBytes(KIT.resolve("cobalt-skylift-tariff-2026-11.pdf"));
 
         Reading r = reader.read("tariff.bin", bytes);
 
         assertEquals("application/pdf", r.detectedType());
-        assertEquals(Reading.Status.UNREADABLE, r.status());
-        assertFalse(r.notes().isEmpty());
+        assertEquals(Reading.Status.OK, r.status()); // office reader (ticket 04)
+        assertFalse(r.text().isBlank());
     }
 
     @Test
