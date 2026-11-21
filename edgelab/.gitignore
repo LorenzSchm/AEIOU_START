@@ -2,3 +2,4 @@
 build/
 alerts.log
 alarm-memory.json
+alarm-memory.json.tmp
