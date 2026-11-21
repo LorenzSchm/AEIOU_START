@@ -1,0 +1,218 @@
+{
+  "ran_at": "2026-11-21T14:55:21.817482+00:00",
+  "cases": {
+    "1": [
+      "ASU",
+      "cheapest",
+      100
+    ],
+    "2": [
+      "ASU",
+      "fastest",
+      100
+    ],
+    "3": [
+      "LIM",
+      "cheapest",
+      245
+    ]
+  },
+  "calls": {
+    "1": {
+      "status": 200,
+      "fields": "{\"origin\":\"FRA\",\"destination\":\"ASU\",\"weight_kg\":100,\"volume_cbm\":0.2,\"preference\":\"cheapest\",\"pickup_required\":true,\"pickup_zone\":\"60\",\"needs_review\":false}"
+    },
+    "2": {
+      "status": 200,
+      "fields": "{\"origin\":null,\"destination\":\"ASU\",\"weight_kg\":100,\"volume_cbm\":0.2,\"preference\":\"fastest\",\"pickup_required\":true,\"pickup_zone\":\"11\",\"needs_review\":false}"
+    },
+    "3": {
+      "status": 200,
+      "fields": "{\"origin\":\"FRA\",\"destination\":\"LIM\",\"weight_kg\":245,\"volume_cbm\":0.2,\"preference\":\"cheapest option\",\"pickup_required\":false,\"pickup_zone\":null,\"needs_review\":false}"
+    }
+  },
+  "quotes": [
+    {
+      "body": "Hi,\n\nThe lowest rate we found for your 100 kg shipment from FRA to ASU is with Himalaya Bridge Air at EUR 639.00 all in.\n\nThat includes collection from postcode 60311. Allow about 6 days and 16 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+      "subject": "Re: RFQ FRA to ASU",
+      "to": "customer1@example.invalid",
+      "in_reply_to": 1,
+      "id": 131,
+      "elapsed": 9.68
+    },
+    {
+      "body": "Hi,\n\nThe quickest option we found for your 100 kg shipment from FRA to ASU is with Himalaya Bridge Air at EUR 669.00 all in.\n\nThat includes collection from postcode 60311. Allow about 6 days and 3 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+      "subject": "Re: RFQ FRA to ASU",
+      "to": "customer2@example.invalid",
+      "in_reply_to": 2,
+      "id": 132,
+      "elapsed": 9.69
+    },
+    {
+      "body": "Hi,\n\nThe lowest rate we found for your 245 kg shipment from FRA to LIM is with Yellowtail Air Freight at EUR 1002.50 all in.\n\nAllow about 5 days from airport to airport.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+      "subject": "Re: RFQ FRA to LIM",
+      "to": "customer3@example.invalid",
+      "in_reply_to": 3,
+      "id": 133,
+      "elapsed": 9.7
+    }
+  ],
+  "decisions": [
+    {
+      "id": 1,
+      "stage": "sent",
+      "shipment": {
+        "origin": "FRA",
+        "destination": "ASU",
+        "weight_kg": 100,
+        "volume_cbm": 0.2,
+        "preference": "cheapest",
+        "pickup_zone": "60",
+        "pickup_eur": null,
+        "pickup_days": 0.0
+      },
+      "proposal": {
+        "revision": "3064f8aa-fa3b-4596-b518-8149ba18da25",
+        "offer": {
+          "airline": "Himalaya Bridge Air",
+          "days": 6.666666666666667,
+          "total_eur": 639.0,
+          "billed_kg": 100,
+          "source": "carrier bid",
+          "rate_id": null,
+          "valid_until": null
+        },
+        "alternatives": [
+          {
+            "airline": "Himalaya Bridge Air",
+            "days": 6.666666666666667,
+            "total_eur": 639.0,
+            "billed_kg": 100,
+            "source": "carrier bid",
+            "rate_id": null,
+            "valid_until": null
+          }
+        ],
+        "notes": [],
+        "body": "Hi,\n\nThe lowest rate we found for your 100 kg shipment from FRA to ASU is with Himalaya Bridge Air at EUR 639.00 all in.\n\nThat includes collection from postcode 60311. Allow about 6 days and 16 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "trucker": "Isarwelle Spedition",
+        "pickup_eur": 110.0,
+        "pickup_days": 0.6666666666666666
+      },
+      "reason": null
+    },
+    {
+      "id": 2,
+      "stage": "sent",
+      "shipment": {
+        "origin": "FRA",
+        "destination": "ASU",
+        "weight_kg": 100,
+        "volume_cbm": 0.2,
+        "preference": "fastest",
+        "pickup_zone": "60",
+        "pickup_eur": null,
+        "pickup_days": 0.0
+      },
+      "proposal": {
+        "revision": "4dc9329a-45cc-4a01-9ff2-2c1644c4380d",
+        "offer": {
+          "airline": "Himalaya Bridge Air",
+          "days": 6.125,
+          "total_eur": 669.0,
+          "billed_kg": 100,
+          "source": "carrier bid",
+          "rate_id": null,
+          "valid_until": null
+        },
+        "alternatives": [
+          {
+            "airline": "Himalaya Bridge Air",
+            "days": 6.125,
+            "total_eur": 669.0,
+            "billed_kg": 100,
+            "source": "carrier bid",
+            "rate_id": null,
+            "valid_until": null
+          }
+        ],
+        "notes": [],
+        "body": "Hi,\n\nThe quickest option we found for your 100 kg shipment from FRA to ASU is with Himalaya Bridge Air at EUR 669.00 all in.\n\nThat includes collection from postcode 60311. Allow about 6 days and 3 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "trucker": "Taunusfracht",
+        "pickup_eur": 140.0,
+        "pickup_days": 0.125
+      },
+      "reason": null
+    },
+    {
+      "id": 3,
+      "stage": "sent",
+      "shipment": {
+        "origin": "FRA",
+        "destination": "LIM",
+        "weight_kg": 245,
+        "volume_cbm": 0.2,
+        "preference": "cheapest",
+        "pickup_zone": null,
+        "pickup_eur": null,
+        "pickup_days": 0.0
+      },
+      "proposal": {
+        "revision": "69dd1734-1dbf-460e-b2e8-698116bd6d12",
+        "offer": {
+          "airline": "Yellowtail Air Freight",
+          "days": 5.0,
+          "total_eur": 1002.5,
+          "billed_kg": 250,
+          "source": "sheet",
+          "rate_id": null,
+          "valid_until": null
+        },
+        "alternatives": [
+          {
+            "airline": "Yellowtail Air Freight",
+            "days": 5.0,
+            "total_eur": 1002.5,
+            "billed_kg": 250,
+            "source": "sheet",
+            "rate_id": null,
+            "valid_until": null
+          },
+          {
+            "airline": "Quetzal Air Freight",
+            "days": 5.0,
+            "total_eur": 1058.4,
+            "billed_kg": 245,
+            "source": "sheet",
+            "rate_id": null,
+            "valid_until": null
+          },
+          {
+            "airline": "Quetzal Air Freight",
+            "days": 5.0,
+            "total_eur": 1058.4,
+            "billed_kg": 245,
+            "source": "carrier bid",
+            "rate_id": null,
+            "valid_until": null
+          },
+          {
+            "airline": "Aurelia Air Cargo",
+            "days": 3.0,
+            "total_eur": 1283.8,
+            "billed_kg": 245,
+            "source": "portal",
+            "rate_id": "R-qgAtxIO8JIvGeXWr",
+            "valid_until": "2026-11-21T15:09:22.985625Z"
+          }
+        ],
+        "notes": [],
+        "body": "Hi,\n\nThe lowest rate we found for your 245 kg shipment from FRA to LIM is with Yellowtail Air Freight at EUR 1002.50 all in.\n\nAllow about 5 days from airport to airport.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "trucker": null,
+        "pickup_eur": null,
+        "pickup_days": null
+      },
+      "reason": null
+    }
+  ]
+}

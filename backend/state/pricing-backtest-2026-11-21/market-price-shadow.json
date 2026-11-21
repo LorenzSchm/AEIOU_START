@@ -1,0 +1,610 @@
+[ {
+  "round" : 1,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 966.93,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2388.32
+}, {
+  "round" : 1,
+  "airline" : "Ibisair Cargo",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 966.93,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2833.11
+}, {
+  "round" : 1,
+  "airline" : "Meridian Freightways",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 966.93,
+  "assumed_bracket" : "500",
+  "actual_eur" : 3094.18
+}, {
+  "round" : 1,
+  "airline" : "Xenon Cargo Airlines",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 966.93,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2049.89
+}, {
+  "round" : 2,
+  "airline" : "Polaris Air Logistics",
+  "lane" : "FRA-JFK",
+  "billed_kg" : 1800.26,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4158.59
+}, {
+  "round" : 2,
+  "airline" : "Solace Air Cargo",
+  "lane" : "FRA-JFK",
+  "billed_kg" : 1800.26,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 5238.75
+}, {
+  "round" : 3,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "DUS-JFK",
+  "billed_kg" : 1540,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3696.00
+}, {
+  "round" : 3,
+  "airline" : "Ultraviolet Air Freight",
+  "lane" : "DUS-JFK",
+  "billed_kg" : 1540,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3819.20
+}, {
+  "round" : 4,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 699.73,
+  "assumed_bracket" : "500",
+  "actual_eur" : 1728.33,
+  "estimated_eur" : 1728.335198618307,
+  "absolute_percentage_error" : 0.0003007885245873184,
+  "transit_days_match" : true
+}, {
+  "round" : 4,
+  "airline" : "Ibisair Cargo",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 699.73,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2050.22,
+  "estimated_eur" : 2050.212590673575,
+  "absolute_percentage_error" : 0.0003613917738096399,
+  "transit_days_match" : true
+}, {
+  "round" : 4,
+  "airline" : "Meridian Freightways",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 699.73,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2239.13,
+  "estimated_eur" : 2239.138894645941,
+  "absolute_percentage_error" : 0.0003972366919741149,
+  "transit_days_match" : true
+}, {
+  "round" : 4,
+  "airline" : "Xenon Cargo Airlines",
+  "lane" : "CGN-ORD",
+  "billed_kg" : 699.73,
+  "assumed_bracket" : "500",
+  "actual_eur" : 1483.43,
+  "estimated_eur" : 1483.426442141623,
+  "absolute_percentage_error" : 0.0002398399908994695,
+  "transit_days_match" : true
+}, {
+  "round" : 5,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1228,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4064.68
+}, {
+  "round" : 5,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1228,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4408.52
+}, {
+  "round" : 5,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1228,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3155.96
+}, {
+  "round" : 6,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "DUS-KUL",
+  "billed_kg" : 1549,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3949.95
+}, {
+  "round" : 7,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "MUC-LAX",
+  "billed_kg" : 998,
+  "assumed_bracket" : "500",
+  "actual_eur" : 3203.58
+}, {
+  "round" : 8,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "MUC-CAI",
+  "billed_kg" : 486,
+  "assumed_bracket" : "300",
+  "actual_eur" : 1909.98
+}, {
+  "round" : 8,
+  "airline" : "Borealis Freight Airways",
+  "lane" : "MUC-CAI",
+  "billed_kg" : 486,
+  "assumed_bracket" : "300",
+  "actual_eur" : 1642.68
+}, {
+  "round" : 9,
+  "airline" : "Lumen Air Cargo",
+  "lane" : "FRA-LOS",
+  "billed_kg" : 1952,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4840.96
+}, {
+  "round" : 9,
+  "airline" : "Tamarind Airways",
+  "lane" : "FRA-LOS",
+  "billed_kg" : 1952,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 6714.88
+}, {
+  "round" : 10,
+  "airline" : "Juniper Cargo Lines",
+  "lane" : "FRA-GRU",
+  "billed_kg" : 715,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2609.75
+}, {
+  "round" : 10,
+  "airline" : "Riverbend Airlines Cargo",
+  "lane" : "FRA-GRU",
+  "billed_kg" : 715,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2774.20
+}, {
+  "round" : 10,
+  "airline" : "Juniper Cargo Lines",
+  "lane" : "FRA-GRU",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3150.00
+}, {
+  "round" : 10,
+  "airline" : "Riverbend Airlines Cargo",
+  "lane" : "FRA-GRU",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3350.00
+}, {
+  "round" : 12,
+  "airline" : "Riverbend Airlines Cargo",
+  "lane" : "FRA-DOH",
+  "billed_kg" : 102,
+  "assumed_bracket" : "100",
+  "actual_eur" : 344.76
+}, {
+  "round" : 12,
+  "airline" : "Ultraviolet Air Freight",
+  "lane" : "FRA-DOH",
+  "billed_kg" : 102,
+  "assumed_bracket" : "100",
+  "actual_eur" : 324.36
+}, {
+  "round" : 12,
+  "airline" : "Riverbend Airlines Cargo",
+  "lane" : "FRA-DOH",
+  "billed_kg" : 300,
+  "assumed_bracket" : "300",
+  "actual_eur" : 864.00
+}, {
+  "round" : 12,
+  "airline" : "Ultraviolet Air Freight",
+  "lane" : "FRA-DOH",
+  "billed_kg" : 300,
+  "assumed_bracket" : "300",
+  "actual_eur" : 807.00
+}, {
+  "round" : 13,
+  "airline" : "Borealis Freight Airways",
+  "lane" : "HAM-DEL",
+  "billed_kg" : 1619,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 2752.30
+}, {
+  "round" : 13,
+  "airline" : "Ibisair Cargo",
+  "lane" : "HAM-DEL",
+  "billed_kg" : 1619,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4840.81
+}, {
+  "round" : 13,
+  "airline" : "Borealis Freight Airways",
+  "lane" : "HAM-DEL",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 3000.00
+}, {
+  "round" : 13,
+  "airline" : "Ibisair Cargo",
+  "lane" : "HAM-DEL",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 5560.00
+}, {
+  "round" : 14,
+  "airline" : "Gannet Airways",
+  "lane" : "DUS-PEK",
+  "billed_kg" : 1341.01,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3003.86
+}, {
+  "round" : 15,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "MUC-SGN",
+  "billed_kg" : 572,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2459.60
+}, {
+  "round" : 15,
+  "airline" : "Polaris Air Logistics",
+  "lane" : "MUC-SGN",
+  "billed_kg" : 572,
+  "assumed_bracket" : "500",
+  "actual_eur" : 1058.20
+}, {
+  "round" : 15,
+  "airline" : "Tamarind Airways",
+  "lane" : "MUC-SGN",
+  "billed_kg" : 572,
+  "assumed_bracket" : "500",
+  "actual_eur" : 1178.32
+}, {
+  "round" : 15,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "MUC-SGN",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3650.00
+}, {
+  "round" : 15,
+  "airline" : "Polaris Air Logistics",
+  "lane" : "MUC-SGN",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 1750.00
+}, {
+  "round" : 15,
+  "airline" : "Tamarind Airways",
+  "lane" : "MUC-SGN",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 1680.00
+}, {
+  "round" : 16,
+  "airline" : "Meridian Freightways",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 400.8,
+  "assumed_bracket" : "300",
+  "actual_eur" : 1442.88
+}, {
+  "round" : 16,
+  "airline" : "Xenon Cargo Airlines",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 400.8,
+  "assumed_bracket" : "300",
+  "actual_eur" : 1322.65
+}, {
+  "round" : 16,
+  "airline" : "Meridian Freightways",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 500,
+  "assumed_bracket" : "500",
+  "actual_eur" : 1600.00
+}, {
+  "round" : 16,
+  "airline" : "Xenon Cargo Airlines",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 500,
+  "assumed_bracket" : "500",
+  "actual_eur" : 1460.00
+}, {
+  "round" : 17,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1805,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 5974.55
+}, {
+  "round" : 17,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1805,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 6479.95
+}, {
+  "round" : 17,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1805,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4638.85
+}, {
+  "round" : 17,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 5820.00
+}, {
+  "round" : 17,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 6340.00
+}, {
+  "round" : 17,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 4780.00
+}, {
+  "round" : 18,
+  "airline" : "Juniper Cargo Lines",
+  "lane" : "CGN-SGN",
+  "billed_kg" : 874,
+  "assumed_bracket" : "500",
+  "actual_eur" : 3207.58
+}, {
+  "round" : 18,
+  "airline" : "Lumen Air Cargo",
+  "lane" : "CGN-SGN",
+  "billed_kg" : 874,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2150.04
+}, {
+  "round" : 18,
+  "airline" : "Juniper Cargo Lines",
+  "lane" : "CGN-SGN",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3180.00
+}, {
+  "round" : 18,
+  "airline" : "Lumen Air Cargo",
+  "lane" : "CGN-SGN",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 2150.00
+}, {
+  "round" : 19,
+  "airline" : "Lumen Air Cargo",
+  "lane" : "CGN-DFW",
+  "billed_kg" : 2100.86,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 5819.38
+}, {
+  "round" : 19,
+  "airline" : "Ultraviolet Air Freight",
+  "lane" : "CGN-DFW",
+  "billed_kg" : 2100.86,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 4453.82
+}, {
+  "round" : 20,
+  "airline" : "Juniper Cargo Lines",
+  "lane" : "MUC-RUH",
+  "billed_kg" : 1513.02,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3283.25
+}, {
+  "round" : 20,
+  "airline" : "Ultraviolet Air Freight",
+  "lane" : "MUC-RUH",
+  "billed_kg" : 1513.02,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 2799.08
+}, {
+  "round" : 21,
+  "airline" : "Meridian Freightways",
+  "lane" : "HAM-EZE",
+  "billed_kg" : 676,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2264.60
+}, {
+  "round" : 21,
+  "airline" : "Meridian Freightways",
+  "lane" : "HAM-EZE",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 2840.00
+}, {
+  "round" : 22,
+  "airline" : "Juniper Cargo Lines",
+  "lane" : "CGN-SGN",
+  "billed_kg" : 2244.48,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 7137.45
+}, {
+  "round" : 22,
+  "airline" : "Lumen Air Cargo",
+  "lane" : "CGN-SGN",
+  "billed_kg" : 2244.48,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 4825.63
+}, {
+  "round" : 23,
+  "airline" : "Meridian Freightways",
+  "lane" : "FRA-DEL",
+  "billed_kg" : 1148.96,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 1987.70
+}, {
+  "round" : 23,
+  "airline" : "Solace Air Cargo",
+  "lane" : "FRA-DEL",
+  "billed_kg" : 1148.96,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3113.69
+}, {
+  "round" : 23,
+  "airline" : "Solace Air Cargo",
+  "lane" : "FRA-DEL",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 4980.00
+}, {
+  "round" : 24,
+  "airline" : "Meridian Freightways",
+  "lane" : "DUS-ATL",
+  "billed_kg" : 1754,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4402.54
+}, {
+  "round" : 24,
+  "airline" : "Polaris Air Logistics",
+  "lane" : "DUS-ATL",
+  "billed_kg" : 1754,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4700.72
+}, {
+  "round" : 24,
+  "airline" : "Riverbend Airlines Cargo",
+  "lane" : "DUS-ATL",
+  "billed_kg" : 1754,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4472.70
+}, {
+  "round" : 24,
+  "airline" : "Solace Air Cargo",
+  "lane" : "DUS-ATL",
+  "billed_kg" : 1754,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4156.98
+}, {
+  "round" : 24,
+  "airline" : "Riverbend Airlines Cargo",
+  "lane" : "DUS-ATL",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 4160.00
+}, {
+  "round" : 24,
+  "airline" : "Solace Air Cargo",
+  "lane" : "DUS-ATL",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 3860.00
+}, {
+  "round" : 25,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 544,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2143.36
+}, {
+  "round" : 25,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 544,
+  "assumed_bracket" : "500",
+  "actual_eur" : 2317.44
+}, {
+  "round" : 25,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 544,
+  "assumed_bracket" : "500",
+  "actual_eur" : 1632.00
+}, {
+  "round" : 25,
+  "airline" : "Aurelia Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3310.00,
+  "estimated_eur" : 3310.00,
+  "absolute_percentage_error" : 0,
+  "transit_days_match" : true
+}, {
+  "round" : 25,
+  "airline" : "Fjordline Air Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 3590.00,
+  "estimated_eur" : 3590.00,
+  "absolute_percentage_error" : 0,
+  "transit_days_match" : true
+}, {
+  "round" : 25,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "STR-EZE",
+  "billed_kg" : 1000,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 2570.00,
+  "estimated_eur" : 2570.00,
+  "absolute_percentage_error" : 0,
+  "transit_days_match" : true
+}, {
+  "round" : 26,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "MUC-BKK",
+  "billed_kg" : 1708,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4987.36
+}, {
+  "round" : 26,
+  "airline" : "Polaris Air Logistics",
+  "lane" : "MUC-BKK",
+  "billed_kg" : 1708,
+  "assumed_bracket" : "1000",
+  "actual_eur" : 4679.92
+}, {
+  "round" : 26,
+  "airline" : "Nova Atlas Cargo",
+  "lane" : "MUC-BKK",
+  "billed_kg" : 2000,
+  "assumed_bracket" : "2000",
+  "actual_eur" : 5840.00
+}, {
+  "round" : 30,
+  "airline" : "Meridian Freightways",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 134,
+  "assumed_bracket" : "100",
+  "actual_eur" : 534.66
+}, {
+  "round" : 30,
+  "airline" : "Xenon Cargo Airlines",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 134,
+  "assumed_bracket" : "100",
+  "actual_eur" : 477.04
+}, {
+  "round" : 30,
+  "airline" : "Meridian Freightways",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 300,
+  "assumed_bracket" : "300",
+  "actual_eur" : 1080.00
+}, {
+  "round" : 30,
+  "airline" : "Xenon Cargo Airlines",
+  "lane" : "MUC-PVG",
+  "billed_kg" : 300,
+  "assumed_bracket" : "300",
+  "actual_eur" : 990.00
+} ]

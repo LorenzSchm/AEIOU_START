@@ -1,0 +1,32 @@
+[
+  {
+    "case": 1,
+    "worker_eur": 639.0,
+    "reference_eur": 600.0,
+    "reference_hours": 170,
+    "worker_hours": 160,
+    "reference_option": "Himalaya Bridge Air + Bodenseefracht",
+    "difference_percent": 6.5,
+    "lowest_observed_eur_ignoring_preference": 600.0
+  },
+  {
+    "case": 2,
+    "worker_eur": 669.0,
+    "reference_eur": 669.0,
+    "reference_hours": 147,
+    "worker_hours": 147,
+    "reference_option": "Himalaya Bridge Air + Taunusfracht",
+    "difference_percent": 0.0,
+    "lowest_observed_eur_ignoring_preference": 600.0
+  },
+  {
+    "case": 3,
+    "worker_eur": 1002.5,
+    "reference_eur": 1002.5,
+    "reference_hours": 120,
+    "worker_hours": 120,
+    "reference_option": "Yellowtail Air Freight",
+    "difference_percent": 0.0,
+    "lowest_observed_eur_ignoring_preference": 1002.5
+  }
+]

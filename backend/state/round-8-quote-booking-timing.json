@@ -1,0 +1,26 @@
+{
+  "round": 8,
+  "official": {
+    "round_no": 8,
+    "sent_at": "2026-11-21T15:43:30.559499+00:00",
+    "answered_at": "2026-11-21T15:44:06.153015+00:00",
+    "verdict": "rejected",
+    "reason": "too_high",
+    "booked": null
+  },
+  "checked_at": "2026-11-21T15:44:13.749287+00:00",
+  "rfq_to_quote_seconds": 35.594,
+  "request_id": 1832,
+  "subject": "Air freight quote: MUC to CAI",
+  "stage": "sent",
+  "offer": {
+    "airline": "Wayzata Air Cargo",
+    "days": 2.0,
+    "total_eur": 1585.0,
+    "billed_kg": 500,
+    "source": "sheet",
+    "rate_id": null,
+    "valid_until": null
+  },
+  "rfq_to_first_inquiry_seconds": 3.939
+}

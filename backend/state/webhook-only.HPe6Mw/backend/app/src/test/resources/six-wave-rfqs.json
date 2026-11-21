@@ -1,0 +1,272 @@
+[
+  {
+    "subject": "Fastest air freight to ORD",
+    "body": "Hi,\n\nCould you quote an all-in price in EUR for the fastest air freight option to ORD (Chicago, US)? Please arrange trucking from our site in 51447 Bergisch Gladbach, Germany, to the departure airport. The shipment is ready for pickup on 2026-11-25.\n\nIt’s 12 pieces of printed marketing material, 676 kg gross and 5.79 cbm.\n\nSara\nLindqvist Medtech",
+    "shipment": {
+      "origin": "CGN",
+      "destination": "ORD",
+      "weight_kg": 676,
+      "volume_cbm": 5.79,
+      "preference": "fastest",
+      "pickup_zone": "51",
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "offers": [
+      {
+        "airline": "Aurelia Air Cargo",
+        "days": 2.0,
+        "total_eur": 2388.32,
+        "billed_kg": 966.93,
+        "source": "portal",
+        "rate_id": "TEST-0",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Ibisair Cargo",
+        "days": 2.0,
+        "total_eur": 2833.11,
+        "billed_kg": 966.93,
+        "source": "portal",
+        "rate_id": "TEST-1",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Meridian Freightways",
+        "days": 1.0,
+        "total_eur": 3094.18,
+        "billed_kg": 966.93,
+        "source": "portal",
+        "rate_id": "TEST-2",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Xenon Cargo Airlines",
+        "days": 3.0,
+        "total_eur": 2049.89,
+        "billed_kg": 966.93,
+        "source": "portal",
+        "rate_id": "TEST-3",
+        "valid_until": "2026-11-21T15:15:00Z"
+      }
+    ],
+    "replies": {
+      "aurelia-air-cargo@hackloop.mail": "Dear Team AEIOU,\n\nThe all-in air freight rate from CGN to ORD is 2388.32 EUR. The estimated transit time is 2 days.\n\nThis rate is valid until 21 Nov 2026 15:16 UTC. Please quote reference R-QT6nFhplAYPbxneN when booking.\n\nKind regards,\nAurelia Air Cargo",
+      "borealis-freight-airways@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: CGN-ORD.\nWe fly CGN-SCL, DUS-NRT, FRA-CAI, FRA-ORD, FRA-YYZ, HAM-DEL, HAM-YYZ, MUC-CAI, MUC-LIM, MUC-SCL, MUC-SYD, STR-PEK, STR-SGN.\n\nBest regards\nBorealis Freight Airways\nborealis-freight-airways@hackloop.mail",
+      "elbflug-air-freight@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: CGN-ORD.\nWe fly CGN-LOS, DUS-HKG, DUS-TLV, FRA-BOG, FRA-DFW, FRA-DXB, FRA-HKG, FRA-MEL, FRA-MIA, FRA-SGN, FRA-SIN, HAM-DFW, HAM-DXB, HAM-MEX, HAM-TLV, MUC-BOG, MUC-SYD, STR-ORD, STR-PVG.\n\nBest regards\nElbflug Air Freight\nelbflug-air-freight@hackloop.mail",
+      "elbkante-logistik@hackloop.mail": "Dear Team AEIOU,\n\nOur fastest option is direct express trucking from Bergisch Gladbach to Cologne Bonn Airport (CGN).\n\nAll-in trucking rate: 134.69 EUR\nEstimated transit time from pickup to delivery: 29 hours\nRate valid until: 21 Nov 2026 15:17 UTC\nOffer reference: TRK-174\n\nNo booking is required for pickup.\n\nKind regards,\nElbkante Logistik",
+      "maintal-transport-logistik@hackloop.mail": "Hi Team AEIOU,\n\nOur fastest option from Bergisch Gladbach to Cologne Bonn Airport is direct express trucking. We can collect on your requested date, with an estimated transit time of 13 hours from pickup to delivery.\n\nThe all-in rate is 222.36 EUR, valid until 21 Nov 2026 15:17 UTC. No booking is needed for pickup. Your offer reference is TRK-173.\n\nBest regards,\nMaintal Transport Logistik"
+    },
+    "euros": 3316.54
+  },
+  {
+    "subject": "Air freight quote request to JFK",
+    "body": "Dear Sir or Madam,\n\nCould you please quote the fastest air freight option to JFK (New York, US)? The shipment will be ready for pickup at our site in 61018 (Bad Homburg), Germany, on 2026-11-25. Please arrange trucking from our site to the departure airport.\n\nThe shipment consists of 6 pieces of precision instruments, with a gross weight of 1233 kg and a total volume of 10.78 cbm.\n\nPlease provide your all-in price in EUR, including pickup and trucking, and confirm the earliest available arrival at JFK.\n\nThank you in advance.\n\nKind regards\nAnna Sonnberg\nHead of Purchasing and Logistics\nSonnberg Kaffeeroesterei GmbH",
+    "shipment": {
+      "origin": "FRA",
+      "destination": "JFK",
+      "weight_kg": 1233,
+      "volume_cbm": 10.78,
+      "preference": "fastest",
+      "pickup_zone": "61",
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "offers": [
+      {
+        "airline": "Polaris Air Logistics",
+        "days": 4.0,
+        "total_eur": 4158.59,
+        "billed_kg": 1800.26,
+        "source": "portal",
+        "rate_id": "TEST-0",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Solace Air Cargo",
+        "days": 2.0,
+        "total_eur": 5238.75,
+        "billed_kg": 1800.26,
+        "source": "portal",
+        "rate_id": "TEST-1",
+        "valid_until": "2026-11-21T15:15:00Z"
+      }
+    ],
+    "replies": {
+      "cobalt-skylift@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-JFK.\nWe fly CGN-EZE, CGN-SGN, CGN-SIN, DUS-BOM, DUS-DEL, DUS-JFK, DUS-SYD, FRA-BOG, FRA-ICN, FRA-JNB, FRA-SYD, FRA-TPE, HAM-BOG, HAM-RUH, MUC-BOG, MUC-LIM, MUC-MEL, MUC-MEX, MUC-MIA, MUC-YYZ, STR-YYZ.\n\nBest regards\nCobalt Skylift\ncobalt-skylift@hackloop.mail",
+      "fjordline-air-cargo@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-JFK.\nWe fly CGN-NBO, CGN-SIN, DUS-BOM, DUS-DEL, DUS-JFK, DUS-KUL, FRA-ATL, FRA-JNB, FRA-TLV, HAM-GRU, MUC-LAX, STR-EZE.\n\nBest regards\nFjordline Air Cargo\nfjordline-air-cargo@hackloop.mail",
+      "hansekogge-trucking@hackloop.mail": "Dear Team AEIOU,\n\nOur fixed all-in rate for collection and delivery to FRA is 245.02 EUR, valid until 21 Nov 2026 15:23 UTC.\n\nEstimated time to pickup: 23 hours.\n\nOffer reference: TRK-265. No booking is required for pickup.\n\nKind regards,\nHansekogge Trucking",
+      "ibisair-cargo@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-JFK.\nWe fly CGN-ORD, DUS-HKG, DUS-NBO, FRA-ATL, FRA-BKK, FRA-BOG, HAM-DEL, HAM-GRU, HAM-JFK, HAM-SYD, MUC-ICN, MUC-MEX, MUC-MIA, MUC-PEK, MUC-SIN, STR-BOM, STR-YYZ.\n\nBest regards\nIbisair Cargo\nibisair-cargo@hackloop.mail",
+      "westfalenroute@hackloop.mail": "Dear Team AEIOU,\n\nThank you for your enquiry. Our all-in rate for collection and delivery to FRA is 266.03 EUR, valid until 21 Nov 2026 15:23 UTC.\n\nEstimated time to pickup: 23 hours.\n\nOffer reference: TRK-263. No booking is required for pickup.\n\nKind regards,\nWestfalenroute"
+    },
+    "euros": 5483.77
+  },
+  {
+    "subject": "Air freight quote: DUS to JFK",
+    "body": "Hello,\n\nCould you please quote the fastest air freight option from DUS to JFK (New York, US)? The shipment will be ready on 2026-11-27, and we will deliver it to DUS ourselves.\n\nIt is 1 piece of electronic control units, with a gross weight of 1540 kg and a volume of 5.90 cbm.\n\nPlease let me know the earliest departure and arrival you can offer, together with your all-in price in EUR.\n\nBest greetings from Regensburg\nTobias Auer\nVersand / Shipping\nAuer Maschinenbau GmbH",
+    "shipment": {
+      "origin": "DUS",
+      "destination": "JFK",
+      "weight_kg": 1540,
+      "volume_cbm": 5.9,
+      "preference": "fastest",
+      "pickup_zone": null,
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "offers": [
+      {
+        "airline": "Fjordline Air Cargo",
+        "days": 3.0,
+        "total_eur": 3696.0,
+        "billed_kg": 1540,
+        "source": "portal",
+        "rate_id": "TEST-0",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Ultraviolet Air Freight",
+        "days": 6.0,
+        "total_eur": 3819.2,
+        "billed_kg": 1540,
+        "source": "portal",
+        "rate_id": "TEST-1",
+        "valid_until": "2026-11-21T15:15:00Z"
+      }
+    ],
+    "replies": {},
+    "euros": 3696.0
+  },
+  {
+    "subject": "Air freight quote to ORD",
+    "body": "Hello,\n\nCould you please quote your cheapest air freight option to ORD (Chicago, US) for 6 pieces of precision instruments? The total gross weight is 679 kg and the volume is 4.19 cbm.\n\nThe shipment will be ready for pickup on 2026-11-28 at our site in 51896 (Bergisch Gladbach), Germany. Please arrange the truck from our site to the departure airport and include this in your all-in price in EUR.\n\nThank you.\n\nViele Gruesse / Many greetings\nDeniz Yilmaz\nRheintal Elektronik GmbH",
+    "shipment": {
+      "origin": "CGN",
+      "destination": "ORD",
+      "weight_kg": 679,
+      "volume_cbm": 4.19,
+      "preference": "cheapest",
+      "pickup_zone": "51",
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "offers": [
+      {
+        "airline": "Aurelia Air Cargo",
+        "days": 2.0,
+        "total_eur": 1728.33,
+        "billed_kg": 699.73,
+        "source": "portal",
+        "rate_id": "TEST-0",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Ibisair Cargo",
+        "days": 2.0,
+        "total_eur": 2050.22,
+        "billed_kg": 699.73,
+        "source": "portal",
+        "rate_id": "TEST-1",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Meridian Freightways",
+        "days": 1.0,
+        "total_eur": 2239.13,
+        "billed_kg": 699.73,
+        "source": "portal",
+        "rate_id": "TEST-2",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Xenon Cargo Airlines",
+        "days": 3.0,
+        "total_eur": 1483.43,
+        "billed_kg": 699.73,
+        "source": "portal",
+        "rate_id": "TEST-3",
+        "valid_until": "2026-11-21T15:15:00Z"
+      }
+    ],
+    "replies": {
+      "aurelia-air-cargo@hackloop.mail": "Dear Team AEIOU,\n\nOur all-in air freight rate from CGN to ORD is 1728.33 EUR. The estimated transit time is 2 days.\n\nThis rate is valid until 21 Nov 2026 15:34 UTC. Please quote reference R-aygf0tZzf-Y_8bSy when booking.\n\nKind regards,\nAurelia Air Cargo",
+      "borealis-freight-airways@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: CGN-ORD.\nWe fly CGN-SCL, DUS-NRT, FRA-CAI, FRA-ORD, FRA-YYZ, HAM-DEL, HAM-YYZ, MUC-CAI, MUC-LIM, MUC-SCL, MUC-SYD, STR-PEK, STR-SGN.\n\nBest regards\nBorealis Freight Airways\nborealis-freight-airways@hackloop.mail",
+      "elbflug-air-freight@hackloop.mail": "Hello,\n\nthank you for your request. We do not serve this lane/zone: CGN-ORD.\nWe fly CGN-LOS, DUS-HKG, DUS-TLV, FRA-BOG, FRA-DFW, FRA-DXB, FRA-HKG, FRA-MEL, FRA-MIA, FRA-SGN, FRA-SIN, HAM-DFW, HAM-DXB, HAM-MEX, HAM-TLV, MUC-BOG, MUC-SYD, STR-ORD, STR-PVG.\n\nBest regards\nElbflug Air Freight\nelbflug-air-freight@hackloop.mail",
+      "elbkante-logistik@hackloop.mail": "Dear Team AEIOU,\n\nThank you for your enquiry. Our fixed all-in rate for collection and delivery to CGN is 115.98 EUR. The estimated time to pickup is 29 hours.\n\nThis offer is valid until 21 Nov 2026 15:34 UTC. Our offer reference is TRK-408. No booking is required for pickup.\n\nKind regards,\nElbkante Logistik",
+      "maintal-transport-logistik@hackloop.mail": "Hi Team AEIOU,\n\nThanks for your request. Our all-in rate for collection and delivery to CGN is 192.97 EUR, valid until 21 Nov 2026 15:34 UTC.\n\nEstimated time to pickup: 13 hours.\n\nOur offer reference is TRK-416. No booking is needed for pickup.\n\nBest regards,\nMaintal Transport Logistik"
+    },
+    "euros": 1599.41
+  },
+  {
+    "subject": "Fastest air freight quote: STR to EZE",
+    "body": "Hi there,\n\nHope your week's going well. Could you send me an all-in price in EUR for the fastest air freight option from STR to EZE (Buenos Aires, AR)?\n\nThe textile samples will be ready on 2026-11-26, and we'll deliver them to Stuttgart airport (STR) ourselves. There are 12 pieces with a gross weight of 1228 kg and a total volume of 5.37 cbm.\n\nCould you also let me know the latest drop-off time at STR and when the shipment would arrive at EZE?\n\nThanks for checking!\n\nCheers,\nKlaus Weidner\nWeidner Spielwaren GmbH, Nuremberg",
+    "shipment": {
+      "origin": "STR",
+      "destination": "EZE",
+      "weight_kg": 1228,
+      "volume_cbm": 5.37,
+      "preference": "fastest",
+      "pickup_zone": null,
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "offers": [
+      {
+        "airline": "Aurelia Air Cargo",
+        "days": 6.0,
+        "total_eur": 4064.68,
+        "billed_kg": 1228,
+        "source": "portal",
+        "rate_id": "TEST-0",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Fjordline Air Cargo",
+        "days": 4.0,
+        "total_eur": 4408.52,
+        "billed_kg": 1228,
+        "source": "portal",
+        "rate_id": "TEST-1",
+        "valid_until": "2026-11-21T15:15:00Z"
+      },
+      {
+        "airline": "Nova Atlas Cargo",
+        "days": 7.0,
+        "total_eur": 3155.96,
+        "billed_kg": 1228,
+        "source": "portal",
+        "rate_id": "TEST-2",
+        "valid_until": "2026-11-21T15:15:00Z"
+      }
+    ],
+    "replies": {},
+    "euros": 4408.52
+  },
+  {
+    "subject": "Air freight quote request: DUS to KUL",
+    "body": "Dear Air Freight Team,\n\nCould you please quote your cheapest air freight option from DUS to KUL (Kuala Lumpur, MY)? We will deliver the shipment to DUS ourselves. It will be ready on 2026-11-26.\n\nThe shipment consists of 12 pieces of spare parts for packaging machines, with a gross weight of 1549 kg and a total volume of 8.26 cbm.\n\nPlease provide an all-in price in EUR.\n\nThank you for your assistance.\n\nMit freundlichen Gruessen / Kind regards\nJonas Kessler\nLogistics Coordinator\nKessler Feinmechanik GmbH, Ulm",
+    "shipment": {
+      "origin": "DUS",
+      "destination": "KUL",
+      "weight_kg": 1549,
+      "volume_cbm": 8.26,
+      "preference": "cheapest",
+      "pickup_zone": null,
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "offers": [
+      {
+        "airline": "Fjordline Air Cargo",
+        "days": 5.0,
+        "total_eur": 3949.95,
+        "billed_kg": 1549,
+        "source": "portal",
+        "rate_id": "TEST-0",
+        "valid_until": "2026-11-21T15:15:00Z"
+      }
+    ],
+    "replies": {},
+    "euros": 3949.95
+  }
+]

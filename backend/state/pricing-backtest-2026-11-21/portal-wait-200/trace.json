@@ -1,0 +1,4467 @@
+[ {
+  "round" : 1,
+  "request_id" : 263,
+  "official" : {
+    "round_no" : 1,
+    "sent_at" : "2026-11-21T15:00:59.986067+00:00",
+    "answered_at" : "2026-11-21T15:03:03.615703+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : false,
+    "points" : {
+      "cost" : 39.95,
+      "time" : 14.77,
+      "booking" : 0.0,
+      "accuracy" : 32.95,
+      "tracking" : 0.0
+    },
+    "total" : 87.67,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 1.5416666666666665,
+    "total_eur" : 3316.54,
+    "billed_kg" : 966.93,
+    "source" : "portal",
+    "rate_id" : "R-UiSMrYYlpQcQfMSM",
+    "valid_until" : "2026-11-21T15:16:04.533367Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "CGN",
+    "destination" : "ORD",
+    "weight_kg" : 676,
+    "volume_cbm" : 5.79,
+    "preference" : "fastest",
+    "pickup_zone" : "51",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 1.5416666666666665,
+    "total_eur" : 3316.54,
+    "billed_kg" : 966.93,
+    "source" : "portal",
+    "rate_id" : "R-UiSMrYYlpQcQfMSM",
+    "valid_until" : "2026-11-21T15:16:04.533367Z"
+  },
+  "replay_trucker" : "Maintal Transport Logistik",
+  "replay_pickup_eur" : 222.36,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:263:aurelia-air-cargo@hackloop.mail",
+    "to" : "aurelia-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-263 | CGN to ORD",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 347 ]
+  }, {
+    "action" : "bid:263:elbflug-air-freight@hackloop.mail",
+    "to" : "elbflug-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-263 | CGN to ORD",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 344 ]
+  }, {
+    "action" : "bid:263:helix-air-freight@hackloop.mail",
+    "to" : "helix-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-263 | CGN to ORD",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:263:maintal-transport-logistik@hackloop.mail",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-263 | pickup from postcode 51447 to CGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 385 ]
+  }, {
+    "action" : "bid:263:elbkante-logistik@hackloop.mail",
+    "to" : "elbkante-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-263 | pickup from postcode 51447 to CGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 384 ]
+  }, {
+    "action" : "quote:263",
+    "to" : "lindqvist-medtech@hackloop.mail",
+    "subject" : "Re: Fastest air freight to ORD",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 4,
+    "results_at_seconds" : 4.601,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "aurelia-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 347,
+    "euros" : "2388.32",
+    "days" : 2,
+    "issue" : null,
+    "bid_action" : "bid:263:aurelia-air-cargo@hackloop.mail"
+  }, {
+    "email" : "elbflug-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 344,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:263:elbflug-air-freight@hackloop.mail"
+  }, {
+    "email" : "elbkante-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 384,
+    "euros" : "134.69",
+    "days" : 1.2083333333333333,
+    "issue" : null,
+    "bid_action" : "bid:263:elbkante-logistik@hackloop.mail"
+  }, {
+    "email" : "helix-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:263:helix-air-freight@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 385,
+    "euros" : "222.36",
+    "days" : 0.5416666666666666,
+    "issue" : null,
+    "bid_action" : "bid:263:maintal-transport-logistik@hackloop.mail"
+  } ]
+}, {
+  "round" : 2,
+  "request_id" : 419,
+  "official" : {
+    "round_no" : 2,
+    "sent_at" : "2026-11-21T15:07:05.268407+00:00",
+    "answered_at" : "2026-11-21T15:09:07.924097+00:00",
+    "verdict" : "rejected",
+    "reason" : "too_high",
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Solace Air Cargo",
+    "days" : 2.9583333333333335,
+    "total_eur" : 5483.77,
+    "billed_kg" : 1800.26,
+    "source" : "portal",
+    "rate_id" : "R-WYvVal1xv_5qCPzH",
+    "valid_until" : "2026-11-21T15:23:34.428342Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 2,
+  "shipment" : {
+    "origin" : "FRA",
+    "destination" : "JFK",
+    "weight_kg" : 1233,
+    "volume_cbm" : 10.78,
+    "preference" : "fastest",
+    "pickup_zone" : "61",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "expired",
+  "replay_offer" : null,
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : null,
+  "reason_before_terminal_stage" : "Waiting for a confirmed pickup total and transit time.",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 collecting", "40 waiting for pickup", "76 collecting", "115 waiting for pickup", "356 expired" ],
+  "gateway_calls" : [ ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:419:fjordline-air-cargo@hackloop.mail",
+    "to" : "fjordline-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-419 | FRA to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 632 ]
+  }, {
+    "action" : "bid:419:ibisair-cargo@hackloop.mail",
+    "to" : "ibisair-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-419 | FRA to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 633 ]
+  }, {
+    "action" : "bid:419:polaris-air-logistics@hackloop.mail",
+    "to" : "polaris-air-logistics@hackloop.mail",
+    "subject" : "Rate request AEIOU-419 | FRA to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:419:hansekogge-trucking@hackloop.mail",
+    "to" : "hansekogge-trucking@hackloop.mail",
+    "subject" : "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 636 ]
+  }, {
+    "action" : "bid:419:westfalenroute@hackloop.mail",
+    "to" : "westfalenroute@hackloop.mail",
+    "subject" : "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 635 ]
+  }, {
+    "action" : "bid:419:hansekogge-trucking@hackloop.mail:transit",
+    "to" : "hansekogge-trucking@hackloop.mail",
+    "subject" : "Re: Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:419:westfalenroute@hackloop.mail:transit",
+    "to" : "westfalenroute@hackloop.mail",
+    "subject" : "Re: Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:419:spessart-spedition@hackloop.mail",
+    "to" : "spessart-spedition@hackloop.mail",
+    "subject" : "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+    "after_seconds" : 75.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:419:bodenseefracht@hackloop.mail",
+    "to" : "bodenseefracht@hackloop.mail",
+    "subject" : "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+    "after_seconds" : 75.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 35.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 70.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 70.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 105.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 105.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "bodenseefracht@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:419:bodenseefracht@hackloop.mail"
+  }, {
+    "email" : "fjordline-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 632,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:419:fjordline-air-cargo@hackloop.mail"
+  }, {
+    "email" : "hansekogge-trucking@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 636,
+    "euros" : "245.02",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:419:hansekogge-trucking@hackloop.mail"
+  }, {
+    "email" : "ibisair-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 633,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:419:ibisair-cargo@hackloop.mail"
+  }, {
+    "email" : "polaris-air-logistics@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:419:polaris-air-logistics@hackloop.mail"
+  }, {
+    "email" : "spessart-spedition@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:419:spessart-spedition@hackloop.mail"
+  }, {
+    "email" : "westfalenroute@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 635,
+    "euros" : "266.03",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:419:westfalenroute@hackloop.mail"
+  } ]
+}, {
+  "round" : 3,
+  "request_id" : 729,
+  "official" : {
+    "round_no" : 3,
+    "sent_at" : "2026-11-21T15:13:10.155511+00:00",
+    "answered_at" : "2026-11-21T15:13:58.647750+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.95,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "tracking" : 10.0
+    },
+    "total" : 109.95,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 3.0,
+    "total_eur" : 3696.0,
+    "billed_kg" : 1540,
+    "source" : "portal",
+    "rate_id" : "R-4bF8zKGwscgjEpVk",
+    "valid_until" : "2026-11-21T15:28:58.557970Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 2,
+  "shipment" : {
+    "origin" : "DUS",
+    "destination" : "JFK",
+    "weight_kg" : 1540,
+    "volume_cbm" : 5.90,
+    "preference" : "fastest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 3.0,
+    "total_eur" : 3696.00,
+    "billed_kg" : 1540,
+    "source" : "portal",
+    "rate_id" : "R-4bF8zKGwscgjEpVk",
+    "valid_until" : "2026-11-21T15:28:58.557970Z"
+  },
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : 70.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 collecting", "70 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:729:cobalt-skylift@hackloop.mail",
+    "to" : "cobalt-skylift@hackloop.mail",
+    "subject" : "Rate request AEIOU-729 | DUS to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 902 ]
+  }, {
+    "action" : "bid:729:fjordline-air-cargo@hackloop.mail",
+    "to" : "fjordline-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-729 | DUS to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 899 ]
+  }, {
+    "action" : "bid:729:polaris-air-logistics@hackloop.mail",
+    "to" : "polaris-air-logistics@hackloop.mail",
+    "subject" : "Rate request AEIOU-729 | DUS to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 901 ]
+  }, {
+    "action" : "bid:729:quetzal-air-freight@hackloop.mail",
+    "to" : "quetzal-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-729 | DUS to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 903 ]
+  }, {
+    "action" : "bid:729:solace-air-cargo@hackloop.mail",
+    "to" : "solace-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-729 | DUS to JFK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "quote:729",
+    "to" : "auer-maschinenbau@hackloop.mail",
+    "subject" : "Re: Air freight quote: DUS to JFK",
+    "after_seconds" : 70.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 35.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 70.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 70.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "cobalt-skylift@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 902,
+    "euros" : "3465.00",
+    "days" : 4,
+    "issue" : null,
+    "bid_action" : "bid:729:cobalt-skylift@hackloop.mail"
+  }, {
+    "email" : "fjordline-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 899,
+    "euros" : "3696.00",
+    "days" : 3,
+    "issue" : null,
+    "bid_action" : "bid:729:fjordline-air-cargo@hackloop.mail"
+  }, {
+    "email" : "polaris-air-logistics@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 901,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:729:polaris-air-logistics@hackloop.mail"
+  }, {
+    "email" : "quetzal-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 903,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:729:quetzal-air-freight@hackloop.mail"
+  }, {
+    "email" : "solace-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:729:solace-air-cargo@hackloop.mail"
+  } ]
+}, {
+  "round" : 4,
+  "request_id" : 935,
+  "official" : {
+    "round_no" : 4,
+    "sent_at" : "2026-11-21T15:19:13.717937+00:00",
+    "answered_at" : "2026-11-21T15:19:49.952519+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.95,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 25.62,
+      "tracking" : 0.0
+    },
+    "total" : 80.57,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Xenon Cargo Airlines",
+    "days" : 4.208333333333333,
+    "total_eur" : 1599.41,
+    "billed_kg" : 699.73,
+    "source" : "portal",
+    "rate_id" : "R-ayLEuFDh-kd9tUv7",
+    "valid_until" : "2026-11-21T15:34:20.076154Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "CGN",
+    "destination" : "ORD",
+    "weight_kg" : 679,
+    "volume_cbm" : 4.19,
+    "preference" : "cheapest",
+    "pickup_zone" : "51",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Xenon Cargo Airlines",
+    "days" : 3.0,
+    "total_eur" : 1599.41,
+    "billed_kg" : 699.73,
+    "source" : "portal",
+    "rate_id" : "R-ayLEuFDh-kd9tUv7",
+    "valid_until" : "2026-11-21T15:34:00Z"
+  },
+  "replay_trucker" : "Elbkante Logistik",
+  "replay_pickup_eur" : 115.98,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:935:ibisair-cargo@hackloop.mail",
+    "to" : "ibisair-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-935 | CGN to ORD",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:935:aurelia-air-cargo@hackloop.mail",
+    "to" : "aurelia-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-935 | CGN to ORD",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1070 ]
+  }, {
+    "action" : "bid:935:helix-air-freight@hackloop.mail",
+    "to" : "helix-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-935 | CGN to ORD",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:935:maintal-transport-logistik@hackloop.mail",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-935 | pickup from postcode 51896 to CGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1098 ]
+  }, {
+    "action" : "bid:935:elbkante-logistik@hackloop.mail",
+    "to" : "elbkante-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-935 | pickup from postcode 51896 to CGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1100 ]
+  }, {
+    "action" : "quote:935",
+    "to" : "rheintal-elektronik@hackloop.mail",
+    "subject" : "Re: Air freight quote to ORD",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 4,
+    "results_at_seconds" : 35.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "aurelia-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1070,
+    "euros" : "1728.33",
+    "days" : 2,
+    "issue" : null,
+    "bid_action" : "bid:935:aurelia-air-cargo@hackloop.mail"
+  }, {
+    "email" : "elbkante-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 1100,
+    "euros" : "115.98",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:935:elbkante-logistik@hackloop.mail"
+  }, {
+    "email" : "helix-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:935:helix-air-freight@hackloop.mail"
+  }, {
+    "email" : "ibisair-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:935:ibisair-cargo@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 1098,
+    "euros" : "192.97",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:935:maintal-transport-logistik@hackloop.mail"
+  } ]
+}, {
+  "round" : 5,
+  "request_id" : 1221,
+  "official" : {
+    "round_no" : 5,
+    "sent_at" : "2026-11-21T15:25:18.288590+00:00",
+    "answered_at" : "2026-11-21T15:25:53.002700+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.95,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "tracking" : 10.0
+    },
+    "total" : 109.95,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 4.0,
+    "total_eur" : 4408.52,
+    "billed_kg" : 1228,
+    "source" : "portal",
+    "rate_id" : "R-iUO8HjK-GVLibpPo",
+    "valid_until" : "2026-11-21T15:40:22.094439Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 3,
+  "shipment" : {
+    "origin" : "STR",
+    "destination" : "EZE",
+    "weight_kg" : 1228,
+    "volume_cbm" : 5.37,
+    "preference" : "fastest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 4.0,
+    "total_eur" : 4408.52,
+    "billed_kg" : 1228,
+    "source" : "portal",
+    "rate_id" : "R-iUO8HjK-GVLibpPo",
+    "valid_until" : "2026-11-21T15:40:22.094439Z"
+  },
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:1221:fjordline-air-cargo@hackloop.mail",
+    "to" : "fjordline-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1221 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1342 ]
+  }, {
+    "action" : "bid:1221:nova-atlas-cargo@hackloop.mail",
+    "to" : "nova-atlas-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1221 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:1221:aurelia-air-cargo@hackloop.mail",
+    "to" : "aurelia-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1221 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1335 ]
+  }, {
+    "action" : "bid:1221:danube-wings-cargo@hackloop.mail",
+    "to" : "danube-wings-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1221 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1341 ]
+  }, {
+    "action" : "bid:1221:juniper-cargo-lines@hackloop.mail",
+    "to" : "juniper-cargo-lines@hackloop.mail",
+    "subject" : "Rate request AEIOU-1221 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1346 ]
+  }, {
+    "action" : "quote:1221",
+    "to" : "weidner-spielwaren@hackloop.mail",
+    "subject" : "Re: Fastest air freight quote: STR to EZE",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 3,
+    "results_at_seconds" : 3.879,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "aurelia-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1335,
+    "euros" : "4064.68",
+    "days" : 6,
+    "issue" : null,
+    "bid_action" : "bid:1221:aurelia-air-cargo@hackloop.mail"
+  }, {
+    "email" : "danube-wings-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1341,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:1221:danube-wings-cargo@hackloop.mail"
+  }, {
+    "email" : "fjordline-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1342,
+    "euros" : "4408.52",
+    "days" : 4,
+    "issue" : null,
+    "bid_action" : "bid:1221:fjordline-air-cargo@hackloop.mail"
+  }, {
+    "email" : "juniper-cargo-lines@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1346,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:1221:juniper-cargo-lines@hackloop.mail"
+  }, {
+    "email" : "nova-atlas-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:1221:nova-atlas-cargo@hackloop.mail"
+  } ]
+}, {
+  "round" : 6,
+  "request_id" : 1458,
+  "official" : {
+    "round_no" : 6,
+    "sent_at" : "2026-11-21T15:31:22.981062+00:00",
+    "answered_at" : "2026-11-21T15:32:03.245808+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.95,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "humanity" : 10.0,
+      "tracking" : 10.0
+    },
+    "total" : 119.95,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 5.0,
+    "total_eur" : 3949.95,
+    "billed_kg" : 1549,
+    "source" : "portal",
+    "rate_id" : "R-T1l1XWycX7uc9rAx",
+    "valid_until" : "2026-11-21T15:46:58.818861Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 1,
+  "shipment" : {
+    "origin" : "DUS",
+    "destination" : "KUL",
+    "weight_kg" : 1549,
+    "volume_cbm" : 8.26,
+    "preference" : "cheapest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 5.0,
+    "total_eur" : 3949.95,
+    "billed_kg" : 1549,
+    "source" : "portal",
+    "rate_id" : "R-T1l1XWycX7uc9rAx",
+    "valid_until" : "2026-11-21T15:46:58.818861Z"
+  },
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : 35.837,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 collecting", "35 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:1458:fjordline-air-cargo@hackloop.mail",
+    "to" : "fjordline-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1458 | DUS to KUL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1562 ]
+  }, {
+    "action" : "bid:1458:kestrel-airways@hackloop.mail",
+    "to" : "kestrel-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-1458 | DUS to KUL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1563 ]
+  }, {
+    "action" : "bid:1458:orion-cargo-air@hackloop.mail",
+    "to" : "orion-cargo-air@hackloop.mail",
+    "subject" : "Rate request AEIOU-1458 | DUS to KUL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1565 ]
+  }, {
+    "action" : "bid:1458:vega-skyfreight@hackloop.mail",
+    "to" : "vega-skyfreight@hackloop.mail",
+    "subject" : "Rate request AEIOU-1458 | DUS to KUL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1564 ]
+  }, {
+    "action" : "quote:1458",
+    "to" : "kessler-feinmechanik@hackloop.mail",
+    "subject" : "Re: Air freight quote request: DUS to KUL",
+    "after_seconds" : 35.837,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 1,
+    "results_at_seconds" : 35.837,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "fjordline-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1562,
+    "euros" : "3949.95",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:1458:fjordline-air-cargo@hackloop.mail"
+  }, {
+    "email" : "kestrel-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1563,
+    "euros" : "4523.08",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:1458:kestrel-airways@hackloop.mail"
+  }, {
+    "email" : "orion-cargo-air@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1565,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:1458:orion-cargo-air@hackloop.mail"
+  }, {
+    "email" : "vega-skyfreight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1564,
+    "euros" : "4399.16",
+    "days" : 2,
+    "issue" : null,
+    "bid_action" : "bid:1458:vega-skyfreight@hackloop.mail"
+  } ]
+}, {
+  "round" : 7,
+  "request_id" : 1626,
+  "official" : {
+    "round_no" : 7,
+    "sent_at" : "2026-11-21T15:37:26.409249+00:00",
+    "answered_at" : "2026-11-21T15:38:31.546910+00:00",
+    "verdict" : "rejected",
+    "reason" : "too_high",
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 3.0,
+    "total_eur" : 3203.58,
+    "billed_kg" : 998,
+    "source" : "portal",
+    "rate_id" : "R-7_4ppJkwE6sPNwZ6",
+    "valid_until" : "2026-11-21T15:53:31.508847Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 1,
+  "shipment" : {
+    "origin" : "MUC",
+    "destination" : "LAX",
+    "weight_kg" : 998,
+    "volume_cbm" : 2.39,
+    "preference" : "fastest",
+    "pickup_zone" : "80",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "expired",
+  "replay_offer" : null,
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : null,
+  "reason_before_terminal_stage" : "Could you please confirm the full five-digit pickup postcode and town?",
+  "recorded_replies_injected" : 0,
+  "stage_trace" : [ "0 waiting for customer", "356 expired" ],
+  "gateway_calls" : [ "recorded extraction" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:1626",
+    "to" : "rheintal-elektronik@hackloop.mail",
+    "subject" : "Re: Air freight quote: MUC to LAX",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ ],
+  "tenders" : [ ]
+}, {
+  "round" : 8,
+  "request_id" : 1832,
+  "official" : {
+    "round_no" : 8,
+    "sent_at" : "2026-11-21T15:43:30.559499+00:00",
+    "answered_at" : "2026-11-21T15:44:06.153015+00:00",
+    "verdict" : "rejected",
+    "reason" : "too_high",
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Wayzata Air Cargo",
+    "days" : 2.0,
+    "total_eur" : 1585.0,
+    "billed_kg" : 500,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : null
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 2,
+  "shipment" : {
+    "origin" : "MUC",
+    "destination" : "CAI",
+    "weight_kg" : 486,
+    "volume_cbm" : 2.62,
+    "preference" : "cheapest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Wayzata Air Cargo",
+    "days" : 2.0,
+    "total_eur" : 1585.00,
+    "billed_kg" : 500,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : null
+  },
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : 31.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 collecting", "31 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:1832:aurelia-air-cargo@hackloop.mail",
+    "to" : "aurelia-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1832 | MUC to CAI",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1893 ]
+  }, {
+    "action" : "bid:1832:borealis-freight-airways@hackloop.mail",
+    "to" : "borealis-freight-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-1832 | MUC to CAI",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1895 ]
+  }, {
+    "action" : "bid:1832:wayzata-air-cargo@hackloop.mail",
+    "to" : "wayzata-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1832 | MUC to CAI",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1897 ]
+  }, {
+    "action" : "bid:1832:kestrel-airways@hackloop.mail",
+    "to" : "kestrel-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-1832 | MUC to CAI",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 1894 ]
+  }, {
+    "action" : "quote:1832",
+    "to" : "nordlicht-audio@hackloop.mail",
+    "subject" : "Re: Air freight quote: MUC to CAI",
+    "after_seconds" : 31.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 3.884,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "aurelia-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1893,
+    "euros" : "1909.98",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:1832:aurelia-air-cargo@hackloop.mail"
+  }, {
+    "email" : "borealis-freight-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1895,
+    "euros" : "1642.68",
+    "days" : 4,
+    "issue" : null,
+    "bid_action" : "bid:1832:borealis-freight-airways@hackloop.mail"
+  }, {
+    "email" : "kestrel-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1894,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:1832:kestrel-airways@hackloop.mail"
+  }, {
+    "email" : "wayzata-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 1897,
+    "euros" : "1759.32",
+    "days" : 2,
+    "issue" : null,
+    "bid_action" : "bid:1832:wayzata-air-cargo@hackloop.mail"
+  } ]
+}, {
+  "round" : 9,
+  "request_id" : 1965,
+  "official" : {
+    "round_no" : 9,
+    "sent_at" : "2026-11-21T15:49:35.432873+00:00",
+    "answered_at" : "2026-11-21T15:50:31.853980+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.95,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 39.07,
+      "humanity" : 10.0,
+      "tracking" : 0.0
+    },
+    "total" : 104.02,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Lumen Air Cargo",
+    "days" : 5.25,
+    "total_eur" : 5270.76,
+    "billed_kg" : 1952,
+    "source" : "portal",
+    "rate_id" : "R-kEmvB5_g8urlZDbr",
+    "valid_until" : "2026-11-21T16:04:58.540518Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 2,
+  "shipment" : {
+    "origin" : "FRA",
+    "destination" : "LOS",
+    "weight_kg" : 1952,
+    "volume_cbm" : 4.676800,
+    "preference" : "cheapest",
+    "pickup_zone" : "36",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Lumen Air Cargo",
+    "days" : 5.0,
+    "total_eur" : 5202.20,
+    "billed_kg" : 1952,
+    "source" : "portal",
+    "rate_id" : "R-kEmvB5_g8urlZDbr",
+    "valid_until" : "2026-11-21T16:04:58.540518Z"
+  },
+  "replay_trucker" : "Domblick Kurierdienst",
+  "replay_pickup_eur" : 361.24,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:1965:lumen-air-cargo@hackloop.mail",
+    "to" : "lumen-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-1965 | FRA to LOS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 2123 ]
+  }, {
+    "action" : "bid:1965:tamarind-airways@hackloop.mail",
+    "to" : "tamarind-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-1965 | FRA to LOS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:1965:vega-skyfreight@hackloop.mail",
+    "to" : "vega-skyfreight@hackloop.mail",
+    "subject" : "Rate request AEIOU-1965 | FRA to LOS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:1965:domblick-kurierdienst@hackloop.mail",
+    "to" : "domblick-kurierdienst@hackloop.mail",
+    "subject" : "Rate request AEIOU-1965 | pickup from postcode 36627 to FRA",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 2124 ]
+  }, {
+    "action" : "bid:1965:bodenseefracht@hackloop.mail",
+    "to" : "bodenseefracht@hackloop.mail",
+    "subject" : "Rate request AEIOU-1965 | pickup from postcode 36627 to FRA",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 2125 ]
+  }, {
+    "action" : "quote:1965",
+    "to" : "nordlicht-audio@hackloop.mail",
+    "subject" : "Re: Air freight quote to LOS",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 35.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "bodenseefracht@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 2125,
+    "euros" : "429.80",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:1965:bodenseefracht@hackloop.mail"
+  }, {
+    "email" : "domblick-kurierdienst@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 2124,
+    "euros" : "361.24",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:1965:domblick-kurierdienst@hackloop.mail"
+  }, {
+    "email" : "lumen-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 2123,
+    "euros" : "4840.96",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:1965:lumen-air-cargo@hackloop.mail"
+  }, {
+    "email" : "tamarind-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:1965:tamarind-airways@hackloop.mail"
+  }, {
+    "email" : "vega-skyfreight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:1965:vega-skyfreight@hackloop.mail"
+  } ]
+}, {
+  "round" : 10,
+  "request_id" : 2254,
+  "official" : {
+    "round_no" : 10,
+    "sent_at" : "2026-11-21T15:55:39.435542+00:00",
+    "answered_at" : "2026-11-21T15:57:52.028462+00:00",
+    "verdict" : "rejected",
+    "reason" : "dg_docs_missing",
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Juniper Cargo Lines",
+    "days" : 5.958333333333333,
+    "total_eur" : 2757.1,
+    "billed_kg" : 715,
+    "source" : "portal",
+    "rate_id" : "R-rFN9NOBlXT6jzTFL",
+    "valid_until" : "2026-11-21T16:12:20.186735Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "FRA",
+    "destination" : "GRU",
+    "weight_kg" : 715,
+    "volume_cbm" : 2.65,
+    "preference" : "cheapest",
+    "pickup_zone" : "61",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "waiting for documents",
+  "replay_offer" : null,
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : null,
+  "reason_before_terminal_stage" : "Dangerous goods indicated. Hold pending documents and carrier review.",
+  "recorded_replies_injected" : 0,
+  "stage_trace" : [ "0 waiting for documents" ],
+  "gateway_calls" : [ ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "dg-docs:2254",
+    "to" : "weidner-spielwaren@hackloop.mail",
+    "subject" : "Re: Air freight quote to GRU",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ ],
+  "tenders" : [ ]
+}, {
+  "round" : 11,
+  "request_id" : 2528,
+  "official" : {
+    "round_no" : 11,
+    "sent_at" : "2026-11-21T16:01:46.977362+00:00",
+    "answered_at" : "2026-11-21T16:03:32.391790+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : null,
+    "points" : {
+      "cost" : 0.0,
+      "time" : 15.0,
+      "accuracy" : 45.0,
+      "humanity" : 10.0
+    },
+    "total" : 70.0,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : null,
+  "historical_operator" : false,
+  "historical_stage" : "review",
+  "historical_portal_offer_count" : 0,
+  "shipment" : {
+    "origin" : "HAM",
+    "destination" : "YYZ",
+    "weight_kg" : 855,
+    "volume_cbm" : 3.74,
+    "preference" : "cheapest",
+    "pickup_zone" : "21",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "waiting for documents",
+  "replay_offer" : null,
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : null,
+  "reason_before_terminal_stage" : "Dangerous goods indicated. Hold pending documents and carrier review.",
+  "recorded_replies_injected" : 1,
+  "stage_trace" : [ "0 waiting for documents" ],
+  "gateway_calls" : [ ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "dg-docs:2528",
+    "to" : "lindqvist-medtech@hackloop.mail",
+    "subject" : "Re: Air freight quote request: Lueneburg to Toronto",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 2810 ]
+  } ],
+  "portal_trace" : [ ],
+  "tenders" : [ ]
+}, {
+  "round" : 12,
+  "request_id" : 2817,
+  "official" : {
+    "round_no" : 12,
+    "sent_at" : "2026-11-21T16:07:50.280353+00:00",
+    "answered_at" : "2026-11-21T16:08:55.381827+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.96,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "humanity" : 10.0,
+      "tracking" : 10.0
+    },
+    "total" : 119.96,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Ultraviolet Air Freight",
+    "days" : 3.0,
+    "total_eur" : 324.36,
+    "billed_kg" : 102,
+    "source" : "portal",
+    "rate_id" : "R-OsEAqdkzBomihx98",
+    "valid_until" : "2026-11-21T16:23:55.125392Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "FRA",
+    "destination" : "DOH",
+    "weight_kg" : 102,
+    "volume_cbm" : 0.49,
+    "preference" : "cheapest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "expired",
+  "replay_offer" : null,
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : null,
+  "reason_before_terminal_stage" : "Could you confirm whether you need warehouse collection or will deliver the shipment to the airport? If you need collection, please include the full five-digit postcode.",
+  "recorded_replies_injected" : 0,
+  "stage_trace" : [ "0 waiting for customer", "356 expired" ],
+  "gateway_calls" : [ ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:2817",
+    "to" : "hofmann-textilwerk@hackloop.mail",
+    "subject" : "Re: Air freight quote: FRA to DOH",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ ],
+  "tenders" : [ ]
+}, {
+  "round" : 13,
+  "request_id" : 2965,
+  "official" : {
+    "round_no" : 13,
+    "sent_at" : "2026-11-21T16:13:54.996679+00:00",
+    "answered_at" : "2026-11-21T16:14:30.776136+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 0.0,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 33.0,
+      "tracking" : 0.0
+    },
+    "total" : 48.0,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Borealis Freight Airways",
+    "days" : 6.25,
+    "total_eur" : 2875.06,
+    "billed_kg" : 1619,
+    "source" : "portal",
+    "rate_id" : "R-oHHdVp0jYfEPmSGP",
+    "valid_until" : "2026-11-21T16:28:57.062766Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "HAM",
+    "destination" : "DEL",
+    "weight_kg" : 1619,
+    "volume_cbm" : 7.66,
+    "preference" : "cheapest",
+    "pickup_zone" : "24",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Borealis Freight Airways",
+    "days" : 5.0,
+    "total_eur" : 2875.06,
+    "billed_kg" : 1619,
+    "source" : "portal",
+    "rate_id" : "R-oHHdVp0jYfEPmSGP",
+    "valid_until" : "2026-11-21T16:28:57.062766Z"
+  },
+  "replay_trucker" : "Alpenblick Logistik",
+  "replay_pickup_eur" : 122.76,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:2965:borealis-freight-airways@hackloop.mail",
+    "to" : "borealis-freight-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-2965 | HAM to DEL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3135 ]
+  }, {
+    "action" : "bid:2965:ibisair-cargo@hackloop.mail",
+    "to" : "ibisair-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-2965 | HAM to DEL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:2965:vega-skyfreight@hackloop.mail",
+    "to" : "vega-skyfreight@hackloop.mail",
+    "subject" : "Rate request AEIOU-2965 | HAM to DEL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:2965:maintal-transport-logistik@hackloop.mail",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-2965 | pickup from postcode 24983 to HAM",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3150 ]
+  }, {
+    "action" : "bid:2965:alpenblick-logistik@hackloop.mail",
+    "to" : "alpenblick-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-2965 | pickup from postcode 24983 to HAM",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3151 ]
+  }, {
+    "action" : "quote:2965",
+    "to" : "auer-maschinenbau@hackloop.mail",
+    "subject" : "Re: Air freight quote to DEL",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 4,
+    "results_at_seconds" : 2.664,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "alpenblick-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 3151,
+    "euros" : "122.76",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:2965:alpenblick-logistik@hackloop.mail"
+  }, {
+    "email" : "borealis-freight-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 3135,
+    "euros" : "2752.30",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:2965:borealis-freight-airways@hackloop.mail"
+  }, {
+    "email" : "ibisair-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:2965:ibisair-cargo@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 3150,
+    "euros" : "190.33",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:2965:maintal-transport-logistik@hackloop.mail"
+  }, {
+    "email" : "vega-skyfreight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:2965:vega-skyfreight@hackloop.mail"
+  } ]
+}, {
+  "round" : 14,
+  "request_id" : 3315,
+  "official" : {
+    "round_no" : 14,
+    "sent_at" : "2026-11-21T16:20:00.243607+00:00",
+    "answered_at" : "2026-11-21T16:20:36.855939+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.96,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 37.2,
+      "tracking" : 0.0
+    },
+    "total" : 92.16,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Gannet Airways",
+    "days" : 5.291666666666667,
+    "total_eur" : 3383.24,
+    "billed_kg" : 1341.01,
+    "source" : "portal",
+    "rate_id" : "R-sMtuJvb07SI8hVVa",
+    "valid_until" : "2026-11-21T16:35:04.641384Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 1,
+  "shipment" : {
+    "origin" : "DUS",
+    "destination" : "PEK",
+    "weight_kg" : 1081,
+    "volume_cbm" : 8.03,
+    "preference" : "cheapest",
+    "pickup_zone" : "42",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Gannet Airways",
+    "days" : 5.0,
+    "total_eur" : 3383.24,
+    "billed_kg" : 1341.01,
+    "source" : "portal",
+    "rate_id" : "R-sMtuJvb07SI8hVVa",
+    "valid_until" : "2026-11-21T16:35:00Z"
+  },
+  "replay_trucker" : "Rheinufer Spedition",
+  "replay_pickup_eur" : 379.38,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:3315:gannet-airways@hackloop.mail",
+    "to" : "gannet-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-3315 | DUS to PEK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3470 ]
+  }, {
+    "action" : "bid:3315:vega-skyfreight@hackloop.mail",
+    "to" : "vega-skyfreight@hackloop.mail",
+    "subject" : "Rate request AEIOU-3315 | DUS to PEK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:3315:lumen-air-cargo@hackloop.mail",
+    "to" : "lumen-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-3315 | DUS to PEK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:3315:rheinufer-spedition@hackloop.mail",
+    "to" : "rheinufer-spedition@hackloop.mail",
+    "subject" : "Rate request AEIOU-3315 | pickup from postcode 42401 to DUS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3476 ]
+  }, {
+    "action" : "bid:3315:schwabenbote-transporte@hackloop.mail",
+    "to" : "schwabenbote-transporte@hackloop.mail",
+    "subject" : "Rate request AEIOU-3315 | pickup from postcode 42401 to DUS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3479 ]
+  }, {
+    "action" : "quote:3315",
+    "to" : "hofmann-textilwerk@hackloop.mail",
+    "subject" : "Re: RE: FW: ZURICH AIRPORT - MEL / 87 PLT 3,459 KGS",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 1,
+    "results_at_seconds" : 4.397,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "gannet-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 3470,
+    "euros" : "3003.86",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:3315:gannet-airways@hackloop.mail"
+  }, {
+    "email" : "lumen-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3315:lumen-air-cargo@hackloop.mail"
+  }, {
+    "email" : "rheinufer-spedition@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 3476,
+    "euros" : "379.38",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3315:rheinufer-spedition@hackloop.mail"
+  }, {
+    "email" : "schwabenbote-transporte@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 3479,
+    "euros" : "379.79",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3315:schwabenbote-transporte@hackloop.mail"
+  }, {
+    "email" : "vega-skyfreight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3315:vega-skyfreight@hackloop.mail"
+  } ]
+}, {
+  "round" : 15,
+  "request_id" : 3625,
+  "official" : {
+    "round_no" : 15,
+    "sent_at" : "2026-11-21T16:26:03.244131+00:00",
+    "answered_at" : null,
+    "verdict" : "no answer",
+    "reason" : null,
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : null,
+  "historical_operator" : false,
+  "historical_stage" : "expired",
+  "historical_portal_offer_count" : 6,
+  "shipment" : {
+    "origin" : "MUC",
+    "destination" : "SGN",
+    "weight_kg" : 572,
+    "volume_cbm" : 2.29,
+    "preference" : "cheapest",
+    "pickup_zone" : "80",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Helix Air Freight",
+    "days" : 6.916666666666667,
+    "total_eur" : 2487.96,
+    "billed_kg" : 572,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : "2026-11-21T16:46:00Z"
+  },
+  "replay_trucker" : "Neckarstrom Kurier",
+  "replay_pickup_eur" : 171.36,
+  "replay_quote_seconds" : 200.0,
+  "reason_before_terminal_stage" : "Could you please confirm the full five-digit pickup postcode and town?",
+  "recorded_replies_injected" : 2,
+  "stage_trace" : [ "0 waiting for customer", "11 collecting", "200 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:3625",
+    "to" : "auer-maschinenbau@hackloop.mail",
+    "subject" : "Re: RE: FW: AMSTERDAM SCHIPHOL - HKG / 128 PCS 165 KGS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3919 ]
+  }, {
+    "action" : "bid:3625:neckarstrom-kurier@hackloop.mail:3919",
+    "to" : "neckarstrom-kurier@hackloop.mail",
+    "subject" : "Rate request AEIOU-3625 | pickup from postcode 80287 to MUC",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 3946 ]
+  }, {
+    "action" : "bid:3625:ruhrpott-express@hackloop.mail:3919",
+    "to" : "ruhrpott-express@hackloop.mail",
+    "subject" : "Rate request AEIOU-3625 | pickup from postcode 80287 to MUC",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:3625:helix-air-freight@hackloop.mail",
+    "to" : "helix-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-3625 | MUC to SGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:3625:nova-atlas-cargo@hackloop.mail",
+    "to" : "nova-atlas-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-3625 | MUC to SGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:3625:polaris-air-logistics@hackloop.mail",
+    "to" : "polaris-air-logistics@hackloop.mail",
+    "subject" : "Rate request AEIOU-3625 | MUC to SGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "quote:3625",
+    "to" : "auer-maschinenbau@hackloop.mail",
+    "subject" : "Re: RE: FW: AMSTERDAM SCHIPHOL - HKG / 128 PCS 165 KGS",
+    "after_seconds" : 200.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 11.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 11.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 46.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 46.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 81.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 81.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 116.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 116.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 151.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 151.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 186.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 186.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "helix-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3625:helix-air-freight@hackloop.mail"
+  }, {
+    "email" : "neckarstrom-kurier@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 3946,
+    "euros" : "171.36",
+    "days" : 0.9166666666666666,
+    "issue" : null,
+    "bid_action" : "bid:3625:neckarstrom-kurier@hackloop.mail:3919"
+  }, {
+    "email" : "nova-atlas-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3625:nova-atlas-cargo@hackloop.mail"
+  }, {
+    "email" : "polaris-air-logistics@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3625:polaris-air-logistics@hackloop.mail"
+  }, {
+    "email" : "ruhrpott-express@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3625:ruhrpott-express@hackloop.mail:3919"
+  } ]
+}, {
+  "round" : 16,
+  "request_id" : 3928,
+  "official" : {
+    "round_no" : 16,
+    "sent_at" : "2026-11-21T16:32:07.712399+00:00",
+    "answered_at" : "2026-11-21T16:37:56.939346+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.96,
+      "time" : 0.67,
+      "booking" : 0.0,
+      "accuracy" : 31.8,
+      "tracking" : 0.0
+    },
+    "total" : 72.43,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 4.0,
+    "total_eur" : 1544.94,
+    "billed_kg" : 400.8,
+    "source" : "portal",
+    "rate_id" : "R-iydLNz4c1t0tHx98",
+    "valid_until" : "2026-11-21T16:52:25.987017Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "MUC",
+    "destination" : "PVG",
+    "weight_kg" : 349,
+    "volume_cbm" : 2.40,
+    "preference" : "fastest",
+    "pickup_zone" : "84",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Helix Air Freight",
+    "days" : 6.0,
+    "total_eur" : 1228.31,
+    "billed_kg" : 400.80,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : "2026-11-21T16:52:00Z"
+  },
+  "replay_trucker" : "Maintal Transport Logistik",
+  "replay_pickup_eur" : 102.06,
+  "replay_quote_seconds" : 200.0,
+  "reason_before_terminal_stage" : "Could you please confirm the full five-digit pickup postcode and town?",
+  "recorded_replies_injected" : 5,
+  "stage_trace" : [ "0 waiting for customer", "12 collecting", "200 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:3928",
+    "to" : "nordlicht-audio@hackloop.mail",
+    "subject" : "Re: Air freight quote to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4106 ]
+  }, {
+    "action" : "bid:3928:maintal-transport-logistik@hackloop.mail:4106",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-3928 | pickup from postcode 84236 to MUC",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4118 ]
+  }, {
+    "action" : "bid:3928:isarwelle-spedition@hackloop.mail:4106",
+    "to" : "isarwelle-spedition@hackloop.mail",
+    "subject" : "Rate request AEIOU-3928 | pickup from postcode 84236 to MUC",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4117 ]
+  }, {
+    "action" : "bid:3928:helix-air-freight@hackloop.mail",
+    "to" : "helix-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-3928 | MUC to PVG",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4120 ]
+  }, {
+    "action" : "bid:3928:meridian-freightways@hackloop.mail",
+    "to" : "meridian-freightways@hackloop.mail",
+    "subject" : "Rate request AEIOU-3928 | MUC to PVG",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:3928:lumen-air-cargo@hackloop.mail",
+    "to" : "lumen-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-3928 | MUC to PVG",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4116 ]
+  }, {
+    "action" : "quote:3928",
+    "to" : "nordlicht-audio@hackloop.mail",
+    "subject" : "Re: Air freight quote to PVG",
+    "after_seconds" : 200.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 12.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 12.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 47.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 47.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 82.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 82.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 117.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 117.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 152.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 152.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 187.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 187.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "helix-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 4120,
+    "euros" : "1126.25",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:3928:helix-air-freight@hackloop.mail"
+  }, {
+    "email" : "isarwelle-spedition@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4117,
+    "euros" : "58.04",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3928:isarwelle-spedition@hackloop.mail:4106"
+  }, {
+    "email" : "lumen-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 4116,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:3928:lumen-air-cargo@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4118,
+    "euros" : "102.06",
+    "days" : 1,
+    "issue" : null,
+    "bid_action" : "bid:3928:maintal-transport-logistik@hackloop.mail:4106"
+  }, {
+    "email" : "meridian-freightways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:3928:meridian-freightways@hackloop.mail"
+  } ]
+}, {
+  "round" : 17,
+  "request_id" : 4125,
+  "official" : {
+    "round_no" : 17,
+    "sent_at" : "2026-11-21T16:38:12.035815+00:00",
+    "answered_at" : "2026-11-21T16:41:38.523232+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 39.96,
+      "time" : 9.59,
+      "booking" : 0.0,
+      "accuracy" : 40.45,
+      "tracking" : 0.0
+    },
+    "total" : 90.0,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Nova Atlas Cargo",
+    "days" : 7.708333333333333,
+    "total_eur" : 5005.6,
+    "billed_kg" : 1805,
+    "source" : "portal",
+    "rate_id" : "R-KlPxzAichTEMmyg4",
+    "valid_until" : "2026-11-21T16:56:07.740225Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 6,
+  "shipment" : {
+    "origin" : "STR",
+    "destination" : "EZE",
+    "weight_kg" : 1805,
+    "volume_cbm" : 6.92,
+    "preference" : "cheapest",
+    "pickup_zone" : "72",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Nova Atlas Cargo",
+    "days" : 7.0,
+    "total_eur" : 5005.60,
+    "billed_kg" : 1805,
+    "source" : "portal",
+    "rate_id" : "R-KlPxzAichTEMmyg4",
+    "valid_until" : "2026-11-21T16:56:00Z"
+  },
+  "replay_trucker" : "Hansekogge Trucking",
+  "replay_pickup_eur" : 366.75,
+  "replay_quote_seconds" : 187.0,
+  "reason_before_terminal_stage" : "Could you please confirm the full five-digit pickup postcode and town?",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 waiting for customer", "12 collecting", "187 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:4125",
+    "to" : "lindqvist-medtech@hackloop.mail",
+    "subject" : "Re: Air freight quote to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4323 ]
+  }, {
+    "action" : "bid:4125:alpenblick-logistik@hackloop.mail:4323",
+    "to" : "alpenblick-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-4125 | pickup from postcode 72146 to STR",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4332 ]
+  }, {
+    "action" : "bid:4125:hansekogge-trucking@hackloop.mail:4323",
+    "to" : "hansekogge-trucking@hackloop.mail",
+    "subject" : "Rate request AEIOU-4125 | pickup from postcode 72146 to STR",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4335 ]
+  }, {
+    "action" : "bid:4125:aurelia-air-cargo@hackloop.mail",
+    "to" : "aurelia-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-4125 | STR to EZE",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4334 ]
+  }, {
+    "action" : "bid:4125:fjordline-air-cargo@hackloop.mail",
+    "to" : "fjordline-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-4125 | STR to EZE",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4125:nova-atlas-cargo@hackloop.mail",
+    "to" : "nova-atlas-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-4125 | STR to EZE",
+    "after_seconds" : 12.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "quote:4125",
+    "to" : "lindqvist-medtech@hackloop.mail",
+    "subject" : "Re: Air freight quote to EZE",
+    "after_seconds" : 187.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 12.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 12.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 47.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 47.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 82.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 82.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 117.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 117.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 152.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 152.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 187.0,
+    "visible_offers" : 6,
+    "results_at_seconds" : 187.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "alpenblick-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4332,
+    "euros" : "417.85",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4125:alpenblick-logistik@hackloop.mail:4323"
+  }, {
+    "email" : "aurelia-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 4334,
+    "euros" : "5974.55",
+    "days" : 6,
+    "issue" : null,
+    "bid_action" : "bid:4125:aurelia-air-cargo@hackloop.mail"
+  }, {
+    "email" : "fjordline-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4125:fjordline-air-cargo@hackloop.mail"
+  }, {
+    "email" : "hansekogge-trucking@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4335,
+    "euros" : "366.75",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4125:hansekogge-trucking@hackloop.mail:4323"
+  }, {
+    "email" : "nova-atlas-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4125:nova-atlas-cargo@hackloop.mail"
+  } ]
+}, {
+  "round" : 18,
+  "request_id" : 4361,
+  "official" : {
+    "round_no" : 18,
+    "sent_at" : "2026-11-21T16:44:16.160345+00:00",
+    "answered_at" : "2026-11-21T16:45:01.892348+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 0.0,
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 29.6,
+      "tracking" : 0.0
+    },
+    "total" : 44.6,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Lumen Air Cargo",
+    "days" : 5.208333333333333,
+    "total_eur" : 2278.18,
+    "billed_kg" : 1000,
+    "source" : "portal",
+    "rate_id" : "R-BdBgpr1fpsC2jP__",
+    "valid_until" : "2026-11-21T16:59:30.278446Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "CGN",
+    "destination" : "SGN",
+    "weight_kg" : 874,
+    "volume_cbm" : 2.77,
+    "preference" : "cheapest",
+    "pickup_zone" : "51",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Lumen Air Cargo",
+    "days" : 4.0,
+    "total_eur" : 2278.18,
+    "billed_kg" : 1000,
+    "source" : "portal",
+    "rate_id" : "R-BdBgpr1fpsC2jP__",
+    "valid_until" : "2026-11-21T16:59:00Z"
+  },
+  "replay_trucker" : "Elbkante Logistik",
+  "replay_pickup_eur" : 128.18,
+  "replay_quote_seconds" : 51.0,
+  "reason_before_terminal_stage" : "Could you please confirm the full five-digit pickup postcode and town?",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 waiting for customer", "11 collecting", "51 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:4361",
+    "to" : "lindqvist-medtech@hackloop.mail",
+    "subject" : "Re: Air freight quote to SGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4410 ]
+  }, {
+    "action" : "bid:4361:maintal-transport-logistik@hackloop.mail:4410",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-4361 | pickup from postcode 51115 to CGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4481 ]
+  }, {
+    "action" : "bid:4361:elbkante-logistik@hackloop.mail:4410",
+    "to" : "elbkante-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-4361 | pickup from postcode 51115 to CGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4482 ]
+  }, {
+    "action" : "bid:4361:cobalt-skylift@hackloop.mail",
+    "to" : "cobalt-skylift@hackloop.mail",
+    "subject" : "Rate request AEIOU-4361 | CGN to SGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4489 ]
+  }, {
+    "action" : "bid:4361:juniper-cargo-lines@hackloop.mail",
+    "to" : "juniper-cargo-lines@hackloop.mail",
+    "subject" : "Rate request AEIOU-4361 | CGN to SGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4361:lumen-air-cargo@hackloop.mail",
+    "to" : "lumen-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-4361 | CGN to SGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "quote:4361",
+    "to" : "lindqvist-medtech@hackloop.mail",
+    "subject" : "Re: Air freight quote to SGN",
+    "after_seconds" : 51.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 11.0,
+    "visible_offers" : 4,
+    "results_at_seconds" : 14.118,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "cobalt-skylift@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 4489,
+    "euros" : "2691.92",
+    "days" : 4,
+    "issue" : null,
+    "bid_action" : "bid:4361:cobalt-skylift@hackloop.mail"
+  }, {
+    "email" : "elbkante-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4482,
+    "euros" : "128.18",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4361:elbkante-logistik@hackloop.mail:4410"
+  }, {
+    "email" : "juniper-cargo-lines@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4361:juniper-cargo-lines@hackloop.mail"
+  }, {
+    "email" : "lumen-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4361:lumen-air-cargo@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4481,
+    "euros" : "212.14",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4361:maintal-transport-logistik@hackloop.mail:4410"
+  } ]
+}, {
+  "round" : 19,
+  "request_id" : 4637,
+  "official" : {
+    "round_no" : 19,
+    "sent_at" : "2026-11-21T16:50:20.912493+00:00",
+    "answered_at" : "2026-11-21T16:52:53.843503+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "cost" : 0.0,
+      "time" : 12.94,
+      "booking" : 0.0,
+      "accuracy" : 44.34,
+      "tracking" : 0.0
+    },
+    "total" : 57.28,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Lumen Air Cargo",
+    "days" : 1.5416666666666665,
+    "total_eur" : 6166.47,
+    "billed_kg" : 2100.86,
+    "source" : "portal",
+    "rate_id" : "R-ASQxUlHOfzXXS90O",
+    "valid_until" : "2026-11-21T17:06:49.569004Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 2,
+  "shipment" : {
+    "origin" : "CGN",
+    "destination" : "DFW",
+    "weight_kg" : 1795,
+    "volume_cbm" : 12.58,
+    "preference" : "fastest",
+    "pickup_zone" : "51",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "expired",
+  "replay_offer" : null,
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : null,
+  "reason_before_terminal_stage" : "Waiting for a confirmed pickup total and transit time.",
+  "recorded_replies_injected" : 6,
+  "stage_trace" : [ "0 waiting for customer", "11 collecting", "51 waiting for pickup", "83 collecting", "122 waiting for pickup", "356 expired" ],
+  "gateway_calls" : [ ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:4637",
+    "to" : "rheintal-elektronik@hackloop.mail",
+    "subject" : "Re: Air freight quote to DFW",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4677 ]
+  }, {
+    "action" : "bid:4637:maintal-transport-logistik@hackloop.mail:4677",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-4637 | pickup from postcode 51804 to CGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4763 ]
+  }, {
+    "action" : "bid:4637:elbkante-logistik@hackloop.mail:4677",
+    "to" : "elbkante-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-4637 | pickup from postcode 51804 to CGN",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4764 ]
+  }, {
+    "action" : "bid:4637:lumen-air-cargo@hackloop.mail",
+    "to" : "lumen-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-4637 | CGN to DFW",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4770 ]
+  }, {
+    "action" : "bid:4637:quetzal-air-freight@hackloop.mail",
+    "to" : "quetzal-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-4637 | CGN to DFW",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4637:ultraviolet-air-freight@hackloop.mail",
+    "to" : "ultraviolet-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-4637 | CGN to DFW",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4637:elbkante-logistik@hackloop.mail:4677:transit",
+    "to" : "elbkante-logistik@hackloop.mail",
+    "subject" : "Re: Rate request AEIOU-4637 | pickup from postcode 51804 to CGN",
+    "after_seconds" : 51.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4898 ]
+  }, {
+    "action" : "bid:4637:maintal-transport-logistik@hackloop.mail:4677:transit",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Re: Rate request AEIOU-4637 | pickup from postcode 51804 to CGN",
+    "after_seconds" : 51.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4897 ]
+  }, {
+    "action" : "bid:4637:westfalenroute@hackloop.mail:4677",
+    "to" : "westfalenroute@hackloop.mail",
+    "subject" : "Rate request AEIOU-4637 | pickup from postcode 51804 to CGN",
+    "after_seconds" : 82.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4637:bodenseefracht@hackloop.mail:4677",
+    "to" : "bodenseefracht@hackloop.mail",
+    "subject" : "Rate request AEIOU-4637 | pickup from postcode 51804 to CGN",
+    "after_seconds" : 82.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 11.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 11.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 46.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 46.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 81.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 81.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 116.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 116.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "bodenseefracht@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4637:bodenseefracht@hackloop.mail:4677"
+  }, {
+    "email" : "elbkante-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4898,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:4637:elbkante-logistik@hackloop.mail:4677"
+  }, {
+    "email" : "lumen-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 4770,
+    "euros" : "5819.38",
+    "days" : 1,
+    "issue" : null,
+    "bid_action" : "bid:4637:lumen-air-cargo@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 4897,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:4637:maintal-transport-logistik@hackloop.mail:4677"
+  }, {
+    "email" : "quetzal-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4637:quetzal-air-freight@hackloop.mail"
+  }, {
+    "email" : "ultraviolet-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4637:ultraviolet-air-freight@hackloop.mail"
+  }, {
+    "email" : "westfalenroute@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4637:westfalenroute@hackloop.mail:4677"
+  } ]
+}, {
+  "round" : 20,
+  "request_id" : 4917,
+  "official" : {
+    "round_no" : 20,
+    "sent_at" : "2026-11-21T16:56:24.003949+00:00",
+    "answered_at" : null,
+    "verdict" : "no answer",
+    "reason" : null,
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : null,
+  "historical_operator" : false,
+  "historical_stage" : "expired",
+  "historical_portal_offer_count" : 2,
+  "shipment" : {
+    "origin" : "MUC",
+    "destination" : "RUH",
+    "weight_kg" : 970,
+    "volume_cbm" : 9.06,
+    "preference" : "fastest",
+    "pickup_zone" : "86",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "expired",
+  "replay_offer" : null,
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : null,
+  "reason_before_terminal_stage" : "Waiting for a confirmed pickup total and transit time. Airport delivery offered as an alternative.",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 waiting for customer", "11 collecting", "51 waiting for pickup", "52 collecting", "91 waiting for pickup", "356 expired" ],
+  "gateway_calls" : [ ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "pickup-postcode:4917",
+    "to" : "weidner-spielwaren@hackloop.mail",
+    "subject" : "Re: Air freight quote to RUH",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 4968 ]
+  }, {
+    "action" : "bid:4917:maintal-transport-logistik@hackloop.mail:4968:area",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-4917 | pickup from Augsburg to MUC",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5171 ]
+  }, {
+    "action" : "bid:4917:neckarstrom-kurier@hackloop.mail:4968:area",
+    "to" : "neckarstrom-kurier@hackloop.mail",
+    "subject" : "Rate request AEIOU-4917 | pickup from Augsburg to MUC",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5172 ]
+  }, {
+    "action" : "bid:4917:juniper-cargo-lines@hackloop.mail",
+    "to" : "juniper-cargo-lines@hackloop.mail",
+    "subject" : "Rate request AEIOU-4917 | MUC to RUH",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4917:quetzal-air-freight@hackloop.mail",
+    "to" : "quetzal-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-4917 | MUC to RUH",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4917:ultraviolet-air-freight@hackloop.mail",
+    "to" : "ultraviolet-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-4917 | MUC to RUH",
+    "after_seconds" : 11.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:4917:sternmeile-logistik@hackloop.mail:4968:area",
+    "to" : "sternmeile-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-4917 | pickup from Augsburg to MUC",
+    "after_seconds" : 51.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5178 ]
+  }, {
+    "action" : "airport-delivery:4917",
+    "to" : "weidner-spielwaren@hackloop.mail",
+    "subject" : "Re: Air freight quote to RUH",
+    "after_seconds" : 51.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 11.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 11.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 46.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 46.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 81.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 81.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 116.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 116.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 151.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 151.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 186.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 186.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 221.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 221.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 256.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 256.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "juniper-cargo-lines@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4917:juniper-cargo-lines@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 5171,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:4917:maintal-transport-logistik@hackloop.mail:4968:area"
+  }, {
+    "email" : "neckarstrom-kurier@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 5172,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:4917:neckarstrom-kurier@hackloop.mail:4968:area"
+  }, {
+    "email" : "quetzal-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4917:quetzal-air-freight@hackloop.mail"
+  }, {
+    "email" : "sternmeile-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 5178,
+    "euros" : null,
+    "days" : null,
+    "issue" : "No unambiguous EUR total and transit",
+    "bid_action" : "bid:4917:sternmeile-logistik@hackloop.mail:4968:area"
+  }, {
+    "email" : "ultraviolet-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:4917:ultraviolet-air-freight@hackloop.mail"
+  } ]
+}, {
+  "round" : 21,
+  "request_id" : 5241,
+  "official" : {
+    "round_no" : 21,
+    "sent_at" : "2026-11-21T17:02:28.772314+00:00",
+    "answered_at" : "2026-11-21T17:03:01.687177+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "tracking" : 0.0
+    },
+    "total" : 60.0,
+    "closed" : true,
+    "cost_pending" : true
+  },
+  "historical_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 3.5,
+    "total_eur" : 2470.48,
+    "billed_kg" : 676,
+    "source" : "portal",
+    "rate_id" : "R-ZHBpY7pLXu2Hx1Rv",
+    "valid_until" : "2026-11-21T17:17:30.175988Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 2,
+  "shipment" : {
+    "origin" : "HAM",
+    "destination" : "EZE",
+    "weight_kg" : 676,
+    "volume_cbm" : 3.44,
+    "preference" : "fastest",
+    "pickup_zone" : "28",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 3.5,
+    "total_eur" : 2470.48,
+    "billed_kg" : 676,
+    "source" : "portal",
+    "rate_id" : "R-ZHBpY7pLXu2Hx1Rv",
+    "valid_until" : "2026-11-21T17:17:00Z"
+  },
+  "replay_trucker" : "Schwabenbote Transporte",
+  "replay_pickup_eur" : 205.88,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 2,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:5241:meridian-freightways@hackloop.mail",
+    "to" : "meridian-freightways@hackloop.mail",
+    "subject" : "Rate request AEIOU-5241 | HAM to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:5241:wayzata-air-cargo@hackloop.mail",
+    "to" : "wayzata-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-5241 | HAM to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:5241:tamarind-airways@hackloop.mail",
+    "to" : "tamarind-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-5241 | HAM to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:5241:schwabenbote-transporte@hackloop.mail",
+    "to" : "schwabenbote-transporte@hackloop.mail",
+    "subject" : "Rate request AEIOU-5241 | pickup from postcode 28261 to HAM",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5372 ]
+  }, {
+    "action" : "bid:5241:spessart-spedition@hackloop.mail",
+    "to" : "spessart-spedition@hackloop.mail",
+    "subject" : "Rate request AEIOU-5241 | pickup from postcode 28261 to HAM",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5375 ]
+  }, {
+    "action" : "quote:5241",
+    "to" : "rheintal-elektronik@hackloop.mail",
+    "subject" : "Re: Air freight quote to EZE",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 1.442,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "meridian-freightways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5241:meridian-freightways@hackloop.mail"
+  }, {
+    "email" : "schwabenbote-transporte@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 5372,
+    "euros" : "205.88",
+    "days" : 0.5,
+    "issue" : null,
+    "bid_action" : "bid:5241:schwabenbote-transporte@hackloop.mail"
+  }, {
+    "email" : "spessart-spedition@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 5375,
+    "euros" : "165.36",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5241:spessart-spedition@hackloop.mail"
+  }, {
+    "email" : "tamarind-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5241:tamarind-airways@hackloop.mail"
+  }, {
+    "email" : "wayzata-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5241:wayzata-air-cargo@hackloop.mail"
+  } ]
+}, {
+  "round" : 22,
+  "request_id" : 5521,
+  "official" : {
+    "round_no" : 22,
+    "sent_at" : "2026-11-21T17:08:33.414867+00:00",
+    "answered_at" : "2026-11-21T17:11:09.941960+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "time" : 12.72,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "tracking" : 0.0
+    },
+    "total" : 57.72,
+    "closed" : true,
+    "cost_pending" : true
+  },
+  "historical_offer" : {
+    "airline" : "Juniper Cargo Lines",
+    "days" : 2.4583333333333335,
+    "total_eur" : 7637.01,
+    "billed_kg" : 2244.48,
+    "source" : "portal",
+    "rate_id" : "R-aX-uSK2AeDWRagpk",
+    "valid_until" : "2026-11-21T17:26:09.807425Z"
+  },
+  "historical_operator" : true,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 3,
+  "shipment" : {
+    "origin" : "CGN",
+    "destination" : "SGN",
+    "weight_kg" : 1403,
+    "volume_cbm" : 13.44,
+    "preference" : "fastest",
+    "pickup_zone" : "53",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Juniper Cargo Lines",
+    "days" : 3.291666666666667,
+    "total_eur" : 7357.56,
+    "billed_kg" : 2244.48,
+    "source" : "portal",
+    "rate_id" : "R-aX-uSK2AeDWRagpk",
+    "valid_until" : "2026-11-21T17:23:00Z"
+  },
+  "replay_trucker" : "Ruhrpott Express",
+  "replay_pickup_eur" : 220.11,
+  "replay_quote_seconds" : 175.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "175 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:5521:cobalt-skylift@hackloop.mail",
+    "to" : "cobalt-skylift@hackloop.mail",
+    "subject" : "Rate request AEIOU-5521 | CGN to SGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5658 ]
+  }, {
+    "action" : "bid:5521:juniper-cargo-lines@hackloop.mail",
+    "to" : "juniper-cargo-lines@hackloop.mail",
+    "subject" : "Rate request AEIOU-5521 | CGN to SGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:5521:lumen-air-cargo@hackloop.mail",
+    "to" : "lumen-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-5521 | CGN to SGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:5521:ruhrpott-express@hackloop.mail",
+    "to" : "ruhrpott-express@hackloop.mail",
+    "subject" : "Rate request AEIOU-5521 | pickup from postcode 53088 to CGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5656 ]
+  }, {
+    "action" : "bid:5521:spessart-spedition@hackloop.mail",
+    "to" : "spessart-spedition@hackloop.mail",
+    "subject" : "Rate request AEIOU-5521 | pickup from postcode 53088 to CGN",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 5659 ]
+  }, {
+    "action" : "quote:5521",
+    "to" : "auer-maschinenbau@hackloop.mail",
+    "subject" : "Re: Air freight quote request – Bonn to SGN",
+    "after_seconds" : 175.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 35.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 70.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 70.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 105.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 105.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 140.0,
+    "visible_offers" : 2,
+    "results_at_seconds" : 140.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 175.0,
+    "visible_offers" : 3,
+    "results_at_seconds" : 175.0,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "cobalt-skylift@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 5658,
+    "euros" : "5633.64",
+    "days" : 4,
+    "issue" : null,
+    "bid_action" : "bid:5521:cobalt-skylift@hackloop.mail"
+  }, {
+    "email" : "juniper-cargo-lines@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5521:juniper-cargo-lines@hackloop.mail"
+  }, {
+    "email" : "lumen-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5521:lumen-air-cargo@hackloop.mail"
+  }, {
+    "email" : "ruhrpott-express@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 5656,
+    "euros" : "220.11",
+    "days" : 1.2916666666666667,
+    "issue" : null,
+    "bid_action" : "bid:5521:ruhrpott-express@hackloop.mail"
+  }, {
+    "email" : "spessart-spedition@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 5659,
+    "euros" : "268.45",
+    "days" : 1.3333333333333333,
+    "issue" : null,
+    "bid_action" : "bid:5521:spessart-spedition@hackloop.mail"
+  } ]
+}, {
+  "round" : 23,
+  "request_id" : 5842,
+  "official" : {
+    "round_no" : 23,
+    "sent_at" : "2026-11-21T17:14:36.384410+00:00",
+    "answered_at" : "2026-11-21T17:14:39.005614+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "tracking" : 10.0
+    },
+    "total" : 70.0,
+    "closed" : true,
+    "cost_pending" : true
+  },
+  "historical_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 4.0,
+    "total_eur" : 1987.7,
+    "billed_kg" : 1148.96,
+    "source" : "portal",
+    "rate_id" : "R-ANI_i0EE_l-4L4Xx",
+    "valid_until" : "2026-11-21T17:29:38.814057Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 3,
+  "shipment" : {
+    "origin" : "FRA",
+    "destination" : "DEL",
+    "weight_kg" : 736,
+    "volume_cbm" : 6.88,
+    "preference" : "cheapest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 4.0,
+    "total_eur" : 1987.70,
+    "billed_kg" : 1148.96,
+    "source" : "portal",
+    "rate_id" : "R-ANI_i0EE_l-4L4Xx",
+    "valid_until" : "2026-11-21T17:29:38.814057Z"
+  },
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 0,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:5842:kestrel-airways@hackloop.mail",
+    "to" : "kestrel-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-5842 | FRA to DEL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:5842:meridian-freightways@hackloop.mail",
+    "to" : "meridian-freightways@hackloop.mail",
+    "subject" : "Rate request AEIOU-5842 | FRA to DEL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:5842:solace-air-cargo@hackloop.mail",
+    "to" : "solace-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-5842 | FRA to DEL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "quote:5842",
+    "to" : "lindqvist-medtech@hackloop.mail",
+    "subject" : "Re: Air freight quote: FRA–DEL",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 3,
+    "results_at_seconds" : 2.514,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "kestrel-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5842:kestrel-airways@hackloop.mail"
+  }, {
+    "email" : "meridian-freightways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5842:meridian-freightways@hackloop.mail"
+  }, {
+    "email" : "solace-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:5842:solace-air-cargo@hackloop.mail"
+  } ]
+}, {
+  "round" : 24,
+  "request_id" : 6053,
+  "official" : {
+    "round_no" : 24,
+    "sent_at" : "2026-11-21T17:20:39.836693+00:00",
+    "answered_at" : "2026-11-21T17:21:14.524814+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 45.0,
+      "tracking" : 10.0
+    },
+    "total" : 70.0,
+    "closed" : true,
+    "cost_pending" : true
+  },
+  "historical_offer" : {
+    "airline" : "Riverbend Airlines Cargo",
+    "days" : 2.4583333333333335,
+    "total_eur" : 4500.02,
+    "billed_kg" : 2000,
+    "source" : "portal",
+    "rate_id" : "R-ZS1laxxkOtzKjjVf",
+    "valid_until" : "2026-11-21T17:35:41.750785Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 6,
+  "shipment" : {
+    "origin" : "DUS",
+    "destination" : "ATL",
+    "weight_kg" : 1754,
+    "volume_cbm" : 6.83,
+    "preference" : "fastest",
+    "pickup_zone" : "41",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Riverbend Airlines Cargo",
+    "days" : 2.4583333333333335,
+    "total_eur" : 4500.02,
+    "billed_kg" : 2000,
+    "source" : "portal",
+    "rate_id" : "R-ZS1laxxkOtzKjjVf",
+    "valid_until" : "2026-11-21T17:35:00Z"
+  },
+  "replay_trucker" : "Ruhrpott Express",
+  "replay_pickup_eur" : 340.02,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:6053:meridian-freightways@hackloop.mail",
+    "to" : "meridian-freightways@hackloop.mail",
+    "subject" : "Rate request AEIOU-6053 | DUS to ATL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6153 ]
+  }, {
+    "action" : "bid:6053:polaris-air-logistics@hackloop.mail",
+    "to" : "polaris-air-logistics@hackloop.mail",
+    "subject" : "Rate request AEIOU-6053 | DUS to ATL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6053:riverbend-airlines-cargo@hackloop.mail",
+    "to" : "riverbend-airlines-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-6053 | DUS to ATL",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6053:ruhrpott-express@hackloop.mail",
+    "to" : "ruhrpott-express@hackloop.mail",
+    "subject" : "Rate request AEIOU-6053 | pickup from postcode 41007 to DUS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6157 ]
+  }, {
+    "action" : "bid:6053:odenwald-cargo@hackloop.mail",
+    "to" : "odenwald-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-6053 | pickup from postcode 41007 to DUS",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6156 ]
+  }, {
+    "action" : "quote:6053",
+    "to" : "weidner-spielwaren@hackloop.mail",
+    "subject" : "Re: Air freight quote to ATL",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 6,
+    "results_at_seconds" : 1.982,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "meridian-freightways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 6153,
+    "euros" : "4402.54",
+    "days" : 5,
+    "issue" : null,
+    "bid_action" : "bid:6053:meridian-freightways@hackloop.mail"
+  }, {
+    "email" : "odenwald-cargo@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 6156,
+    "euros" : "190.32",
+    "days" : 1.0833333333333333,
+    "issue" : null,
+    "bid_action" : "bid:6053:odenwald-cargo@hackloop.mail"
+  }, {
+    "email" : "polaris-air-logistics@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6053:polaris-air-logistics@hackloop.mail"
+  }, {
+    "email" : "riverbend-airlines-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6053:riverbend-airlines-cargo@hackloop.mail"
+  }, {
+    "email" : "ruhrpott-express@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 6157,
+    "euros" : "340.02",
+    "days" : 0.4583333333333333,
+    "issue" : null,
+    "bid_action" : "bid:6053:ruhrpott-express@hackloop.mail"
+  } ]
+}, {
+  "round" : 25,
+  "request_id" : 6320,
+  "official" : {
+    "round_no" : 25,
+    "sent_at" : "2026-11-21T17:26:44.340991+00:00",
+    "answered_at" : "2026-11-21T17:27:25.338984+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 28.96,
+      "tracking" : 10.0
+    },
+    "total" : 53.96,
+    "closed" : true,
+    "cost_pending" : true
+  },
+  "historical_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 4.875,
+    "total_eur" : 2451.84,
+    "billed_kg" : 544,
+    "source" : "portal",
+    "rate_id" : "R--JXsDfWz4XqQbieu",
+    "valid_until" : "2026-11-21T17:41:47.580261Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 6,
+  "shipment" : {
+    "origin" : "STR",
+    "destination" : "EZE",
+    "weight_kg" : 544,
+    "volume_cbm" : 1.86,
+    "preference" : "fastest",
+    "pickup_zone" : "70",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Fjordline Air Cargo",
+    "days" : 4.875,
+    "total_eur" : 2451.84,
+    "billed_kg" : 544,
+    "source" : "portal",
+    "rate_id" : "R--JXsDfWz4XqQbieu",
+    "valid_until" : "2026-11-21T17:41:00Z"
+  },
+  "replay_trucker" : "Isarwelle Spedition",
+  "replay_pickup_eur" : 134.40,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "recorded quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:6320:aurelia-air-cargo@hackloop.mail",
+    "to" : "aurelia-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-6320 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6488 ]
+  }, {
+    "action" : "bid:6320:fjordline-air-cargo@hackloop.mail",
+    "to" : "fjordline-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-6320 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6320:nova-atlas-cargo@hackloop.mail",
+    "to" : "nova-atlas-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-6320 | STR to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6320:rheinufer-spedition@hackloop.mail",
+    "to" : "rheinufer-spedition@hackloop.mail",
+    "subject" : "Rate request AEIOU-6320 | pickup from postcode 70498 to STR",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6506 ]
+  }, {
+    "action" : "bid:6320:isarwelle-spedition@hackloop.mail",
+    "to" : "isarwelle-spedition@hackloop.mail",
+    "subject" : "Rate request AEIOU-6320 | pickup from postcode 70498 to STR",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6511 ]
+  }, {
+    "action" : "quote:6320",
+    "to" : "kessler-feinmechanik@hackloop.mail",
+    "subject" : "Re: Air freight quote request to EZE",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 6,
+    "results_at_seconds" : 4.161,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "aurelia-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 6488,
+    "euros" : "2143.36",
+    "days" : 6,
+    "issue" : null,
+    "bid_action" : "bid:6320:aurelia-air-cargo@hackloop.mail"
+  }, {
+    "email" : "fjordline-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6320:fjordline-air-cargo@hackloop.mail"
+  }, {
+    "email" : "isarwelle-spedition@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 6511,
+    "euros" : "134.40",
+    "days" : 0.875,
+    "issue" : null,
+    "bid_action" : "bid:6320:isarwelle-spedition@hackloop.mail"
+  }, {
+    "email" : "nova-atlas-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6320:nova-atlas-cargo@hackloop.mail"
+  }, {
+    "email" : "rheinufer-spedition@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 6506,
+    "euros" : "94.08",
+    "days" : 1.1666666666666667,
+    "issue" : null,
+    "bid_action" : "bid:6320:rheinufer-spedition@hackloop.mail"
+  } ]
+}, {
+  "round" : 26,
+  "request_id" : 6627,
+  "official" : {
+    "round_no" : 26,
+    "sent_at" : "2026-11-21T17:32:49.071473+00:00",
+    "answered_at" : "2026-11-21T17:33:24.815942+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : {
+      "time" : 15.0,
+      "booking" : 0.0,
+      "accuracy" : 36.87,
+      "tracking" : 10.0
+    },
+    "total" : 61.87,
+    "closed" : true,
+    "cost_pending" : true
+  },
+  "historical_offer" : {
+    "airline" : "Nova Atlas Cargo",
+    "days" : 2.625,
+    "total_eur" : 5336.56,
+    "billed_kg" : 1708,
+    "source" : "portal",
+    "rate_id" : "R-M5C3rXqYEKxBxPhQ",
+    "valid_until" : "2026-11-21T17:47:50.306556Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 3,
+  "shipment" : {
+    "origin" : "MUC",
+    "destination" : "BKK",
+    "weight_kg" : 1708,
+    "volume_cbm" : 5.32,
+    "preference" : "fastest",
+    "pickup_zone" : "81",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Nova Atlas Cargo",
+    "days" : 2.625,
+    "total_eur" : 5336.56,
+    "billed_kg" : 1708,
+    "source" : "portal",
+    "rate_id" : "R-M5C3rXqYEKxBxPhQ",
+    "valid_until" : "2026-11-21T17:47:00Z"
+  },
+  "replay_trucker" : "Alpenblick Logistik",
+  "replay_pickup_eur" : 349.20,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 4,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "recorded quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:6627:nova-atlas-cargo@hackloop.mail",
+    "to" : "nova-atlas-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-6627 | MUC to BKK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6725 ]
+  }, {
+    "action" : "bid:6627:polaris-air-logistics@hackloop.mail",
+    "to" : "polaris-air-logistics@hackloop.mail",
+    "subject" : "Rate request AEIOU-6627 | MUC to BKK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6728 ]
+  }, {
+    "action" : "bid:6627:tamarind-airways@hackloop.mail",
+    "to" : "tamarind-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-6627 | MUC to BKK",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6627:alpenblick-logistik@hackloop.mail",
+    "to" : "alpenblick-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-6627 | pickup from postcode 81617 to MUC",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6735 ]
+  }, {
+    "action" : "bid:6627:neckarstrom-kurier@hackloop.mail",
+    "to" : "neckarstrom-kurier@hackloop.mail",
+    "subject" : "Rate request AEIOU-6627 | pickup from postcode 81617 to MUC",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 6732 ]
+  }, {
+    "action" : "quote:6627",
+    "to" : "auer-maschinenbau@hackloop.mail",
+    "subject" : "Re: Air freight quote to BKK",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 3,
+    "results_at_seconds" : 1.321,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "alpenblick-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 6735,
+    "euros" : "349.20",
+    "days" : 0.625,
+    "issue" : null,
+    "bid_action" : "bid:6627:alpenblick-logistik@hackloop.mail"
+  }, {
+    "email" : "neckarstrom-kurier@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 6732,
+    "euros" : "245.80",
+    "days" : 1.125,
+    "issue" : null,
+    "bid_action" : "bid:6627:neckarstrom-kurier@hackloop.mail"
+  }, {
+    "email" : "nova-atlas-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 6725,
+    "euros" : "4987.36",
+    "days" : 2,
+    "issue" : null,
+    "bid_action" : "bid:6627:nova-atlas-cargo@hackloop.mail"
+  }, {
+    "email" : "polaris-air-logistics@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 6728,
+    "euros" : "4679.92",
+    "days" : 3,
+    "issue" : null,
+    "bid_action" : "bid:6627:polaris-air-logistics@hackloop.mail"
+  }, {
+    "email" : "tamarind-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6627:tamarind-airways@hackloop.mail"
+  } ]
+}, {
+  "round" : 27,
+  "request_id" : 6880,
+  "official" : {
+    "round_no" : 27,
+    "sent_at" : "2026-11-21T17:38:52.827984+00:00",
+    "answered_at" : "2026-11-21T17:41:04.208379+00:00",
+    "verdict" : "rejected",
+    "reason" : "too_low",
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Wayzata Air Cargo",
+    "days" : 7.25,
+    "total_eur" : 2222.36,
+    "billed_kg" : 1000,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : null
+  },
+  "historical_operator" : true,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 0,
+  "shipment" : {
+    "origin" : "HAM",
+    "destination" : "EZE",
+    "weight_kg" : 859,
+    "volume_cbm" : 3.50,
+    "preference" : "fastest",
+    "pickup_zone" : "24",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Wayzata Air Cargo",
+    "days" : 7.25,
+    "total_eur" : 2222.36,
+    "billed_kg" : 1000,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : "2026-11-21T17:54:00Z"
+  },
+  "replay_trucker" : "Alpenblick Logistik",
+  "replay_pickup_eur" : 92.36,
+  "replay_quote_seconds" : 200.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 2,
+  "stage_trace" : [ "0 collecting", "200 sent" ],
+  "gateway_calls" : [ "recorded quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:6880:meridian-freightways@hackloop.mail",
+    "to" : "meridian-freightways@hackloop.mail",
+    "subject" : "Rate request AEIOU-6880 | HAM to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6880:wayzata-air-cargo@hackloop.mail",
+    "to" : "wayzata-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-6880 | HAM to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6880:tamarind-airways@hackloop.mail",
+    "to" : "tamarind-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-6880 | HAM to EZE",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:6880:maintal-transport-logistik@hackloop.mail",
+    "to" : "maintal-transport-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-6880 | pickup from postcode 24489 to HAM",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 7060 ]
+  }, {
+    "action" : "bid:6880:alpenblick-logistik@hackloop.mail",
+    "to" : "alpenblick-logistik@hackloop.mail",
+    "subject" : "Rate request AEIOU-6880 | pickup from postcode 24489 to HAM",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 7067 ]
+  }, {
+    "action" : "quote:6880",
+    "to" : "kessler-feinmechanik@hackloop.mail",
+    "subject" : "Re: Air freight quote request to EZE",
+    "after_seconds" : 200.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 35.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 70.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 70.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 105.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 105.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 140.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 140.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 175.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 175.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "alpenblick-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 7067,
+    "euros" : "92.36",
+    "days" : 1.25,
+    "issue" : null,
+    "bid_action" : "bid:6880:alpenblick-logistik@hackloop.mail"
+  }, {
+    "email" : "maintal-transport-logistik@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 7060,
+    "euros" : "137.13",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6880:maintal-transport-logistik@hackloop.mail"
+  }, {
+    "email" : "meridian-freightways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6880:meridian-freightways@hackloop.mail"
+  }, {
+    "email" : "tamarind-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6880:tamarind-airways@hackloop.mail"
+  }, {
+    "email" : "wayzata-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:6880:wayzata-air-cargo@hackloop.mail"
+  } ]
+}, {
+  "round" : 28,
+  "request_id" : 7235,
+  "official" : {
+    "round_no" : 28,
+    "sent_at" : "2026-11-21T17:44:57.404211+00:00",
+    "answered_at" : "2026-11-21T17:48:20.790526+00:00",
+    "verdict" : "rejected",
+    "reason" : "too_high",
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Quetzal Air Freight",
+    "days" : 2.0,
+    "total_eur" : 416.16,
+    "billed_kg" : 116.9,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : null
+  },
+  "historical_operator" : true,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 0,
+  "shipment" : {
+    "origin" : "CGN",
+    "destination" : "DFW",
+    "weight_kg" : 85,
+    "volume_cbm" : 0.70,
+    "preference" : "cheapest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Quetzal Air Freight",
+    "days" : 2.0,
+    "total_eur" : 416.16,
+    "billed_kg" : 116.90,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : null
+  },
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : 200.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 0,
+  "stage_trace" : [ "0 collecting", "200 sent" ],
+  "gateway_calls" : [ "assumed successful advisory quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:7235:lumen-air-cargo@hackloop.mail",
+    "to" : "lumen-air-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-7235 | CGN to DFW",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7235:quetzal-air-freight@hackloop.mail",
+    "to" : "quetzal-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-7235 | CGN to DFW",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7235:ultraviolet-air-freight@hackloop.mail",
+    "to" : "ultraviolet-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-7235 | CGN to DFW",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7235:riverbend-airlines-cargo@hackloop.mail",
+    "to" : "riverbend-airlines-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-7235 | CGN to DFW",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7235:yellowtail-air-freight@hackloop.mail",
+    "to" : "yellowtail-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-7235 | CGN to DFW",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "quote:7235",
+    "to" : "weidner-spielwaren@hackloop.mail",
+    "subject" : "Re: Air freight quote: CGN to DFW",
+    "after_seconds" : 200.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 35.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 70.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 70.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 105.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 105.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 140.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 140.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 175.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 175.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "lumen-air-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7235:lumen-air-cargo@hackloop.mail"
+  }, {
+    "email" : "quetzal-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7235:quetzal-air-freight@hackloop.mail"
+  }, {
+    "email" : "riverbend-airlines-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7235:riverbend-airlines-cargo@hackloop.mail"
+  }, {
+    "email" : "ultraviolet-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7235:ultraviolet-air-freight@hackloop.mail"
+  }, {
+    "email" : "yellowtail-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7235:yellowtail-air-freight@hackloop.mail"
+  } ]
+}, {
+  "round" : 29,
+  "request_id" : 7446,
+  "official" : {
+    "round_no" : 29,
+    "sent_at" : "2026-11-21T17:51:02.408425+00:00",
+    "answered_at" : "2026-11-21T17:51:37.546988+00:00",
+    "verdict" : "rejected",
+    "reason" : "too_high",
+    "booked" : null,
+    "points" : { },
+    "total" : null,
+    "closed" : true,
+    "cost_pending" : false
+  },
+  "historical_offer" : {
+    "airline" : "Helix Air Freight",
+    "days" : 2.0,
+    "total_eur" : 4118.75,
+    "billed_kg" : 1225,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : null
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 0,
+  "shipment" : {
+    "origin" : "FRA",
+    "destination" : "PVG",
+    "weight_kg" : 1225,
+    "volume_cbm" : 4.62,
+    "preference" : "cheapest",
+    "pickup_zone" : "63",
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Helix Air Freight",
+    "days" : 2.0,
+    "total_eur" : 4118.75,
+    "billed_kg" : 1225,
+    "source" : "sheet",
+    "rate_id" : null,
+    "valid_until" : "2026-11-21T18:06:00Z"
+  },
+  "replay_trucker" : "Westfalenroute",
+  "replay_pickup_eur" : 137.50,
+  "replay_quote_seconds" : 200.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 3,
+  "stage_trace" : [ "0 collecting", "200 sent" ],
+  "gateway_calls" : [ "recorded quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:7446:helix-air-freight@hackloop.mail",
+    "to" : "helix-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-7446 | FRA to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 7559 ]
+  }, {
+    "action" : "bid:7446:nova-atlas-cargo@hackloop.mail",
+    "to" : "nova-atlas-cargo@hackloop.mail",
+    "subject" : "Rate request AEIOU-7446 | FRA to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7446:tamarind-airways@hackloop.mail",
+    "to" : "tamarind-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-7446 | FRA to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7446:domblick-kurierdienst@hackloop.mail",
+    "to" : "domblick-kurierdienst@hackloop.mail",
+    "subject" : "Rate request AEIOU-7446 | pickup from postcode 63198 to FRA",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 7562 ]
+  }, {
+    "action" : "bid:7446:westfalenroute@hackloop.mail",
+    "to" : "westfalenroute@hackloop.mail",
+    "subject" : "Rate request AEIOU-7446 | pickup from postcode 63198 to FRA",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ 7566 ]
+  }, {
+    "action" : "quote:7446",
+    "to" : "sonnberg-roesterei@hackloop.mail",
+    "subject" : "Re: Air freight quote request to PVG",
+    "after_seconds" : 200.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 0.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 35.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 35.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 70.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 70.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 105.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 105.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 140.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 140.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  }, {
+    "after_seconds" : 175.0,
+    "visible_offers" : 0,
+    "results_at_seconds" : 175.0,
+    "complete" : false,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "domblick-kurierdienst@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 7562,
+    "euros" : "202.75",
+    "days" : 1.1666666666666667,
+    "issue" : null,
+    "bid_action" : "bid:7446:domblick-kurierdienst@hackloop.mail"
+  }, {
+    "email" : "helix-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : 7559,
+    "euros" : "3981.25",
+    "days" : 2,
+    "issue" : null,
+    "bid_action" : "bid:7446:helix-air-freight@hackloop.mail"
+  }, {
+    "email" : "nova-atlas-cargo@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7446:nova-atlas-cargo@hackloop.mail"
+  }, {
+    "email" : "tamarind-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7446:tamarind-airways@hackloop.mail"
+  }, {
+    "email" : "westfalenroute@hackloop.mail",
+    "leg" : "trucker",
+    "reply_id" : 7566,
+    "euros" : "137.50",
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7446:westfalenroute@hackloop.mail"
+  } ]
+}, {
+  "round" : 30,
+  "request_id" : 7694,
+  "official" : {
+    "round_no" : 30,
+    "sent_at" : "2026-11-21T17:57:05.482398+00:00",
+    "answered_at" : "2026-11-21T17:57:08.981074+00:00",
+    "verdict" : "accepted",
+    "reason" : null,
+    "booked" : true,
+    "points" : { },
+    "total" : null,
+    "closed" : false,
+    "cost_pending" : true
+  },
+  "historical_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 3.0,
+    "total_eur" : 534.66,
+    "billed_kg" : 134,
+    "source" : "portal",
+    "rate_id" : "R--xuCiKBnii6xD0K1",
+    "valid_until" : "2026-11-21T18:12:07.297172Z"
+  },
+  "historical_operator" : false,
+  "historical_stage" : "sent",
+  "historical_portal_offer_count" : 4,
+  "shipment" : {
+    "origin" : "MUC",
+    "destination" : "PVG",
+    "weight_kg" : 134,
+    "volume_cbm" : 0.77,
+    "preference" : "fastest",
+    "pickup_zone" : null,
+    "pickup_eur" : null,
+    "pickup_days" : 0.0
+  },
+  "replay_stage" : "sent",
+  "replay_offer" : {
+    "airline" : "Meridian Freightways",
+    "days" : 3.0,
+    "total_eur" : 534.66,
+    "billed_kg" : 134,
+    "source" : "portal",
+    "rate_id" : "R--xuCiKBnii6xD0K1",
+    "valid_until" : "2026-11-21T18:12:07.297172Z"
+  },
+  "replay_trucker" : null,
+  "replay_pickup_eur" : null,
+  "replay_quote_seconds" : 40.0,
+  "reason_before_terminal_stage" : "",
+  "recorded_replies_injected" : 0,
+  "stage_trace" : [ "0 collecting", "40 sent" ],
+  "gateway_calls" : [ "recorded quote check" ],
+  "unavailable_attachments" : [ ],
+  "outbound_trace" : [ {
+    "action" : "bid:7694:helix-air-freight@hackloop.mail",
+    "to" : "helix-air-freight@hackloop.mail",
+    "subject" : "Rate request AEIOU-7694 | MUC to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7694:meridian-freightways@hackloop.mail",
+    "to" : "meridian-freightways@hackloop.mail",
+    "subject" : "Rate request AEIOU-7694 | MUC to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7694:tamarind-airways@hackloop.mail",
+    "to" : "tamarind-airways@hackloop.mail",
+    "subject" : "Rate request AEIOU-7694 | MUC to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "bid:7694:xenon-cargo-airlines@hackloop.mail",
+    "to" : "xenon-cargo-airlines@hackloop.mail",
+    "subject" : "Rate request AEIOU-7694 | MUC to PVG",
+    "after_seconds" : 0.0,
+    "historical_send_matched" : false,
+    "archived_replies" : [ ]
+  }, {
+    "action" : "quote:7694",
+    "to" : "hofmann-textilwerk@hackloop.mail",
+    "subject" : "Re: Air freight quote: MUC to PVG",
+    "after_seconds" : 40.0,
+    "historical_send_matched" : true,
+    "archived_replies" : [ ]
+  } ],
+  "portal_trace" : [ {
+    "after_seconds" : 0.0,
+    "visible_offers" : 4,
+    "results_at_seconds" : 1.912,
+    "complete" : true,
+    "recorded_shipment_matches" : true
+  } ],
+  "tenders" : [ {
+    "email" : "helix-air-freight@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7694:helix-air-freight@hackloop.mail"
+  }, {
+    "email" : "meridian-freightways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7694:meridian-freightways@hackloop.mail"
+  }, {
+    "email" : "tamarind-airways@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7694:tamarind-airways@hackloop.mail"
+  }, {
+    "email" : "xenon-cargo-airlines@hackloop.mail",
+    "leg" : "airline",
+    "reply_id" : null,
+    "euros" : null,
+    "days" : null,
+    "issue" : null,
+    "bid_action" : "bid:7694:xenon-cargo-airlines@hackloop.mail"
+  } ]
+} ]

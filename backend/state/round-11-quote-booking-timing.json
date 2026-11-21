@@ -1,0 +1,17 @@
+{
+  "round": 11,
+  "official": {
+    "round_no": 11,
+    "sent_at": "2026-11-21T16:01:46.977362+00:00",
+    "answered_at": "2026-11-21T16:03:32.391790+00:00",
+    "verdict": "accepted",
+    "reason": null,
+    "booked": null
+  },
+  "checked_at": "2026-11-21T16:03:40.353070+00:00",
+  "rfq_to_quote_seconds": 105.414,
+  "request_id": 2528,
+  "subject": "Air freight quote request: Lueneburg to Toronto",
+  "stage": "review",
+  "offer": {}
+}

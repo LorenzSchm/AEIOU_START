@@ -1,0 +1,77 @@
+{
+  "invites": [
+    "zephyr-steppe-cargo@hackloop.mail",
+    "himalaya-bridge-air@hackloop.mail",
+    "lagoon-isles-airways@hackloop.mail",
+    "bodenseefracht@hackloop.mail",
+    "westfalenroute@hackloop.mail"
+  ],
+  "ran_at": "2026-11-21T14:59:07.752027+00:00",
+  "cases": {
+    "1": [
+      "ASU",
+      "cheapest",
+      100
+    ]
+  },
+  "calls": {
+    "1": {
+      "replayed": true
+    }
+  },
+  "quotes": [
+    {
+      "in_reply_to": 1,
+      "to": "customer1@example.invalid",
+      "subject": "Re: RFQ FRA to ASU",
+      "body": "Hi,\n\nThe lowest rate we found for your 100 kg shipment from FRA to ASU is with Himalaya Bridge Air at EUR 600.00 all in.\n\nThat includes collection from postcode 60311. Allow about 7 days and 2 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+      "id": 111,
+      "elapsed": 4.1
+    }
+  ],
+  "decisions": [
+    {
+      "id": 1,
+      "stage": "sent",
+      "shipment": {
+        "origin": "FRA",
+        "destination": "ASU",
+        "weight_kg": 100,
+        "volume_cbm": 0.2,
+        "preference": "cheapest",
+        "pickup_zone": "60",
+        "pickup_eur": null,
+        "pickup_days": 0.0
+      },
+      "proposal": {
+        "revision": "dac79c61-0c7c-4f25-aece-53c80d2a4dff",
+        "offer": {
+          "airline": "Himalaya Bridge Air",
+          "days": 7.083333333333333,
+          "total_eur": 600.0,
+          "billed_kg": 100,
+          "source": "carrier bid",
+          "rate_id": null,
+          "valid_until": null
+        },
+        "alternatives": [
+          {
+            "airline": "Himalaya Bridge Air",
+            "days": 7.083333333333333,
+            "total_eur": 600.0,
+            "billed_kg": 100,
+            "source": "carrier bid",
+            "rate_id": null,
+            "valid_until": null
+          }
+        ],
+        "notes": [],
+        "body": "Hi,\n\nThe lowest rate we found for your 100 kg shipment from FRA to ASU is with Himalaya Bridge Air at EUR 600.00 all in.\n\nThat includes collection from postcode 60311. Allow about 7 days and 2 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "trucker": "Bodenseefracht",
+        "pickup_eur": 71.0,
+        "pickup_days": 1.0833333333333333
+      },
+      "reason": null
+    }
+  ]
+}

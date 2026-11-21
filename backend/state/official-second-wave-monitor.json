@@ -1,0 +1,736 @@
+{
+  "started_at": "2026-11-21T15:06:07.724307+00:00",
+  "events": [
+    {
+      "time": "2026-11-21T15:06:07.745226+00:00",
+      "event": "worker",
+      "value": {
+        "cursor": 391,
+        "error": null,
+        "auto_send": true
+      }
+    },
+    {
+      "time": "2026-11-21T15:06:08.088676+00:00",
+      "event": "scoreboard",
+      "value": [
+        {
+          "round_no": 1,
+          "sent_at": "2026-11-21T15:00:59.986067+00:00",
+          "answered_at": "2026-11-21T15:03:03.615703+00:00",
+          "verdict": "accepted",
+          "reason": null,
+          "booked": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:07:07.547489+00:00",
+      "event": "customer",
+      "value": {
+        "id": 419,
+        "received": "2026-11-21T15:07:05.268407Z",
+        "sender": "sonnberg-roesterei@hackloop.mail",
+        "subject": "Air freight quote request to JFK",
+        "body": "Dear Sir or Madam,\n\nCould you please quote the fastest air freight option to JFK (New York, US)? The shipment will be ready for pickup at our site in 61018 (Bad Homburg), Germany, on 2026-11-25. Please arrange trucking from our site to the departure airport.\n\nThe shipment consists of 6 pieces of precision instruments, with a gross weight of 1233 kg and a total volume of 10.78 cbm.\n\nPlease provide your all-in price in EUR, including pickup and trucking, and confirm the earliest available arrival at JFK.\n\nThank you in advance.\n\nKind regards\nAnna Sonnberg\nHead of Purchasing and Logistics\nSonnberg Kaffeeroesterei GmbH"
+      }
+    },
+    {
+      "time": "2026-11-21T15:07:07.549420+00:00",
+      "event": "stage",
+      "value": [
+        "new",
+        null
+      ]
+    },
+    {
+      "time": "2026-11-21T15:07:07.550000+00:00",
+      "event": "parse",
+      "value": []
+    },
+    {
+      "time": "2026-11-21T15:07:07.550514+00:00",
+      "event": "bids",
+      "value": []
+    },
+    {
+      "time": "2026-11-21T15:07:07.551759+00:00",
+      "event": "delivery",
+      "value": []
+    },
+    {
+      "time": "2026-11-21T15:07:07.552662+00:00",
+      "event": "thread",
+      "value": [
+        [
+          419,
+          "request",
+          "Air freight quote request to JFK"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:07:09.065679+00:00",
+      "event": "worker",
+      "value": {
+        "cursor": 419,
+        "error": null,
+        "auto_send": true
+      }
+    },
+    {
+      "time": "2026-11-21T15:07:09.066422+00:00",
+      "event": "parse",
+      "value": [
+        {
+          "state": "pending",
+          "model": "gpt-4o-mini",
+          "result": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:07:10.567507+00:00",
+      "event": "stage",
+      "value": [
+        "review",
+        "Gateway extraction conflicts with shipment details. Confirm the fields."
+      ]
+    },
+    {
+      "time": "2026-11-21T15:07:10.568378+00:00",
+      "event": "parse",
+      "value": [
+        {
+          "state": "done",
+          "model": "gpt-4o-mini",
+          "result": "{\"origin\":null,\"destination\":\"JFK\",\"weight_kg\":1233,\"volume_cbm\":10.78,\"preference\":null,\"pickup_required\":true,\"pickup_zone\":\"18\",\"needs_review\":false}"
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:07:12.240134+00:00",
+      "event": "scoreboard",
+      "value": [
+        {
+          "round_no": 2,
+          "sent_at": "2026-11-21T15:07:05.268407+00:00",
+          "answered_at": null,
+          "verdict": "open",
+          "reason": null,
+          "booked": null
+        },
+        {
+          "round_no": 1,
+          "sent_at": "2026-11-21T15:00:59.986067+00:00",
+          "answered_at": "2026-11-21T15:03:03.615703+00:00",
+          "verdict": "accepted",
+          "reason": null,
+          "booked": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:08:32.210817+00:00",
+      "event": "stage",
+      "value": [
+        "new",
+        null
+      ]
+    },
+    {
+      "time": "2026-11-21T15:08:33.720286+00:00",
+      "event": "bids",
+      "value": [
+        {
+          "email": "cobalt-skylift@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "fjordline-air-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "ibisair-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:08:33.723883+00:00",
+      "event": "delivery",
+      "value": [
+        [
+          "bid:419:cobalt-skylift@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:fjordline-air-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:ibisair-cargo@hackloop.mail",
+          "pending"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:08:35.515732+00:00",
+      "event": "stage",
+      "value": [
+        "waiting for pickup",
+        "Waiting for a confirmed pickup total and transit time."
+      ]
+    },
+    {
+      "time": "2026-11-21T15:08:35.517121+00:00",
+      "event": "bids",
+      "value": [
+        {
+          "email": "cobalt-skylift@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "fjordline-air-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "hansekogge-trucking@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "ibisair-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "westfalenroute@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:08:35.519673+00:00",
+      "event": "delivery",
+      "value": [
+        [
+          "bid:419:cobalt-skylift@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:fjordline-air-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:ibisair-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:hansekogge-trucking@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:westfalenroute@hackloop.mail",
+          "sent"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:09:06.667688+00:00",
+      "event": "worker",
+      "value": {
+        "cursor": 636,
+        "error": null,
+        "auto_send": true
+      }
+    },
+    {
+      "time": "2026-11-21T15:09:06.670233+00:00",
+      "event": "bids",
+      "value": [
+        {
+          "email": "cobalt-skylift@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 634,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "fjordline-air-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 632,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "hansekogge-trucking@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": 636,
+          "euros": "245.02",
+          "days": 0.9583333333333334,
+          "issue": null
+        },
+        {
+          "email": "ibisair-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 633,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "westfalenroute@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": 635,
+          "euros": "266.03",
+          "days": 0.9583333333333334,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:09:06.672909+00:00",
+      "event": "thread",
+      "value": [
+        [
+          419,
+          "request",
+          "Air freight quote request to JFK"
+        ],
+        [
+          632,
+          "carrier",
+          "Re: Rate request AEIOU-419 | FRA to JFK"
+        ],
+        [
+          633,
+          "carrier",
+          "Re: Rate request AEIOU-419 | FRA to JFK"
+        ],
+        [
+          634,
+          "carrier",
+          "Re: Rate request AEIOU-419 | FRA to JFK"
+        ],
+        [
+          635,
+          "carrier",
+          "Re: Rate request AEIOU-419 | pickup from postcode 61018 to FRA"
+        ],
+        [
+          636,
+          "carrier",
+          "Re: Rate request AEIOU-419 | pickup from postcode 61018 to FRA"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:09:08.182409+00:00",
+      "event": "stage",
+      "value": [
+        "sent",
+        null
+      ]
+    },
+    {
+      "time": "2026-11-21T15:09:08.187761+00:00",
+      "event": "delivery",
+      "value": [
+        [
+          "bid:419:cobalt-skylift@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:fjordline-air-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:ibisair-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:hansekogge-trucking@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:419:westfalenroute@hackloop.mail",
+          "sent"
+        ],
+        [
+          "quote:419",
+          "sent"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:09:08.189954+00:00",
+      "event": "quote",
+      "value": "Hi,\n\nThe quickest option we found for your 1233 kg shipment from FRA to JFK is with Solace Air Cargo at EUR 5483.77 all in.\n\nThat includes collection from postcode 61018. Allow about 2 days and 23 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU"
+    },
+    {
+      "time": "2026-11-21T15:09:12.867887+00:00",
+      "event": "scoreboard",
+      "value": [
+        {
+          "round_no": 2,
+          "sent_at": "2026-11-21T15:07:05.268407+00:00",
+          "answered_at": "2026-11-21T15:09:07.924097+00:00",
+          "verdict": "rejected",
+          "reason": "too_high",
+          "booked": null
+        },
+        {
+          "round_no": 1,
+          "sent_at": "2026-11-21T15:00:59.986067+00:00",
+          "answered_at": "2026-11-21T15:03:03.615703+00:00",
+          "verdict": "accepted",
+          "reason": null,
+          "booked": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:09:12.875763+00:00",
+      "event": "final",
+      "value": {
+        "round_no": 2,
+        "sent_at": "2026-11-21T15:07:05.268407+00:00",
+        "answered_at": "2026-11-21T15:09:07.924097+00:00",
+        "verdict": "rejected",
+        "reason": "too_high",
+        "booked": null
+      }
+    }
+  ],
+  "worker": {
+    "last_poll": "2026-11-21T15:09:12.434024Z",
+    "error": null,
+    "auto_send": true,
+    "cursor": 636,
+    "tariffs": 158,
+    "start_at": "2026-11-21T15:00:00Z",
+    "backend": "spring-boot",
+    "rfq_model": "gpt-4o-mini"
+  },
+  "board": {
+    "team": "aeiou",
+    "rank": 10,
+    "total": 47.72,
+    "frozen_at": null,
+    "scores_revealed": false,
+    "requests": [
+      {
+        "round_no": 2,
+        "sent_at": "2026-11-21T15:07:05.268407+00:00",
+        "answered_at": "2026-11-21T15:09:07.924097+00:00",
+        "verdict": "rejected",
+        "reason": "too_high",
+        "booked": null
+      },
+      {
+        "round_no": 1,
+        "sent_at": "2026-11-21T15:00:59.986067+00:00",
+        "answered_at": "2026-11-21T15:03:03.615703+00:00",
+        "verdict": "accepted",
+        "reason": null,
+        "booked": null
+      }
+    ],
+    "bookings": []
+  },
+  "request_id": 419,
+  "case": {
+    "stage": "sent",
+    "fields": {
+      "origin": "FRA",
+      "destination": "JFK",
+      "weight_kg": 1233,
+      "volume_cbm": 10.78,
+      "preference": "fastest",
+      "pickup_zone": "61",
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "proposal": {
+      "revision": "52931c62-575d-4e2f-884e-a20f5675ed2d",
+      "offer": {
+        "airline": "Solace Air Cargo",
+        "days": 2.9583333333333335,
+        "total_eur": 5483.77,
+        "billed_kg": 1800.26,
+        "source": "portal",
+        "rate_id": "R-WYvVal1xv_5qCPzH",
+        "valid_until": "2026-11-21T15:23:34.428342Z"
+      },
+      "alternatives": [
+        {
+          "airline": "Solace Air Cargo",
+          "days": 2.9583333333333335,
+          "total_eur": 5483.77,
+          "billed_kg": 1800.26,
+          "source": "portal",
+          "rate_id": "R-WYvVal1xv_5qCPzH",
+          "valid_until": "2026-11-21T15:23:34.428342Z"
+        },
+        {
+          "airline": "Polaris Air Logistics",
+          "days": 4.958333333333333,
+          "total_eur": 4403.61,
+          "billed_kg": 1800.26,
+          "source": "portal",
+          "rate_id": "R-7JYHPkfNbBkTQSIp",
+          "valid_until": "2026-11-21T15:23:34.333402Z"
+        },
+        {
+          "airline": "Wayzata Air Cargo",
+          "days": 4.958333333333333,
+          "total_eur": 4547.64,
+          "billed_kg": 1800.26,
+          "source": "sheet",
+          "rate_id": null,
+          "valid_until": null
+        }
+      ],
+      "notes": [],
+      "body": "Hi,\n\nThe quickest option we found for your 1233 kg shipment from FRA to JFK is with Solace Air Cargo at EUR 5483.77 all in.\n\nThat includes collection from postcode 61018. Allow about 2 days and 23 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+      "trucker": "Hansekogge Trucking",
+      "pickup_eur": 245.02,
+      "pickup_days": 0.9583333333333334
+    },
+    "reason": null,
+    "booking": null
+  },
+  "deliveries": [
+    {
+      "action": "bid:419:cobalt-skylift@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:08:33.431959Z",
+      "payload": {
+        "subject": "Rate request AEIOU-419 | FRA to JFK",
+        "to": "cobalt-skylift@hackloop.mail",
+        "body": "Hi,\n\nCould you quote air freight from FRA to JFK for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU"
+      },
+      "response": {
+        "id": 613,
+        "from": "aeiou@hackloop.mail",
+        "to": "cobalt-skylift@hackloop.mail",
+        "subject": "Rate request AEIOU-419 | FRA to JFK",
+        "body": "Hi,\n\nCould you quote air freight from FRA to JFK for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:08:33.446654+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:419:fjordline-air-cargo@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:08:33.526290Z",
+      "payload": {
+        "subject": "Rate request AEIOU-419 | FRA to JFK",
+        "to": "fjordline-air-cargo@hackloop.mail",
+        "body": "Hi,\n\nCould you quote air freight from FRA to JFK for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU"
+      },
+      "response": {
+        "id": 614,
+        "from": "aeiou@hackloop.mail",
+        "to": "fjordline-air-cargo@hackloop.mail",
+        "subject": "Rate request AEIOU-419 | FRA to JFK",
+        "body": "Hi,\n\nCould you quote air freight from FRA to JFK for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:08:33.549812+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:419:ibisair-cargo@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:08:33.616601Z",
+      "payload": {
+        "subject": "Rate request AEIOU-419 | FRA to JFK",
+        "to": "ibisair-cargo@hackloop.mail",
+        "body": "Hi,\n\nCould you quote air freight from FRA to JFK for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU"
+      },
+      "response": {
+        "id": 615,
+        "from": "aeiou@hackloop.mail",
+        "to": "ibisair-cargo@hackloop.mail",
+        "subject": "Rate request AEIOU-419 | FRA to JFK",
+        "body": "Hi,\n\nCould you quote air freight from FRA to JFK for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:08:33.751869+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:419:hansekogge-trucking@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:08:33.839506Z",
+      "payload": {
+        "subject": "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+        "to": "hansekogge-trucking@hackloop.mail",
+        "body": "Hi,\n\nCould you quote collection from postcode 61018 and delivery to FRA for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU"
+      },
+      "response": {
+        "id": 616,
+        "from": "aeiou@hackloop.mail",
+        "to": "hansekogge-trucking@hackloop.mail",
+        "subject": "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+        "body": "Hi,\n\nCould you quote collection from postcode 61018 and delivery to FRA for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:08:33.902186+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:419:westfalenroute@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:08:33.994694Z",
+      "payload": {
+        "subject": "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+        "to": "westfalenroute@hackloop.mail",
+        "body": "Hi,\n\nCould you quote collection from postcode 61018 and delivery to FRA for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU"
+      },
+      "response": {
+        "id": 617,
+        "from": "aeiou@hackloop.mail",
+        "to": "westfalenroute@hackloop.mail",
+        "subject": "Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+        "body": "Hi,\n\nCould you quote collection from postcode 61018 and delivery to FRA for a shipment weighing 1233 kg gross, with a total volume of 10.78 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:08:34.014561+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "quote:419",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:09:07.895393Z",
+      "payload": {
+        "subject": "Re: Air freight quote request to JFK",
+        "body": "Hi,\n\nThe quickest option we found for your 1233 kg shipment from FRA to JFK is with Solace Air Cargo at EUR 5483.77 all in.\n\nThat includes collection from postcode 61018. Allow about 2 days and 23 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "in_reply_to": 419,
+        "to": "sonnberg-roesterei@hackloop.mail"
+      },
+      "response": {
+        "id": 638,
+        "from": "aeiou@hackloop.mail",
+        "to": "sonnberg-roesterei@hackloop.mail",
+        "subject": "Re: Air freight quote request to JFK",
+        "body": "Hi,\n\nThe quickest option we found for your 1233 kg shipment from FRA to JFK is with Solace Air Cargo at EUR 5483.77 all in.\n\nThat includes collection from postcode 61018. Allow about 2 days and 23 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "in_reply_to": 419,
+        "references": [
+          419
+        ],
+        "received_at": "2026-11-21T15:09:07.924097+00:00",
+        "attachments": []
+      }
+    }
+  ],
+  "thread": [
+    {
+      "id": 419,
+      "root": 419,
+      "sender": "sonnberg-roesterei@hackloop.mail",
+      "subject": "Air freight quote request to JFK",
+      "body": "Dear Sir or Madam,\n\nCould you please quote the fastest air freight option to JFK (New York, US)? The shipment will be ready for pickup at our site in 61018 (Bad Homburg), Germany, on 2026-11-25. Please arrange trucking from our site to the departure airport.\n\nThe shipment consists of 6 pieces of precision instruments, with a gross weight of 1233 kg and a total volume of 10.78 cbm.\n\nPlease provide your all-in price in EUR, including pickup and trucking, and confirm the earliest available arrival at JFK.\n\nThank you in advance.\n\nKind regards\nAnna Sonnberg\nHead of Purchasing and Logistics\nSonnberg Kaffeeroesterei GmbH",
+      "received": "2026-11-21T15:07:05.268407Z",
+      "kind": "request",
+      "stage": "sent"
+    },
+    {
+      "id": 632,
+      "root": 419,
+      "sender": "fjordline-air-cargo@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-419 | FRA to JFK",
+      "body": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-JFK.\nWe fly CGN-NBO, CGN-SIN, DUS-BOM, DUS-DEL, DUS-JFK, DUS-KUL, FRA-ATL, FRA-JNB, FRA-TLV, HAM-GRU, MUC-LAX, STR-EZE.\n\nBest regards\nFjordline Air Cargo\nfjordline-air-cargo@hackloop.mail",
+      "received": "2026-11-21T15:09:04.442806Z",
+      "kind": "carrier",
+      "stage": "bid unreadable"
+    },
+    {
+      "id": 633,
+      "root": 419,
+      "sender": "ibisair-cargo@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-419 | FRA to JFK",
+      "body": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-JFK.\nWe fly CGN-ORD, DUS-HKG, DUS-NBO, FRA-ATL, FRA-BKK, FRA-BOG, HAM-DEL, HAM-GRU, HAM-JFK, HAM-SYD, MUC-ICN, MUC-MEX, MUC-MIA, MUC-PEK, MUC-SIN, STR-BOM, STR-YYZ.\n\nBest regards\nIbisair Cargo\nibisair-cargo@hackloop.mail",
+      "received": "2026-11-21T15:09:04.443849Z",
+      "kind": "carrier",
+      "stage": "bid unreadable"
+    },
+    {
+      "id": 634,
+      "root": 419,
+      "sender": "cobalt-skylift@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-419 | FRA to JFK",
+      "body": "Hello,\n\nthank you for your request. We do not serve this lane/zone: FRA-JFK.\nWe fly CGN-EZE, CGN-SGN, CGN-SIN, DUS-BOM, DUS-DEL, DUS-JFK, DUS-SYD, FRA-BOG, FRA-ICN, FRA-JNB, FRA-SYD, FRA-TPE, HAM-BOG, HAM-RUH, MUC-BOG, MUC-LIM, MUC-MEL, MUC-MEX, MUC-MIA, MUC-YYZ, STR-YYZ.\n\nBest regards\nCobalt Skylift\ncobalt-skylift@hackloop.mail",
+      "received": "2026-11-21T15:09:04.442584Z",
+      "kind": "carrier",
+      "stage": "bid unreadable"
+    },
+    {
+      "id": 635,
+      "root": 419,
+      "sender": "westfalenroute@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+      "body": "Dear Team AEIOU,\n\nThank you for your enquiry. Our all-in rate for collection and delivery to FRA is 266.03 EUR, valid until 21 Nov 2026 15:23 UTC.\n\nEstimated time to pickup: 23 hours.\n\nOffer reference: TRK-263. No booking is required for pickup.\n\nKind regards,\nWestfalenroute",
+      "received": "2026-11-21T15:09:04.444697Z",
+      "kind": "carrier",
+      "stage": "bid received"
+    },
+    {
+      "id": 636,
+      "root": 419,
+      "sender": "hansekogge-trucking@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-419 | pickup from postcode 61018 to FRA",
+      "body": "Dear Team AEIOU,\n\nOur fixed all-in rate for collection and delivery to FRA is 245.02 EUR, valid until 21 Nov 2026 15:23 UTC.\n\nEstimated time to pickup: 23 hours.\n\nOffer reference: TRK-265. No booking is required for pickup.\n\nKind regards,\nHansekogge Trucking",
+      "received": "2026-11-21T15:09:04.445010Z",
+      "kind": "carrier",
+      "stage": "bid received"
+    }
+  ],
+  "timings_seconds": {
+    "receipt_to_first_bid_request": 88.164,
+    "bid_request_fanout": 0.563,
+    "last_bid_request_to_last_carrier_reply": 30.45,
+    "last_carrier_reply_to_official_answer": 3.479,
+    "total": 122.656
+  }
+}

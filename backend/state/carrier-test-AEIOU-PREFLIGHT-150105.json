@@ -1,0 +1,66 @@
+{
+  "reference": "AEIOU-PREFLIGHT-150105",
+  "requests": {
+    "airline": {
+      "message": {
+        "to": "zephyr-steppe-cargo@hackloop.mail",
+        "subject": "Rate request AEIOU-PREFLIGHT-150105 | FRA to ASU",
+        "body": "Hello,\n\nCould you quote airport-to-airport air freight from Frankfurt (FRA) to Asunción (ASU)? The shipment is one stackable carton of general cargo, 100 kg gross, 100 × 50 × 40 cm (0.20 cbm). Please send your all-in total in EUR and your transit time in days. This is a rate inquiry only.\n\nReference AEIOU-PREFLIGHT-150105\n\nThank you,\nTeam AEIOU"
+      },
+      "status": "sent",
+      "id": 102
+    },
+    "trucker": {
+      "message": {
+        "to": "isarwelle-spedition@hackloop.mail",
+        "subject": "Rate request AEIOU-PREFLIGHT-150105 | 60311 to FRA",
+        "body": "Hello,\n\nCould you quote collection in 60311 Frankfurt am Main (pickup zone 60) and delivery to Frankfurt Airport (FRA)? The shipment is one stackable carton of general cargo, 100 kg gross, 100 × 50 × 40 cm (0.20 cbm). Please send your all-in total in EUR and your transit time in days. This is a rate inquiry only.\n\nReference AEIOU-PREFLIGHT-150105\n\nThank you,\nTeam AEIOU"
+      },
+      "status": "sent",
+      "id": 103
+    }
+  },
+  "replies": {
+    "airline": {
+      "raw": {
+        "id": 104,
+        "from": "zephyr-steppe-cargo@hackloop.mail",
+        "to": "aeiou@hackloop.mail",
+        "subject": "Re: Rate request AEIOU-PREFLIGHT-150105 | FRA to ASU",
+        "body": "Dear Team AEIOU,\n\nThank you for your inquiry. Our all-in airport-to-airport rate from Frankfurt (FRA) to Asunción (ASU) is 556.00 EUR, with an estimated transit time of 7 days.\n\nThis rate is valid until 21 Nov 2026 14:16 UTC. Should you wish to book, please quote reference R-IBRBk3a0QiFBqBAx.\n\nKind regards,\nZephyr Steppe Cargo",
+        "in_reply_to": 102,
+        "references": [
+          102
+        ],
+        "received_at": "2026-11-21T14:01:36.466256+00:00",
+        "attachments": []
+      },
+      "parser_result": "EUR 556.00, transit days: 7",
+      "verified_parser_result": {
+        "eur": "556.00",
+        "transit_hours": 168
+      }
+    },
+    "trucker": {
+      "raw": {
+        "id": 105,
+        "from": "isarwelle-spedition@hackloop.mail",
+        "to": "aeiou@hackloop.mail",
+        "subject": "Re: Rate request AEIOU-PREFLIGHT-150105 | 60311 to FRA",
+        "body": "Hello Team AEIOU,\n\nThanks for reaching out! Our all-in rate for collection in Frankfurt am Main and delivery to Frankfurt Airport is 110.00 EUR. Pickup time is 16 hours, and the rate is valid until 21 Nov 2026 14:16 UTC.\n\nYour offer reference is TRK-52. No booking is needed for pickup.\n\nBest regards,\nIsarwelle Spedition",
+        "in_reply_to": 103,
+        "references": [
+          103
+        ],
+        "received_at": "2026-11-21T14:01:36.466429+00:00",
+        "attachments": []
+      },
+      "parser_result": "EUR 110.00, transit days: null",
+      "verified_parser_result": {
+        "eur": "110.00",
+        "transit_hours": 16
+      }
+    }
+  },
+  "since_id": 105
+}

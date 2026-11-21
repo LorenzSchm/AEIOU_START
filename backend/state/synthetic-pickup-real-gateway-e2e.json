@@ -1,0 +1,97 @@
+{
+  "original_live_run": {
+    "model": "gpt-4o-mini",
+    "extracted": {
+      "origin": null,
+      "destination": "ASU",
+      "weight_kg": 100,
+      "volume_cbm": 0.2,
+      "preference": "cheapest all-in freight option",
+      "pickup_required": true,
+      "pickup_zone": "11",
+      "needs_review": false
+    },
+    "stage": "review",
+    "reason": "Gateway extraction conflicts with shipment details. Confirm the fields.",
+    "outbound_count": 0,
+    "http_status": 200,
+    "usage": {
+      "prompt_tokens": 277,
+      "completion_tokens": 49,
+      "total_tokens": 326
+    }
+  },
+  "worker_shipment": {
+    "origin": "FRA",
+    "destination": "ASU",
+    "weight_kg": 100,
+    "volume_cbm": 0.2,
+    "preference": "cheapest",
+    "pickup_zone": "60",
+    "pickup_eur": null,
+    "pickup_days": 0.0
+  },
+  "ran_at": "2026-11-21T14:16:23.594921+00:00",
+  "worker_jar_sha256": "caef779edddf80db0196c425f15fbf2207c90200dbf3cc7920b76183b3985cf6",
+  "scope": "Isolated local mailbox replaying the exact stored result of the single real 5U gateway extraction after the Java fix. Verbatim bodies from archived 5U airline and pickup replies. No portal rates or responses from other invited carriers.",
+  "customer_email": {
+    "id": 1,
+    "subject": "RFQ: pickup in Frankfurt for Asunción (ASU)",
+    "body": "Please quote the cheapest all-in freight option to ASU for one carton, 100 kg gross and 0.20 cbm total. Include pickup from Frankfurt am Main, postcode 60311, Germany.",
+    "received_at": "2026-11-21T14:15:00.826870+00:00",
+    "from": "synthetic-buyer@example.invalid"
+  },
+  "replayed_gateway_responses": [
+    "gpt-4o-mini"
+  ],
+  "outbound_messages": [
+    {
+      "elapsed_seconds": 2.06,
+      "id": 2,
+      "subject": "Rate request AEIOU-1 | FRA to ASU",
+      "to": "zephyr-steppe-cargo@hackloop.mail",
+      "body": "Please quote FRA to ASU for 100 kg gross and 0.2 cbm. Please give one all-in EUR total and transit time in days.\n\nThank you,\nTeam AEIOU"
+    },
+    {
+      "elapsed_seconds": 2.07,
+      "id": 4,
+      "subject": "Rate request AEIOU-1 | FRA to ASU",
+      "to": "himalaya-bridge-air@hackloop.mail",
+      "body": "Please quote FRA to ASU for 100 kg gross and 0.2 cbm. Please give one all-in EUR total and transit time in days.\n\nThank you,\nTeam AEIOU"
+    },
+    {
+      "elapsed_seconds": 2.07,
+      "id": 5,
+      "subject": "Rate request AEIOU-1 | FRA to ASU",
+      "to": "lagoon-isles-airways@hackloop.mail",
+      "body": "Please quote FRA to ASU for 100 kg gross and 0.2 cbm. Please give one all-in EUR total and transit time in days.\n\nThank you,\nTeam AEIOU"
+    },
+    {
+      "elapsed_seconds": 2.08,
+      "id": 6,
+      "subject": "Rate request AEIOU-1 | pickup in zone 60 to FRA",
+      "to": "taunusfracht@hackloop.mail",
+      "body": "Please quote pickup in zone 60 to FRA for 100 kg gross and 0.2 cbm. Please give one all-in EUR total and transit time in days. Pickup postcode 60311.\n\nThank you,\nTeam AEIOU"
+    },
+    {
+      "elapsed_seconds": 2.08,
+      "id": 7,
+      "subject": "Rate request AEIOU-1 | pickup in zone 60 to FRA",
+      "to": "isarwelle-spedition@hackloop.mail",
+      "body": "Please quote pickup in zone 60 to FRA for 100 kg gross and 0.2 cbm. Please give one all-in EUR total and transit time in days. Pickup postcode 60311.\n\nThank you,\nTeam AEIOU"
+    },
+    {
+      "elapsed_seconds": 77.04,
+      "id": 9,
+      "subject": "Re: RFQ: pickup in Frankfurt for Asunción (ASU)",
+      "body": "Hello,\n\nFor pickup in zone 60 via FRA to ASU, our cheapest available option is Zephyr Steppe Cargo. The all-in total is EUR 666.00. Estimated transit is 7 days 16 hours.\n\nPlease let us know if you would like to book.\n\nBest regards,\nTeam AEIOU",
+      "in_reply_to": 1,
+      "to": "synthetic-buyer@example.invalid"
+    }
+  ],
+  "replayed_live_response_bodies": {
+    "zephyr-steppe-cargo@hackloop.mail": "Dear Team AEIOU,\n\nThank you for your inquiry. Our all-in airport-to-airport rate from Frankfurt (FRA) to Asunción (ASU) is 556.00 EUR, with an estimated transit time of 7 days.\n\nThis rate is valid until 21 Nov 2026 14:16 UTC. Should you wish to book, please quote reference R-IBRBk3a0QiFBqBAx.\n\nKind regards,\nZephyr Steppe Cargo",
+    "isarwelle-spedition@hackloop.mail": "Hello Team AEIOU,\n\nThanks for reaching out! Our all-in rate for collection in Frankfurt am Main and delivery to Frankfurt Airport is 110.00 EUR. Pickup time is 16 hours, and the rate is valid until 21 Nov 2026 14:16 UTC.\n\nYour offer reference is TRK-52. No booking is needed for pickup.\n\nBest regards,\nIsarwelle Spedition"
+  },
+  "additional_mail_polls_checked": 3
+}

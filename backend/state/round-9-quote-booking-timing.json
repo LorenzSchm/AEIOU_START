@@ -1,0 +1,39 @@
+{
+  "round": 9,
+  "official": {
+    "round_no": 9,
+    "sent_at": "2026-11-21T15:49:35.432873+00:00",
+    "answered_at": "2026-11-21T15:50:31.853980+00:00",
+    "verdict": "accepted",
+    "reason": null,
+    "booked": true
+  },
+  "checked_at": "2026-11-21T15:51:37.042148+00:00",
+  "rfq_to_quote_seconds": 56.421,
+  "request_id": 1965,
+  "subject": "Air freight quote to LOS",
+  "stage": "sent",
+  "offer": {
+    "airline": "Lumen Air Cargo",
+    "days": 5.25,
+    "total_eur": 5270.76,
+    "billed_kg": 1952,
+    "source": "portal",
+    "rate_id": "R-kEmvB5_g8urlZDbr",
+    "valid_until": "2026-11-21T16:04:58.540518Z"
+  },
+  "rfq_to_first_inquiry_seconds": 23.321,
+  "customer_follow_ups": [
+    {
+      "id": 2147,
+      "received": "2026-11-21T15:50:56.675408Z",
+      "body": "Thank you for your offer. That works for us, please go ahead and book it.\n\nMira Petersen\nNordlicht Audio"
+    }
+  ],
+  "quote_to_customer_approval_seconds": 24.821,
+  "booking_reference": "BK-ECCCJQ1V",
+  "booked_at": "2026-11-21T15:50:58.105971+00:00",
+  "approval_to_booking_seconds": 1.431,
+  "carrier_confirmed_at": "2026-11-21T15:51:36.542718Z",
+  "booking_to_confirmation_email_seconds": 38.437
+}

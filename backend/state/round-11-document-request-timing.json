@@ -1,0 +1,18 @@
+{
+  "official": {
+    "round_no": 11,
+    "sent_at": "2026-11-21T16:01:46.977362+00:00",
+    "answered_at": "2026-11-21T16:03:32.391790+00:00",
+    "verdict": "accepted",
+    "reason": null,
+    "booked": null
+  },
+  "request_id": 2528,
+  "reply_id": 2809,
+  "request_to_document_reply_seconds": 105.414,
+  "customer_reply_at": "2026-11-21T16:03:40.949843Z",
+  "documents_received": false,
+  "quotes": 0,
+  "bookings": 0,
+  "checked_at": "2026-11-21T16:08:02.852452+00:00"
+}

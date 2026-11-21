@@ -1,0 +1,39 @@
+{
+  "round": 6,
+  "official": {
+    "round_no": 6,
+    "sent_at": "2026-11-21T15:31:22.981062+00:00",
+    "answered_at": "2026-11-21T15:32:03.245808+00:00",
+    "verdict": "accepted",
+    "reason": null,
+    "booked": true
+  },
+  "checked_at": "2026-11-21T15:33:13.566334+00:00",
+  "rfq_to_quote_seconds": 40.265,
+  "request_id": 1458,
+  "subject": "Air freight quote request: DUS to KUL",
+  "stage": "sent",
+  "offer": {
+    "airline": "Fjordline Air Cargo",
+    "days": 5.0,
+    "total_eur": 3949.95,
+    "billed_kg": 1549,
+    "source": "portal",
+    "rate_id": "R-T1l1XWycX7uc9rAx",
+    "valid_until": "2026-11-21T15:46:58.818861Z"
+  },
+  "rfq_to_first_inquiry_seconds": 35.337,
+  "customer_follow_ups": [
+    {
+      "id": 1561,
+      "received": "2026-11-21T15:32:28.563735Z",
+      "body": "Thank you for your offer. That works for us, please go ahead and book it.\n\nMit freundlichen Gruessen / Kind regards\nJonas Kessler\nLogistics Coordinator\nKessler Feinmechanik GmbH, Ulm"
+    }
+  ],
+  "quote_to_customer_approval_seconds": 25.318,
+  "booking_reference": "BK-SCJB80ZZ",
+  "booked_at": "2026-11-21T15:32:31.547064+00:00",
+  "approval_to_booking_seconds": 2.983,
+  "carrier_confirmed_at": "2026-11-21T15:33:10.992022Z",
+  "booking_to_confirmation_email_seconds": 39.445
+}

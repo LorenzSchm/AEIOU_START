@@ -1,0 +1,930 @@
+{
+  "started_at": "2026-11-21T15:00:44.095333+00:00",
+  "events": [
+    {
+      "time": "2026-11-21T15:00:44.110315+00:00",
+      "event": "worker",
+      "value": {
+        "cursor": 262,
+        "error": null,
+        "auto_send": true
+      }
+    },
+    {
+      "time": "2026-11-21T15:00:44.189284+00:00",
+      "event": "scoreboard",
+      "value": []
+    },
+    {
+      "time": "2026-11-21T15:01:00.920358+00:00",
+      "event": "customer",
+      "value": {
+        "id": 263,
+        "received": "2026-11-21T15:00:59.986067Z",
+        "sender": "lindqvist-medtech@hackloop.mail",
+        "subject": "Fastest air freight to ORD",
+        "body": "Hi,\n\nCould you quote an all-in price in EUR for the fastest air freight option to ORD (Chicago, US)? Please arrange trucking from our site in 51447 Bergisch Gladbach, Germany, to the departure airport. The shipment is ready for pickup on 2026-11-25.\n\nIt’s 12 pieces of printed marketing material, 676 kg gross and 5.79 cbm.\n\nSara\nLindqvist Medtech"
+      }
+    },
+    {
+      "time": "2026-11-21T15:01:00.922219+00:00",
+      "event": "stage",
+      "value": [
+        "new",
+        null
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:00.923620+00:00",
+      "event": "parse",
+      "value": []
+    },
+    {
+      "time": "2026-11-21T15:01:00.924760+00:00",
+      "event": "bids",
+      "value": []
+    },
+    {
+      "time": "2026-11-21T15:01:00.925564+00:00",
+      "event": "delivery",
+      "value": []
+    },
+    {
+      "time": "2026-11-21T15:01:00.926272+00:00",
+      "event": "thread",
+      "value": [
+        [
+          263,
+          "request",
+          "Fastest air freight to ORD"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:02.438326+00:00",
+      "event": "worker",
+      "value": {
+        "cursor": 263,
+        "error": null,
+        "auto_send": true
+      }
+    },
+    {
+      "time": "2026-11-21T15:01:02.520651+00:00",
+      "event": "scoreboard",
+      "value": [
+        {
+          "round_no": 1,
+          "sent_at": "2026-11-21T15:00:59.986067+00:00",
+          "answered_at": null,
+          "verdict": "open",
+          "reason": null,
+          "booked": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:02.522802+00:00",
+      "event": "parse",
+      "value": [
+        {
+          "state": "pending",
+          "model": "gpt-4o-mini",
+          "result": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:04.030527+00:00",
+      "event": "parse",
+      "value": [
+        {
+          "state": "done",
+          "model": "gpt-4o-mini",
+          "result": "{\"origin\":null,\"destination\":\"ORD\",\"weight_kg\":676,\"volume_cbm\":5.79,\"preference\":\"fastest\",\"pickup_required\":true,\"pickup_zone\":\"51\",\"needs_review\":false}"
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:04.033884+00:00",
+      "event": "bids",
+      "value": [
+        {
+          "email": "aurelia-air-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "borealis-freight-airways@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "elbflug-air-freight@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "maintal-transport-logistik@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:04.037258+00:00",
+      "event": "delivery",
+      "value": [
+        [
+          "bid:263:aurelia-air-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:borealis-freight-airways@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:elbflug-air-freight@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:maintal-transport-logistik@hackloop.mail",
+          "pending"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:05.547569+00:00",
+      "event": "stage",
+      "value": [
+        "collecting",
+        null
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:05.550118+00:00",
+      "event": "bids",
+      "value": [
+        {
+          "email": "aurelia-air-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "borealis-freight-airways@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "elbflug-air-freight@hackloop.mail",
+          "leg": "airline",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "elbkante-logistik@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        },
+        {
+          "email": "maintal-transport-logistik@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": null,
+          "euros": null,
+          "days": null,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:05.552476+00:00",
+      "event": "delivery",
+      "value": [
+        [
+          "bid:263:aurelia-air-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:borealis-freight-airways@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:elbflug-air-freight@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:maintal-transport-logistik@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:elbkante-logistik@hackloop.mail",
+          "sent"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:37.774431+00:00",
+      "event": "bids",
+      "value": [
+        {
+          "email": "aurelia-air-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 347,
+          "euros": "2388.32",
+          "days": 2,
+          "issue": null
+        },
+        {
+          "email": "borealis-freight-airways@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 343,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "elbflug-air-freight@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 344,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "elbkante-logistik@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": 345,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "maintal-transport-logistik@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": 346,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:37.778971+00:00",
+      "event": "thread",
+      "value": [
+        [
+          263,
+          "request",
+          "Fastest air freight to ORD"
+        ],
+        [
+          343,
+          "carrier",
+          "Re: Rate request AEIOU-263 | CGN to ORD"
+        ],
+        [
+          344,
+          "carrier",
+          "Re: Rate request AEIOU-263 | CGN to ORD"
+        ],
+        [
+          345,
+          "carrier",
+          "Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+        ],
+        [
+          346,
+          "carrier",
+          "Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+        ],
+        [
+          347,
+          "carrier",
+          "Re: Rate request AEIOU-263 | CGN to ORD"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:01:39.293476+00:00",
+      "event": "worker",
+      "value": {
+        "cursor": 347,
+        "error": null,
+        "auto_send": true
+      }
+    },
+    {
+      "time": "2026-11-21T15:01:39.386632+00:00",
+      "event": "stage",
+      "value": [
+        "waiting for pickup",
+        "Waiting for a confirmed pickup total and transit time."
+      ]
+    },
+    {
+      "time": "2026-11-21T15:03:04.022728+00:00",
+      "event": "stage",
+      "value": [
+        "sent",
+        null
+      ]
+    },
+    {
+      "time": "2026-11-21T15:03:04.026360+00:00",
+      "event": "bids",
+      "value": [
+        {
+          "email": "aurelia-air-cargo@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 347,
+          "euros": "2388.32",
+          "days": 2,
+          "issue": null
+        },
+        {
+          "email": "borealis-freight-airways@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 343,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "elbflug-air-freight@hackloop.mail",
+          "leg": "airline",
+          "reply_id": 344,
+          "euros": null,
+          "days": null,
+          "issue": "No unambiguous EUR total and transit"
+        },
+        {
+          "email": "elbkante-logistik@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": 384,
+          "euros": "134.69",
+          "days": 1.2083333333333333,
+          "issue": null
+        },
+        {
+          "email": "maintal-transport-logistik@hackloop.mail",
+          "leg": "trucker",
+          "reply_id": 385,
+          "euros": "222.36",
+          "days": 0.5416666666666666,
+          "issue": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:03:04.029976+00:00",
+      "event": "delivery",
+      "value": [
+        [
+          "bid:263:aurelia-air-cargo@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:borealis-freight-airways@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:elbflug-air-freight@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:maintal-transport-logistik@hackloop.mail",
+          "sent"
+        ],
+        [
+          "bid:263:elbkante-logistik@hackloop.mail",
+          "sent"
+        ],
+        [
+          "quote:263",
+          "sent"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:03:04.032238+00:00",
+      "event": "quote",
+      "value": "Hi,\n\nThe quickest option we found for your 676 kg shipment from CGN to ORD is with Meridian Freightways at EUR 3316.54 all in.\n\nThat includes collection from pickup zone 51. Allow about 1 day and 13 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU"
+    },
+    {
+      "time": "2026-11-21T15:03:04.034805+00:00",
+      "event": "thread",
+      "value": [
+        [
+          263,
+          "request",
+          "Fastest air freight to ORD"
+        ],
+        [
+          343,
+          "carrier",
+          "Re: Rate request AEIOU-263 | CGN to ORD"
+        ],
+        [
+          344,
+          "carrier",
+          "Re: Rate request AEIOU-263 | CGN to ORD"
+        ],
+        [
+          345,
+          "carrier",
+          "Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+        ],
+        [
+          346,
+          "carrier",
+          "Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+        ],
+        [
+          347,
+          "carrier",
+          "Re: Rate request AEIOU-263 | CGN to ORD"
+        ],
+        [
+          384,
+          "carrier",
+          "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+        ],
+        [
+          385,
+          "carrier",
+          "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+        ]
+      ]
+    },
+    {
+      "time": "2026-11-21T15:03:05.549443+00:00",
+      "event": "worker",
+      "value": {
+        "cursor": 385,
+        "error": null,
+        "auto_send": true
+      }
+    },
+    {
+      "time": "2026-11-21T15:03:11.716264+00:00",
+      "event": "scoreboard",
+      "value": [
+        {
+          "round_no": 1,
+          "sent_at": "2026-11-21T15:00:59.986067+00:00",
+          "answered_at": "2026-11-21T15:03:03.615703+00:00",
+          "verdict": "accepted",
+          "reason": null,
+          "booked": null
+        }
+      ]
+    },
+    {
+      "time": "2026-11-21T15:03:11.722551+00:00",
+      "event": "final",
+      "value": {
+        "round_no": 1,
+        "sent_at": "2026-11-21T15:00:59.986067+00:00",
+        "answered_at": "2026-11-21T15:03:03.615703+00:00",
+        "verdict": "accepted",
+        "reason": null,
+        "booked": null
+      }
+    }
+  ],
+  "worker": {
+    "last_poll": "2026-11-21T15:03:09.542231Z",
+    "error": null,
+    "auto_send": true,
+    "cursor": 385,
+    "tariffs": 158,
+    "start_at": "2026-11-21T15:00:00Z",
+    "backend": "spring-boot",
+    "rfq_model": "gpt-4o-mini"
+  },
+  "board": {
+    "team": "aeiou",
+    "rank": 4,
+    "total": 47.72,
+    "frozen_at": null,
+    "scores_revealed": false,
+    "requests": [
+      {
+        "round_no": 1,
+        "sent_at": "2026-11-21T15:00:59.986067+00:00",
+        "answered_at": "2026-11-21T15:03:03.615703+00:00",
+        "verdict": "accepted",
+        "reason": null,
+        "booked": null
+      }
+    ],
+    "bookings": []
+  },
+  "request_id": 263,
+  "case": {
+    "stage": "sent",
+    "fields": {
+      "origin": "CGN",
+      "destination": "ORD",
+      "weight_kg": 676,
+      "volume_cbm": 5.79,
+      "preference": "fastest",
+      "pickup_zone": "51",
+      "pickup_eur": null,
+      "pickup_days": 0.0
+    },
+    "proposal": {
+      "revision": "e8d29501-465b-48c1-9a70-8d61f88888b4",
+      "offer": {
+        "airline": "Meridian Freightways",
+        "days": 1.5416666666666665,
+        "total_eur": 3316.54,
+        "billed_kg": 966.93,
+        "source": "portal",
+        "rate_id": "R-UiSMrYYlpQcQfMSM",
+        "valid_until": "2026-11-21T15:16:04.533367Z"
+      },
+      "alternatives": [
+        {
+          "airline": "Meridian Freightways",
+          "days": 1.5416666666666665,
+          "total_eur": 3316.54,
+          "billed_kg": 966.93,
+          "source": "portal",
+          "rate_id": "R-UiSMrYYlpQcQfMSM",
+          "valid_until": "2026-11-21T15:16:04.533367Z"
+        },
+        {
+          "airline": "Aurelia Air Cargo",
+          "days": 2.5416666666666665,
+          "total_eur": 2610.68,
+          "billed_kg": 966.93,
+          "source": "portal",
+          "rate_id": "R-4ARIFw3HuSfZVZMh",
+          "valid_until": "2026-11-21T15:16:04.458913Z"
+        },
+        {
+          "airline": "Aurelia Air Cargo",
+          "days": 2.5416666666666665,
+          "total_eur": 2610.68,
+          "billed_kg": 966.93,
+          "source": "carrier bid",
+          "rate_id": null,
+          "valid_until": null
+        },
+        {
+          "airline": "Ibisair Cargo",
+          "days": 2.5416666666666665,
+          "total_eur": 3055.47,
+          "billed_kg": 966.93,
+          "source": "portal",
+          "rate_id": "R-TUldicIXGybCnBGQ",
+          "valid_until": "2026-11-21T15:16:04.495985Z"
+        },
+        {
+          "airline": "Xenon Cargo Airlines",
+          "days": 3.5416666666666665,
+          "total_eur": 2272.25,
+          "billed_kg": 966.93,
+          "source": "portal",
+          "rate_id": "R-lDyp49zcIGOd0Tv9",
+          "valid_until": "2026-11-21T15:16:04.587420Z"
+        }
+      ],
+      "notes": [],
+      "body": "Hi,\n\nThe quickest option we found for your 676 kg shipment from CGN to ORD is with Meridian Freightways at EUR 3316.54 all in.\n\nThat includes collection from pickup zone 51. Allow about 1 day and 13 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+      "trucker": "Maintal Transport Logistik",
+      "pickup_eur": 222.36,
+      "pickup_days": 0.5416666666666666
+    },
+    "reason": null,
+    "booking": null
+  },
+  "deliveries": [
+    {
+      "action": "bid:263:aurelia-air-cargo@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:01:03.684471Z",
+      "payload": {
+        "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "to": "aurelia-air-cargo@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | CGN to ORD"
+      },
+      "response": {
+        "id": 305,
+        "from": "aeiou@hackloop.mail",
+        "to": "aurelia-air-cargo@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | CGN to ORD",
+        "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:01:03.694233+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:263:borealis-freight-airways@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:01:03.724343Z",
+      "payload": {
+        "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "to": "borealis-freight-airways@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | CGN to ORD"
+      },
+      "response": {
+        "id": 306,
+        "from": "aeiou@hackloop.mail",
+        "to": "borealis-freight-airways@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | CGN to ORD",
+        "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:01:03.823968+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:263:elbflug-air-freight@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:01:03.865876Z",
+      "payload": {
+        "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "to": "elbflug-air-freight@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | CGN to ORD"
+      },
+      "response": {
+        "id": 307,
+        "from": "aeiou@hackloop.mail",
+        "to": "elbflug-air-freight@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | CGN to ORD",
+        "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:01:03.881349+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:263:maintal-transport-logistik@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:01:03.921966Z",
+      "payload": {
+        "body": "Hi,\n\nCould you quote collection from pickup zone 51 and delivery to CGN for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "to": "maintal-transport-logistik@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | pickup in zone 51 to CGN"
+      },
+      "response": {
+        "id": 308,
+        "from": "aeiou@hackloop.mail",
+        "to": "maintal-transport-logistik@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | pickup in zone 51 to CGN",
+        "body": "Hi,\n\nCould you quote collection from pickup zone 51 and delivery to CGN for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:01:04.096238+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "bid:263:elbkante-logistik@hackloop.mail",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:01:04.239870Z",
+      "payload": {
+        "body": "Hi,\n\nCould you quote collection from pickup zone 51 and delivery to CGN for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "to": "elbkante-logistik@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | pickup in zone 51 to CGN"
+      },
+      "response": {
+        "id": 309,
+        "from": "aeiou@hackloop.mail",
+        "to": "elbkante-logistik@hackloop.mail",
+        "subject": "Rate request AEIOU-263 | pickup in zone 51 to CGN",
+        "body": "Hi,\n\nCould you quote collection from pickup zone 51 and delivery to CGN for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": null,
+        "references": [],
+        "received_at": "2026-11-21T15:01:04.350118+00:00",
+        "attachments": []
+      }
+    },
+    {
+      "action": "quote:263",
+      "state": "sent",
+      "attempted_at": "2026-11-21T15:03:03.606126Z",
+      "payload": {
+        "to": "lindqvist-medtech@hackloop.mail",
+        "in_reply_to": 263,
+        "body": "Hi,\n\nThe quickest option we found for your 676 kg shipment from CGN to ORD is with Meridian Freightways at EUR 3316.54 all in.\n\nThat includes collection from pickup zone 51. Allow about 1 day and 13 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "subject": "Re: Fastest air freight to ORD"
+      },
+      "response": {
+        "id": 386,
+        "from": "aeiou@hackloop.mail",
+        "to": "lindqvist-medtech@hackloop.mail",
+        "subject": "Re: Fastest air freight to ORD",
+        "body": "Hi,\n\nThe quickest option we found for your 676 kg shipment from CGN to ORD is with Meridian Freightways at EUR 3316.54 all in.\n\nThat includes collection from pickup zone 51. Allow about 1 day and 13 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "in_reply_to": 263,
+        "references": [
+          263
+        ],
+        "received_at": "2026-11-21T15:03:03.615703+00:00",
+        "attachments": []
+      }
+    }
+  ],
+  "thread": [
+    {
+      "id": 263,
+      "root": 263,
+      "sender": "lindqvist-medtech@hackloop.mail",
+      "subject": "Fastest air freight to ORD",
+      "body": "Hi,\n\nCould you quote an all-in price in EUR for the fastest air freight option to ORD (Chicago, US)? Please arrange trucking from our site in 51447 Bergisch Gladbach, Germany, to the departure airport. The shipment is ready for pickup on 2026-11-25.\n\nIt’s 12 pieces of printed marketing material, 676 kg gross and 5.79 cbm.\n\nSara\nLindqvist Medtech",
+      "received": "2026-11-21T15:00:59.986067Z",
+      "kind": "request",
+      "stage": "sent"
+    },
+    {
+      "id": 343,
+      "root": 263,
+      "sender": "borealis-freight-airways@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-263 | CGN to ORD",
+      "body": "Hello,\n\nthank you for your request. We do not serve this lane/zone: CGN-ORD.\nWe fly CGN-SCL, DUS-NRT, FRA-CAI, FRA-ORD, FRA-YYZ, HAM-DEL, HAM-YYZ, MUC-CAI, MUC-LIM, MUC-SCL, MUC-SYD, STR-PEK, STR-SGN.\n\nBest regards\nBorealis Freight Airways\nborealis-freight-airways@hackloop.mail",
+      "received": "2026-11-21T15:01:34.450680Z",
+      "kind": "carrier",
+      "stage": "bid unreadable"
+    },
+    {
+      "id": 344,
+      "root": 263,
+      "sender": "elbflug-air-freight@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-263 | CGN to ORD",
+      "body": "Hello,\n\nthank you for your request. We do not serve this lane/zone: CGN-ORD.\nWe fly CGN-LOS, DUS-HKG, DUS-TLV, FRA-BOG, FRA-DFW, FRA-DXB, FRA-HKG, FRA-MEL, FRA-MIA, FRA-SGN, FRA-SIN, HAM-DFW, HAM-DXB, HAM-MEX, HAM-TLV, MUC-BOG, MUC-SYD, STR-ORD, STR-PVG.\n\nBest regards\nElbflug Air Freight\nelbflug-air-freight@hackloop.mail",
+      "received": "2026-11-21T15:01:34.451876Z",
+      "kind": "carrier",
+      "stage": "bid unreadable"
+    },
+    {
+      "id": 345,
+      "root": 263,
+      "sender": "elbkante-logistik@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-263 | pickup in zone 51 to CGN",
+      "body": "Hello,\n\nthank you for your request. We do not serve this lane/zone: pickup postcode 51.\nWe collect in postcode zones 20, 35, 47, 51, 55, 84, 85, 93 (first two digits).\n\nBest regards\nElbkante Logistik\nelbkante-logistik@hackloop.mail",
+      "received": "2026-11-21T15:01:34.453069Z",
+      "kind": "carrier",
+      "stage": "bid unreadable"
+    },
+    {
+      "id": 346,
+      "root": 263,
+      "sender": "maintal-transport-logistik@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-263 | pickup in zone 51 to CGN",
+      "body": "Hello,\n\nthank you for your request. We do not serve this lane/zone: pickup postcode 51.\nWe collect in postcode zones 21, 24, 45, 51, 65, 84, 86 (first two digits).\n\nBest regards\nMaintal Transport Logistik\nmaintal-transport-logistik@hackloop.mail",
+      "received": "2026-11-21T15:01:34.452009Z",
+      "kind": "carrier",
+      "stage": "bid unreadable"
+    },
+    {
+      "id": 347,
+      "root": 263,
+      "sender": "aurelia-air-cargo@hackloop.mail",
+      "subject": "Re: Rate request AEIOU-263 | CGN to ORD",
+      "body": "Dear Team AEIOU,\n\nThe all-in air freight rate from CGN to ORD is 2388.32 EUR. The estimated transit time is 2 days.\n\nThis rate is valid until 21 Nov 2026 15:16 UTC. Please quote reference R-QT6nFhplAYPbxneN when booking.\n\nKind regards,\nAurelia Air Cargo",
+      "received": "2026-11-21T15:01:34.451183Z",
+      "kind": "carrier",
+      "stage": "bid received"
+    },
+    {
+      "id": 384,
+      "root": 263,
+      "sender": "elbkante-logistik@hackloop.mail",
+      "subject": "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN",
+      "body": "Dear Team AEIOU,\n\nOur fastest option is direct express trucking from Bergisch Gladbach to Cologne Bonn Airport (CGN).\n\nAll-in trucking rate: 134.69 EUR\nEstimated transit time from pickup to delivery: 29 hours\nRate valid until: 21 Nov 2026 15:17 UTC\nOffer reference: TRK-174\n\nNo booking is required for pickup.\n\nKind regards,\nElbkante Logistik",
+      "received": "2026-11-21T15:03:02.115935Z",
+      "kind": "carrier",
+      "stage": "bid received"
+    },
+    {
+      "id": 385,
+      "root": 263,
+      "sender": "maintal-transport-logistik@hackloop.mail",
+      "subject": "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN",
+      "body": "Hi Team AEIOU,\n\nOur fastest option from Bergisch Gladbach to Cologne Bonn Airport is direct express trucking. We can collect on your requested date, with an estimated transit time of 13 hours from pickup to delivery.\n\nThe all-in rate is 222.36 EUR, valid until 21 Nov 2026 15:17 UTC. No booking is needed for pickup. Your offer reference is TRK-173.\n\nBest regards,\nMaintal Transport Logistik",
+      "received": "2026-11-21T15:03:02.115708Z",
+      "kind": "carrier",
+      "stage": "bid received"
+    }
+  ],
+  "corrected_pickup_inquiries": [
+    {
+      "action": "reply:346",
+      "state": "sent",
+      "response": {
+        "id": 373,
+        "from": "aeiou@hackloop.mail",
+        "to": "maintal-transport-logistik@hackloop.mail",
+        "subject": "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN",
+        "body": "Hello,\n\nThe full pickup postcode is 51447. Please quote collection at 51447 Bergisch Gladbach, Germany, to Cologne Bonn Airport (CGN). The shipment is ready on 25 November 2026: 12 pieces of printed marketing material, 676 kg gross and 5.79 cbm total.\n\nWhat is your fastest pickup service for this shipment? Please give the all-in trucking rate in EUR and transit time in hours.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": 346,
+        "references": [
+          308,
+          346
+        ],
+        "received_at": "2026-11-21T15:02:31.432592+00:00",
+        "attachments": []
+      },
+      "payload": {
+        "to": "maintal-transport-logistik@hackloop.mail",
+        "in_reply_to": 346,
+        "body": "Hello,\n\nThe full pickup postcode is 51447. Please quote collection at 51447 Bergisch Gladbach, Germany, to Cologne Bonn Airport (CGN). The shipment is ready on 25 November 2026: 12 pieces of printed marketing material, 676 kg gross and 5.79 cbm total.\n\nWhat is your fastest pickup service for this shipment? Please give the all-in trucking rate in EUR and transit time in hours.\n\nThanks,\nTeam AEIOU",
+        "subject": "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+      },
+      "attempted_at": "2026-11-21T15:02:31.421130Z"
+    },
+    {
+      "action": "reply:345",
+      "state": "sent",
+      "response": {
+        "id": 374,
+        "from": "aeiou@hackloop.mail",
+        "to": "elbkante-logistik@hackloop.mail",
+        "subject": "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN",
+        "body": "Hello,\n\nThe full pickup postcode is 51447. Please quote collection at 51447 Bergisch Gladbach, Germany, to Cologne Bonn Airport (CGN). The shipment is ready on 25 November 2026: 12 pieces of printed marketing material, 676 kg gross and 5.79 cbm total.\n\nWhat is your fastest pickup service for this shipment? Please give the all-in trucking rate in EUR and transit time in hours.\n\nThanks,\nTeam AEIOU",
+        "in_reply_to": 345,
+        "references": [
+          309,
+          345
+        ],
+        "received_at": "2026-11-21T15:02:31.468501+00:00",
+        "attachments": []
+      },
+      "payload": {
+        "to": "elbkante-logistik@hackloop.mail",
+        "in_reply_to": 345,
+        "body": "Hello,\n\nThe full pickup postcode is 51447. Please quote collection at 51447 Bergisch Gladbach, Germany, to Cologne Bonn Airport (CGN). The shipment is ready on 25 November 2026: 12 pieces of printed marketing material, 676 kg gross and 5.79 cbm total.\n\nWhat is your fastest pickup service for this shipment? Please give the all-in trucking rate in EUR and transit time in hours.\n\nThanks,\nTeam AEIOU",
+        "subject": "Re: Re: Rate request AEIOU-263 | pickup in zone 51 to CGN"
+      },
+      "attempted_at": "2026-11-21T15:02:31.460355Z"
+    }
+  ],
+  "portal_offers": [
+    {
+      "airline": "Aurelia Air Cargo",
+      "days": 2.0,
+      "total_eur": 2388.32,
+      "billed_kg": 966.93,
+      "source": "portal",
+      "rate_id": "R-4ARIFw3HuSfZVZMh",
+      "valid_until": "2026-11-21T15:16:04.458913Z"
+    },
+    {
+      "airline": "Ibisair Cargo",
+      "days": 2.0,
+      "total_eur": 2833.11,
+      "billed_kg": 966.93,
+      "source": "portal",
+      "rate_id": "R-TUldicIXGybCnBGQ",
+      "valid_until": "2026-11-21T15:16:04.495985Z"
+    },
+    {
+      "airline": "Meridian Freightways",
+      "days": 1.0,
+      "total_eur": 3094.18,
+      "billed_kg": 966.93,
+      "source": "portal",
+      "rate_id": "R-UiSMrYYlpQcQfMSM",
+      "valid_until": "2026-11-21T15:16:04.533367Z"
+    },
+    {
+      "airline": "Xenon Cargo Airlines",
+      "days": 3.0,
+      "total_eur": 2049.89,
+      "billed_kg": 966.93,
+      "source": "portal",
+      "rate_id": "R-lDyp49zcIGOd0Tv9",
+      "valid_until": "2026-11-21T15:16:04.587420Z"
+    }
+  ],
+  "response_seconds": 123.629636
+}

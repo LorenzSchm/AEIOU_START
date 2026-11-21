@@ -1,0 +1,22 @@
+{
+  "model": "gpt-4o-mini",
+  "extracted": {
+    "origin": null,
+    "destination": "ASU",
+    "weight_kg": 100,
+    "volume_cbm": 0.2,
+    "preference": "cheapest all-in freight option",
+    "pickup_required": true,
+    "pickup_zone": "11",
+    "needs_review": false
+  },
+  "stage": "review",
+  "reason": "Gateway extraction conflicts with shipment details. Confirm the fields.",
+  "outbound_count": 0,
+  "http_status": 200,
+  "usage": {
+    "prompt_tokens": 277,
+    "completion_tokens": 49,
+    "total_tokens": 326
+  }
+}

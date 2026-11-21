@@ -1,0 +1,39 @@
+{
+  "round": 5,
+  "official": {
+    "round_no": 5,
+    "sent_at": "2026-11-21T15:25:18.288590+00:00",
+    "answered_at": "2026-11-21T15:25:53.002700+00:00",
+    "verdict": "accepted",
+    "reason": null,
+    "booked": true
+  },
+  "checked_at": "2026-11-21T15:27:23.139262+00:00",
+  "rfq_to_quote_seconds": 34.714,
+  "request_id": 1221,
+  "subject": "Fastest air freight quote: STR to EZE",
+  "stage": "sent",
+  "offer": {
+    "airline": "Fjordline Air Cargo",
+    "days": 4.0,
+    "total_eur": 4408.52,
+    "billed_kg": 1228,
+    "source": "portal",
+    "rate_id": "R-iUO8HjK-GVLibpPo",
+    "valid_until": "2026-11-21T15:40:22.094439Z"
+  },
+  "rfq_to_first_inquiry_seconds": 2.81,
+  "customer_follow_ups": [
+    {
+      "id": 1389,
+      "received": "2026-11-21T15:26:17.996193Z",
+      "body": "Thank you for your offer. That works for us, please go ahead and book it.\n\nCheers,\nKlaus Weidner\nWeidner Spielwaren GmbH, Nuremberg"
+    }
+  ],
+  "quote_to_customer_approval_seconds": 24.993,
+  "booking_reference": "BK-5409HUAN",
+  "booked_at": "2026-11-21T15:26:42.768221+00:00",
+  "approval_to_booking_seconds": 24.772,
+  "carrier_confirmed_at": "2026-11-21T15:27:21.602934Z",
+  "booking_to_confirmation_email_seconds": 38.835
+}

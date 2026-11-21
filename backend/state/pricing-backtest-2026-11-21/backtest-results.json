@@ -1,0 +1,1341 @@
+{
+  "worker_commit": "1333221",
+  "market_memory_commit": "71b8d16",
+  "historical_cohort": "5U rounds 1–30, 21 November 2026",
+  "method": [
+    "Replayed the Java worker with a virtual clock, archived replies, and recorded portal rates. Portal availability in the archive is inferred from expiry minus 15 minutes.",
+    "Unobserved replies, missing attachments and missing portal offers limit replay coverage. Unrecorded advisory gateway checks were assumed to succeed.",
+    "The 200-second and immediate-portal comparisons are offline counterfactuals. Official verdicts apply only to historical responses.",
+    "The MarketMemory shadow test uses assumed weight brackets and no recorded dataset-version changes because the archive lacks portal bracket metadata and dataset versions."
+  ],
+  "official_verdicts": {
+    "accepted": 21,
+    "rejected": 7,
+    "no answer": 2
+  },
+  "official_price_rejections": {
+    "too_high": 5,
+    "too_low": 1
+  },
+  "replay_outcomes": {
+    "sent": 23,
+    "expired": 5,
+    "waiting for documents": 2
+  },
+  "baseline": {
+    "quotes_sent": 23,
+    "median_seconds_from_rfq": 40.0,
+    "max_seconds_from_rfq": 95.0
+  },
+  "paired_quotes": 22,
+  "same_historical_price": 18,
+  "comparison_summary": {
+    "customer_objective_first": {
+      "quotes_sent": 23,
+      "median_seconds_from_rfq": 40.0,
+      "max_seconds_from_rfq": 95.0,
+      "changed_quotes": []
+    },
+    "portal_wait_200_seconds": {
+      "quotes_sent": 23,
+      "median_seconds_from_rfq": 40.0,
+      "max_seconds_from_rfq": 200.0,
+      "changed_quotes": [
+        15,
+        16,
+        17,
+        22,
+        27,
+        28,
+        29
+      ]
+    },
+    "all_recorded_portal_visible_on_first_lookup": {
+      "quotes_sent": 23,
+      "median_seconds_from_rfq": 40.0,
+      "max_seconds_from_rfq": 95.0,
+      "changed_quotes": [
+        3,
+        6,
+        15,
+        16,
+        17,
+        22
+      ]
+    }
+  },
+  "market_memory": {
+    "recorded_portal_offers": 84,
+    "predictable_offers": 7,
+    "matched_rounds": [
+      4,
+      25
+    ],
+    "max_absolute_error_eur": 0.008894645940927148,
+    "predictions": [
+      {
+        "round": 4,
+        "airline": "Aurelia Air Cargo",
+        "lane": "CGN-ORD",
+        "billed_kg": 699.73,
+        "assumed_bracket": "500",
+        "actual_eur": 1728.33,
+        "estimated_eur": 1728.335198618307,
+        "absolute_percentage_error": 0.0003007885245873184,
+        "transit_days_match": true
+      },
+      {
+        "round": 4,
+        "airline": "Ibisair Cargo",
+        "lane": "CGN-ORD",
+        "billed_kg": 699.73,
+        "assumed_bracket": "500",
+        "actual_eur": 2050.22,
+        "estimated_eur": 2050.212590673575,
+        "absolute_percentage_error": 0.0003613917738096399,
+        "transit_days_match": true
+      },
+      {
+        "round": 4,
+        "airline": "Meridian Freightways",
+        "lane": "CGN-ORD",
+        "billed_kg": 699.73,
+        "assumed_bracket": "500",
+        "actual_eur": 2239.13,
+        "estimated_eur": 2239.138894645941,
+        "absolute_percentage_error": 0.0003972366919741149,
+        "transit_days_match": true
+      },
+      {
+        "round": 4,
+        "airline": "Xenon Cargo Airlines",
+        "lane": "CGN-ORD",
+        "billed_kg": 699.73,
+        "assumed_bracket": "500",
+        "actual_eur": 1483.43,
+        "estimated_eur": 1483.426442141623,
+        "absolute_percentage_error": 0.0002398399908994695,
+        "transit_days_match": true
+      },
+      {
+        "round": 25,
+        "airline": "Aurelia Air Cargo",
+        "lane": "STR-EZE",
+        "billed_kg": 1000,
+        "assumed_bracket": "1000",
+        "actual_eur": 3310.0,
+        "estimated_eur": 3310.0,
+        "absolute_percentage_error": 0,
+        "transit_days_match": true
+      },
+      {
+        "round": 25,
+        "airline": "Fjordline Air Cargo",
+        "lane": "STR-EZE",
+        "billed_kg": 1000,
+        "assumed_bracket": "1000",
+        "actual_eur": 3590.0,
+        "estimated_eur": 3590.0,
+        "absolute_percentage_error": 0,
+        "transit_days_match": true
+      },
+      {
+        "round": 25,
+        "airline": "Nova Atlas Cargo",
+        "lane": "STR-EZE",
+        "billed_kg": 1000,
+        "assumed_bracket": "1000",
+        "actual_eur": 2570.0,
+        "estimated_eur": 2570.0,
+        "absolute_percentage_error": 0,
+        "transit_days_match": true
+      }
+    ]
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "lane": "CGN-ORD",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 3316.54,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Meridian Freightways",
+        "source": "portal",
+        "total_eur": 3316.54,
+        "days": 1.5416666666666665,
+        "billed_kg": 966.93,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 4,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 3316.54,
+          "days": 1.5416666666666665,
+          "billed_kg": 966.93,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 3316.54,
+          "days": 1.5416666666666665,
+          "billed_kg": 966.93,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 3316.54,
+          "days": 1.5416666666666665,
+          "billed_kg": 966.93,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 2,
+      "lane": "FRA-JFK",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "rejected",
+      "official_rejection_reason": "too_high",
+      "historical_quote_eur": 5483.77,
+      "replay_status": "expired",
+      "replay_quote": null,
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 2,
+      "portal_offers_visible_before_replay_quote": 2,
+      "comparisons": {
+        "customer_objective_first": null,
+        "portal_wait_200_seconds": null,
+        "all_recorded_portal_visible_on_first_lookup": null
+      }
+    },
+    {
+      "round": 3,
+      "lane": "DUS-JFK",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 3696.0,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Fjordline Air Cargo",
+        "source": "portal",
+        "total_eur": 3696.0,
+        "days": 3.0,
+        "billed_kg": 1540,
+        "seconds_from_rfq": 70.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 2,
+      "portal_offers_visible_before_replay_quote": 2,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 3696.0,
+          "days": 3.0,
+          "billed_kg": 1540,
+          "seconds_from_rfq": 70.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 3696.0,
+          "days": 3.0,
+          "billed_kg": 1540,
+          "seconds_from_rfq": 70.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 3696.0,
+          "days": 3.0,
+          "billed_kg": 1540,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 4,
+      "lane": "CGN-ORD",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 1599.41,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Xenon Cargo Airlines",
+        "source": "portal",
+        "total_eur": 1599.41,
+        "days": 3.0,
+        "billed_kg": 699.73,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 4,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Xenon Cargo Airlines",
+          "source": "portal",
+          "total_eur": 1599.41,
+          "days": 3.0,
+          "billed_kg": 699.73,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Xenon Cargo Airlines",
+          "source": "portal",
+          "total_eur": 1599.41,
+          "days": 3.0,
+          "billed_kg": 699.73,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Xenon Cargo Airlines",
+          "source": "portal",
+          "total_eur": 1599.41,
+          "days": 3.0,
+          "billed_kg": 699.73,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 5,
+      "lane": "STR-EZE",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 4408.52,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Fjordline Air Cargo",
+        "source": "portal",
+        "total_eur": 4408.52,
+        "days": 4.0,
+        "billed_kg": 1228,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 3,
+      "portal_offers_visible_before_replay_quote": 3,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 4408.52,
+          "days": 4.0,
+          "billed_kg": 1228,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 4408.52,
+          "days": 4.0,
+          "billed_kg": 1228,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 4408.52,
+          "days": 4.0,
+          "billed_kg": 1228,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 6,
+      "lane": "DUS-KUL",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 3949.95,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Fjordline Air Cargo",
+        "source": "portal",
+        "total_eur": 3949.95,
+        "days": 5.0,
+        "billed_kg": 1549,
+        "seconds_from_rfq": 35.837
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 1,
+      "portal_offers_visible_before_replay_quote": 1,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 3949.95,
+          "days": 5.0,
+          "billed_kg": 1549,
+          "seconds_from_rfq": 35.837
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 3949.95,
+          "days": 5.0,
+          "billed_kg": 1549,
+          "seconds_from_rfq": 35.837
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 3949.95,
+          "days": 5.0,
+          "billed_kg": 1549,
+          "seconds_from_rfq": 31.0
+        }
+      }
+    },
+    {
+      "round": 7,
+      "lane": "MUC-LAX",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "rejected",
+      "official_rejection_reason": "too_high",
+      "historical_quote_eur": 3203.58,
+      "replay_status": "expired",
+      "replay_quote": null,
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 1,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": null,
+        "portal_wait_200_seconds": null,
+        "all_recorded_portal_visible_on_first_lookup": null
+      }
+    },
+    {
+      "round": 8,
+      "lane": "MUC-CAI",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "rejected",
+      "official_rejection_reason": "too_high",
+      "historical_quote_eur": 1585.0,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Wayzata Air Cargo",
+        "source": "sheet",
+        "total_eur": 1585.0,
+        "days": 2.0,
+        "billed_kg": 500,
+        "seconds_from_rfq": 31.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 2,
+      "portal_offers_visible_before_replay_quote": 2,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Wayzata Air Cargo",
+          "source": "sheet",
+          "total_eur": 1585.0,
+          "days": 2.0,
+          "billed_kg": 500,
+          "seconds_from_rfq": 31.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Wayzata Air Cargo",
+          "source": "sheet",
+          "total_eur": 1585.0,
+          "days": 2.0,
+          "billed_kg": 500,
+          "seconds_from_rfq": 31.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Wayzata Air Cargo",
+          "source": "sheet",
+          "total_eur": 1585.0,
+          "days": 2.0,
+          "billed_kg": 500,
+          "seconds_from_rfq": 31.0
+        }
+      }
+    },
+    {
+      "round": 9,
+      "lane": "FRA-LOS",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 5270.76,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Lumen Air Cargo",
+        "source": "portal",
+        "total_eur": 5202.2,
+        "days": 5.0,
+        "billed_kg": 1952,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": -1.3,
+      "recorded_portal_offers": 2,
+      "portal_offers_visible_before_replay_quote": 2,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Lumen Air Cargo",
+          "source": "portal",
+          "total_eur": 5202.2,
+          "days": 5.0,
+          "billed_kg": 1952,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Lumen Air Cargo",
+          "source": "portal",
+          "total_eur": 5202.2,
+          "days": 5.0,
+          "billed_kg": 1952,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Lumen Air Cargo",
+          "source": "portal",
+          "total_eur": 5202.2,
+          "days": 5.0,
+          "billed_kg": 1952,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 10,
+      "lane": "FRA-GRU",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "rejected",
+      "official_rejection_reason": "dg_docs_missing",
+      "historical_quote_eur": 2757.1,
+      "replay_status": "waiting for documents",
+      "replay_quote": null,
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": null,
+        "portal_wait_200_seconds": null,
+        "all_recorded_portal_visible_on_first_lookup": null
+      }
+    },
+    {
+      "round": 11,
+      "lane": "HAM-YYZ",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": null,
+      "replay_status": "waiting for documents",
+      "replay_quote": null,
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 0,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": null,
+        "portal_wait_200_seconds": null,
+        "all_recorded_portal_visible_on_first_lookup": null
+      }
+    },
+    {
+      "round": 12,
+      "lane": "FRA-DOH",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 324.36,
+      "replay_status": "expired",
+      "replay_quote": null,
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": null,
+        "portal_wait_200_seconds": null,
+        "all_recorded_portal_visible_on_first_lookup": null
+      }
+    },
+    {
+      "round": 13,
+      "lane": "HAM-DEL",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 2875.06,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Borealis Freight Airways",
+        "source": "portal",
+        "total_eur": 2875.06,
+        "days": 5.0,
+        "billed_kg": 1619,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 4,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Borealis Freight Airways",
+          "source": "portal",
+          "total_eur": 2875.06,
+          "days": 5.0,
+          "billed_kg": 1619,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Borealis Freight Airways",
+          "source": "portal",
+          "total_eur": 2875.06,
+          "days": 5.0,
+          "billed_kg": 1619,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Borealis Freight Airways",
+          "source": "portal",
+          "total_eur": 2875.06,
+          "days": 5.0,
+          "billed_kg": 1619,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 14,
+      "lane": "DUS-PEK",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 3383.24,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Gannet Airways",
+        "source": "portal",
+        "total_eur": 3383.24,
+        "days": 5.0,
+        "billed_kg": 1341.01,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 1,
+      "portal_offers_visible_before_replay_quote": 1,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Gannet Airways",
+          "source": "portal",
+          "total_eur": 3383.24,
+          "days": 5.0,
+          "billed_kg": 1341.01,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Gannet Airways",
+          "source": "portal",
+          "total_eur": 3383.24,
+          "days": 5.0,
+          "billed_kg": 1341.01,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Gannet Airways",
+          "source": "portal",
+          "total_eur": 3383.24,
+          "days": 5.0,
+          "billed_kg": 1341.01,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 15,
+      "lane": "MUC-SGN",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "no answer",
+      "official_rejection_reason": null,
+      "historical_quote_eur": null,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Helix Air Freight",
+        "source": "sheet",
+        "total_eur": 2487.96,
+        "days": 6.916666666666667,
+        "billed_kg": 572,
+        "seconds_from_rfq": 95.0
+      },
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 6,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Helix Air Freight",
+          "source": "sheet",
+          "total_eur": 2487.96,
+          "days": 6.916666666666667,
+          "billed_kg": 572,
+          "seconds_from_rfq": 95.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Helix Air Freight",
+          "source": "sheet",
+          "total_eur": 2487.96,
+          "days": 6.916666666666667,
+          "billed_kg": 572,
+          "seconds_from_rfq": 200.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Polaris Air Logistics",
+          "source": "portal",
+          "total_eur": 1229.56,
+          "days": 4.916666666666667,
+          "billed_kg": 572,
+          "seconds_from_rfq": 51.0
+        }
+      }
+    },
+    {
+      "round": 16,
+      "lane": "MUC-PVG",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 1544.94,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Helix Air Freight",
+        "source": "sheet",
+        "total_eur": 1228.31,
+        "days": 6.0,
+        "billed_kg": 400.8,
+        "seconds_from_rfq": 95.0
+      },
+      "replay_minus_historical_percent": -20.49,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Helix Air Freight",
+          "source": "sheet",
+          "total_eur": 1228.31,
+          "days": 6.0,
+          "billed_kg": 400.8,
+          "seconds_from_rfq": 95.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Helix Air Freight",
+          "source": "sheet",
+          "total_eur": 1228.31,
+          "days": 6.0,
+          "billed_kg": 400.8,
+          "seconds_from_rfq": 200.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 1544.94,
+          "days": 4.0,
+          "billed_kg": 400.8,
+          "seconds_from_rfq": 52.0
+        }
+      }
+    },
+    {
+      "round": 17,
+      "lane": "STR-EZE",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 5005.6,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Aurelia Air Cargo",
+        "source": "carrier bid",
+        "total_eur": 6341.3,
+        "days": 6.0,
+        "billed_kg": 1805,
+        "seconds_from_rfq": 95.0
+      },
+      "replay_minus_historical_percent": 26.68,
+      "recorded_portal_offers": 6,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Aurelia Air Cargo",
+          "source": "carrier bid",
+          "total_eur": 6341.3,
+          "days": 6.0,
+          "billed_kg": 1805,
+          "seconds_from_rfq": 95.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Nova Atlas Cargo",
+          "source": "portal",
+          "total_eur": 5005.6,
+          "days": 7.0,
+          "billed_kg": 1805,
+          "seconds_from_rfq": 187.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Nova Atlas Cargo",
+          "source": "portal",
+          "total_eur": 5005.6,
+          "days": 7.0,
+          "billed_kg": 1805,
+          "seconds_from_rfq": 52.0
+        }
+      }
+    },
+    {
+      "round": 18,
+      "lane": "CGN-SGN",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 2278.18,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Lumen Air Cargo",
+        "source": "portal",
+        "total_eur": 2278.18,
+        "days": 4.0,
+        "billed_kg": 1000,
+        "seconds_from_rfq": 51.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 4,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Lumen Air Cargo",
+          "source": "portal",
+          "total_eur": 2278.18,
+          "days": 4.0,
+          "billed_kg": 1000,
+          "seconds_from_rfq": 51.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Lumen Air Cargo",
+          "source": "portal",
+          "total_eur": 2278.18,
+          "days": 4.0,
+          "billed_kg": 1000,
+          "seconds_from_rfq": 51.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Lumen Air Cargo",
+          "source": "portal",
+          "total_eur": 2278.18,
+          "days": 4.0,
+          "billed_kg": 1000,
+          "seconds_from_rfq": 51.0
+        }
+      }
+    },
+    {
+      "round": 19,
+      "lane": "CGN-DFW",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 6166.47,
+      "replay_status": "expired",
+      "replay_quote": null,
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 2,
+      "portal_offers_visible_before_replay_quote": 2,
+      "comparisons": {
+        "customer_objective_first": null,
+        "portal_wait_200_seconds": null,
+        "all_recorded_portal_visible_on_first_lookup": null
+      }
+    },
+    {
+      "round": 20,
+      "lane": "MUC-RUH",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "no answer",
+      "official_rejection_reason": null,
+      "historical_quote_eur": null,
+      "replay_status": "expired",
+      "replay_quote": null,
+      "replay_minus_historical_percent": null,
+      "recorded_portal_offers": 2,
+      "portal_offers_visible_before_replay_quote": 2,
+      "comparisons": {
+        "customer_objective_first": null,
+        "portal_wait_200_seconds": null,
+        "all_recorded_portal_visible_on_first_lookup": null
+      }
+    },
+    {
+      "round": 21,
+      "lane": "HAM-EZE",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 2470.48,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Meridian Freightways",
+        "source": "portal",
+        "total_eur": 2470.48,
+        "days": 3.5,
+        "billed_kg": 676,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 2,
+      "portal_offers_visible_before_replay_quote": 2,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 2470.48,
+          "days": 3.5,
+          "billed_kg": 676,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 2470.48,
+          "days": 3.5,
+          "billed_kg": 676,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 2470.48,
+          "days": 3.5,
+          "billed_kg": 676,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 22,
+      "lane": "CGN-SGN",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 7637.01,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Cobalt Skylift",
+        "source": "sheet",
+        "total_eur": 5853.75,
+        "days": 5.291666666666667,
+        "billed_kg": 2244.48,
+        "seconds_from_rfq": 95.0
+      },
+      "replay_minus_historical_percent": -23.35,
+      "recorded_portal_offers": 3,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Cobalt Skylift",
+          "source": "sheet",
+          "total_eur": 5853.75,
+          "days": 5.291666666666667,
+          "billed_kg": 2244.48,
+          "seconds_from_rfq": 95.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Juniper Cargo Lines",
+          "source": "portal",
+          "total_eur": 7357.56,
+          "days": 3.291666666666667,
+          "billed_kg": 2244.48,
+          "seconds_from_rfq": 175.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Juniper Cargo Lines",
+          "source": "portal",
+          "total_eur": 7357.56,
+          "days": 3.291666666666667,
+          "billed_kg": 2244.48,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 23,
+      "lane": "FRA-DEL",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 1987.7,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Meridian Freightways",
+        "source": "portal",
+        "total_eur": 1987.7,
+        "days": 4.0,
+        "billed_kg": 1148.96,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 3,
+      "portal_offers_visible_before_replay_quote": 3,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 1987.7,
+          "days": 4.0,
+          "billed_kg": 1148.96,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 1987.7,
+          "days": 4.0,
+          "billed_kg": 1148.96,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 1987.7,
+          "days": 4.0,
+          "billed_kg": 1148.96,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 24,
+      "lane": "DUS-ATL",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 4500.02,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Riverbend Airlines Cargo",
+        "source": "portal",
+        "total_eur": 4500.02,
+        "days": 2.4583333333333335,
+        "billed_kg": 2000,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 6,
+      "portal_offers_visible_before_replay_quote": 6,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Riverbend Airlines Cargo",
+          "source": "portal",
+          "total_eur": 4500.02,
+          "days": 2.4583333333333335,
+          "billed_kg": 2000,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Riverbend Airlines Cargo",
+          "source": "portal",
+          "total_eur": 4500.02,
+          "days": 2.4583333333333335,
+          "billed_kg": 2000,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Riverbend Airlines Cargo",
+          "source": "portal",
+          "total_eur": 4500.02,
+          "days": 2.4583333333333335,
+          "billed_kg": 2000,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 25,
+      "lane": "STR-EZE",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 2451.84,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Fjordline Air Cargo",
+        "source": "portal",
+        "total_eur": 2451.84,
+        "days": 4.875,
+        "billed_kg": 544,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 6,
+      "portal_offers_visible_before_replay_quote": 6,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 2451.84,
+          "days": 4.875,
+          "billed_kg": 544,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 2451.84,
+          "days": 4.875,
+          "billed_kg": 544,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Fjordline Air Cargo",
+          "source": "portal",
+          "total_eur": 2451.84,
+          "days": 4.875,
+          "billed_kg": 544,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 26,
+      "lane": "MUC-BKK",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 5336.56,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Nova Atlas Cargo",
+        "source": "portal",
+        "total_eur": 5336.56,
+        "days": 2.625,
+        "billed_kg": 1708,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 3,
+      "portal_offers_visible_before_replay_quote": 3,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Nova Atlas Cargo",
+          "source": "portal",
+          "total_eur": 5336.56,
+          "days": 2.625,
+          "billed_kg": 1708,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Nova Atlas Cargo",
+          "source": "portal",
+          "total_eur": 5336.56,
+          "days": 2.625,
+          "billed_kg": 1708,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Nova Atlas Cargo",
+          "source": "portal",
+          "total_eur": 5336.56,
+          "days": 2.625,
+          "billed_kg": 1708,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    },
+    {
+      "round": 27,
+      "lane": "HAM-EZE",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "rejected",
+      "official_rejection_reason": "too_low",
+      "historical_quote_eur": 2222.36,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Wayzata Air Cargo",
+        "source": "sheet",
+        "total_eur": 2222.36,
+        "days": 7.25,
+        "billed_kg": 1000,
+        "seconds_from_rfq": 95.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 0,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Wayzata Air Cargo",
+          "source": "sheet",
+          "total_eur": 2222.36,
+          "days": 7.25,
+          "billed_kg": 1000,
+          "seconds_from_rfq": 95.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Wayzata Air Cargo",
+          "source": "sheet",
+          "total_eur": 2222.36,
+          "days": 7.25,
+          "billed_kg": 1000,
+          "seconds_from_rfq": 200.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Wayzata Air Cargo",
+          "source": "sheet",
+          "total_eur": 2222.36,
+          "days": 7.25,
+          "billed_kg": 1000,
+          "seconds_from_rfq": 95.0
+        }
+      }
+    },
+    {
+      "round": 28,
+      "lane": "CGN-DFW",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "rejected",
+      "official_rejection_reason": "too_high",
+      "historical_quote_eur": 416.16,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Quetzal Air Freight",
+        "source": "sheet",
+        "total_eur": 416.16,
+        "days": 2.0,
+        "billed_kg": 116.9,
+        "seconds_from_rfq": 95.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 0,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Quetzal Air Freight",
+          "source": "sheet",
+          "total_eur": 416.16,
+          "days": 2.0,
+          "billed_kg": 116.9,
+          "seconds_from_rfq": 95.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Quetzal Air Freight",
+          "source": "sheet",
+          "total_eur": 416.16,
+          "days": 2.0,
+          "billed_kg": 116.9,
+          "seconds_from_rfq": 200.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Quetzal Air Freight",
+          "source": "sheet",
+          "total_eur": 416.16,
+          "days": 2.0,
+          "billed_kg": 116.9,
+          "seconds_from_rfq": 95.0
+        }
+      }
+    },
+    {
+      "round": 29,
+      "lane": "FRA-PVG",
+      "request_objective": "cheapest",
+      "official_verdict_on_historical_response": "rejected",
+      "official_rejection_reason": "too_high",
+      "historical_quote_eur": 4118.75,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Helix Air Freight",
+        "source": "sheet",
+        "total_eur": 4118.75,
+        "days": 2.0,
+        "billed_kg": 1225,
+        "seconds_from_rfq": 95.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 0,
+      "portal_offers_visible_before_replay_quote": 0,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Helix Air Freight",
+          "source": "sheet",
+          "total_eur": 4118.75,
+          "days": 2.0,
+          "billed_kg": 1225,
+          "seconds_from_rfq": 95.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Helix Air Freight",
+          "source": "sheet",
+          "total_eur": 4118.75,
+          "days": 2.0,
+          "billed_kg": 1225,
+          "seconds_from_rfq": 200.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Helix Air Freight",
+          "source": "sheet",
+          "total_eur": 4118.75,
+          "days": 2.0,
+          "billed_kg": 1225,
+          "seconds_from_rfq": 95.0
+        }
+      }
+    },
+    {
+      "round": 30,
+      "lane": "MUC-PVG",
+      "request_objective": "fastest",
+      "official_verdict_on_historical_response": "accepted",
+      "official_rejection_reason": null,
+      "historical_quote_eur": 534.66,
+      "replay_status": "sent",
+      "replay_quote": {
+        "airline": "Meridian Freightways",
+        "source": "portal",
+        "total_eur": 534.66,
+        "days": 3.0,
+        "billed_kg": 134,
+        "seconds_from_rfq": 40.0
+      },
+      "replay_minus_historical_percent": 0.0,
+      "recorded_portal_offers": 4,
+      "portal_offers_visible_before_replay_quote": 4,
+      "comparisons": {
+        "customer_objective_first": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 534.66,
+          "days": 3.0,
+          "billed_kg": 134,
+          "seconds_from_rfq": 40.0
+        },
+        "portal_wait_200_seconds": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 534.66,
+          "days": 3.0,
+          "billed_kg": 134,
+          "seconds_from_rfq": 40.0
+        },
+        "all_recorded_portal_visible_on_first_lookup": {
+          "airline": "Meridian Freightways",
+          "source": "portal",
+          "total_eur": 534.66,
+          "days": 3.0,
+          "billed_kg": 134,
+          "seconds_from_rfq": 40.0
+        }
+      }
+    }
+  ]
+}

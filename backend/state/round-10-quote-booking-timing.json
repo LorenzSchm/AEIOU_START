@@ -1,0 +1,26 @@
+{
+  "round": 10,
+  "official": {
+    "round_no": 10,
+    "sent_at": "2026-11-21T15:55:39.435542+00:00",
+    "answered_at": "2026-11-21T15:57:52.028462+00:00",
+    "verdict": "rejected",
+    "reason": "dg_docs_missing",
+    "booked": null
+  },
+  "checked_at": "2026-11-21T15:57:58.517283+00:00",
+  "rfq_to_quote_seconds": 132.593,
+  "request_id": 2254,
+  "subject": "Air freight quote to GRU",
+  "stage": "sent",
+  "offer": {
+    "airline": "Juniper Cargo Lines",
+    "days": 5.958333333333333,
+    "total_eur": 2757.1,
+    "billed_kg": 715,
+    "source": "portal",
+    "rate_id": "R-rFN9NOBlXT6jzTFL",
+    "valid_until": "2026-11-21T16:12:20.186735Z"
+  },
+  "rfq_to_first_inquiry_seconds": 100.99
+}

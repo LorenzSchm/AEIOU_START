@@ -1,0 +1,1151 @@
+{
+  "cohort": "5U archive, 21 November 2026, rounds 1–30",
+  "method": [
+    "Ran the production FiveU rate lookup offline with historical portal responses.",
+    "The baseline starts with empty memory for each round. The priority policy learns only from completed earlier rounds.",
+    "Carrier discovery uses the archived pre-wave portal directory order.",
+    "The archive contains billed weights and observed buy-ups. Where carrier-specific lower bracket boundaries were missing, the test assumed common boundaries.",
+    "Winner position measures the sequence of checks. The replay does not measure network latency or simulate new board verdicts."
+  ],
+  "total_rounds": 30,
+  "scored_rounds": 26,
+  "rounds_without_recorded_portal_rates": [
+    11,
+    27,
+    28,
+    29
+  ],
+  "same_confirmed_winner_and_rate_set": 26,
+  "lookups_reordered_on_rounds": [
+    4,
+    25
+  ],
+  "comparisons": {
+    "baseline": {
+      "rate_checks": 84,
+      "winner_in_first_check": 15,
+      "winner_in_first_two_checks": 21,
+      "mean_winner_position": 1.769
+    },
+    "priority": {
+      "rate_checks": 84,
+      "winner_in_first_check": 16,
+      "winner_in_first_two_checks": 22,
+      "mean_winner_position": 1.654
+    }
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "lane": "CGN-ORD",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Meridian Freightways",
+      "winner_eur": 3094.18,
+      "baseline_winner_position": 3,
+      "priority_winner_position": 3,
+      "baseline_order": [
+        {
+          "airline": "AU",
+          "billed": 966.93
+        },
+        {
+          "airline": "IB",
+          "billed": 966.93
+        },
+        {
+          "airline": "MD",
+          "billed": 966.93
+        },
+        {
+          "airline": "XC",
+          "billed": 966.93
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "AU",
+          "billed": 966.93
+        },
+        {
+          "airline": "IB",
+          "billed": 966.93
+        },
+        {
+          "airline": "MD",
+          "billed": 966.93
+        },
+        {
+          "airline": "XC",
+          "billed": 966.93
+        }
+      ]
+    },
+    {
+      "round": 2,
+      "lane": "FRA-JFK",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Solace Air Cargo",
+      "winner_eur": 5238.75,
+      "baseline_winner_position": 2,
+      "priority_winner_position": 2,
+      "baseline_order": [
+        {
+          "airline": "PL",
+          "billed": 1800.26
+        },
+        {
+          "airline": "SL",
+          "billed": 1800.26
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "PL",
+          "billed": 1800.26
+        },
+        {
+          "airline": "SL",
+          "billed": 1800.26
+        }
+      ]
+    },
+    {
+      "round": 3,
+      "lane": "DUS-JFK",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Fjordline Air Cargo",
+      "winner_eur": 3696.0,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "FQ",
+          "billed": 1540.0
+        },
+        {
+          "airline": "UV",
+          "billed": 1540.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "FQ",
+          "billed": 1540.0
+        },
+        {
+          "airline": "UV",
+          "billed": 1540.0
+        }
+      ]
+    },
+    {
+      "round": 4,
+      "lane": "CGN-ORD",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 4,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Xenon Cargo Airlines",
+      "winner_eur": 1483.43,
+      "baseline_winner_position": 4,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "AU",
+          "billed": 699.73
+        },
+        {
+          "airline": "IB",
+          "billed": 699.73
+        },
+        {
+          "airline": "MD",
+          "billed": 699.73
+        },
+        {
+          "airline": "XC",
+          "billed": 699.73
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "XC",
+          "billed": 699.73
+        },
+        {
+          "airline": "AU",
+          "billed": 699.73
+        },
+        {
+          "airline": "IB",
+          "billed": 699.73
+        },
+        {
+          "airline": "MD",
+          "billed": 699.73
+        }
+      ]
+    },
+    {
+      "round": 5,
+      "lane": "STR-EZE",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 3,
+      "winner": "Fjordline Air Cargo",
+      "winner_eur": 4408.52,
+      "baseline_winner_position": 2,
+      "priority_winner_position": 2,
+      "baseline_order": [
+        {
+          "airline": "AU",
+          "billed": 1228
+        },
+        {
+          "airline": "FQ",
+          "billed": 1228
+        },
+        {
+          "airline": "NV",
+          "billed": 1228
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "AU",
+          "billed": 1228
+        },
+        {
+          "airline": "FQ",
+          "billed": 1228
+        },
+        {
+          "airline": "NV",
+          "billed": 1228
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "lane": "DUS-KUL",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 1,
+      "winner": "Fjordline Air Cargo",
+      "winner_eur": 3949.95,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "FQ",
+          "billed": 1549
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "FQ",
+          "billed": 1549
+        }
+      ]
+    },
+    {
+      "round": 7,
+      "lane": "MUC-LAX",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 1,
+      "winner": "Fjordline Air Cargo",
+      "winner_eur": 3203.58,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "FQ",
+          "billed": 998
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "FQ",
+          "billed": 998
+        }
+      ]
+    },
+    {
+      "round": 8,
+      "lane": "MUC-CAI",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Borealis Freight Airways",
+      "winner_eur": 1642.68,
+      "baseline_winner_position": 2,
+      "priority_winner_position": 2,
+      "baseline_order": [
+        {
+          "airline": "AU",
+          "billed": 486
+        },
+        {
+          "airline": "BX",
+          "billed": 486
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "AU",
+          "billed": 486
+        },
+        {
+          "airline": "BX",
+          "billed": 486
+        }
+      ]
+    },
+    {
+      "round": 9,
+      "lane": "FRA-LOS",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Lumen Air Cargo",
+      "winner_eur": 4840.96,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "LM",
+          "billed": 1952
+        },
+        {
+          "airline": "TM",
+          "billed": 1952
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "LM",
+          "billed": 1952
+        },
+        {
+          "airline": "TM",
+          "billed": 1952
+        }
+      ]
+    },
+    {
+      "round": 10,
+      "lane": "FRA-GRU",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Juniper Cargo Lines",
+      "winner_eur": 2609.75,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "JP",
+          "billed": 715
+        },
+        {
+          "airline": "RV",
+          "billed": 715
+        },
+        {
+          "airline": "JP",
+          "billed": 1000.0
+        },
+        {
+          "airline": "RV",
+          "billed": 1000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "JP",
+          "billed": 715
+        },
+        {
+          "airline": "RV",
+          "billed": 715
+        },
+        {
+          "airline": "JP",
+          "billed": 1000.0
+        },
+        {
+          "airline": "RV",
+          "billed": 1000.0
+        }
+      ]
+    },
+    {
+      "round": 11,
+      "lane": "HAM-YYZ",
+      "preference": "cheapest",
+      "status": "no recorded portal offers"
+    },
+    {
+      "round": 12,
+      "lane": "FRA-DOH",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Ultraviolet Air Freight",
+      "winner_eur": 324.36,
+      "baseline_winner_position": 2,
+      "priority_winner_position": 2,
+      "baseline_order": [
+        {
+          "airline": "RV",
+          "billed": 102
+        },
+        {
+          "airline": "UV",
+          "billed": 102
+        },
+        {
+          "airline": "RV",
+          "billed": 300.0
+        },
+        {
+          "airline": "UV",
+          "billed": 300.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "RV",
+          "billed": 102
+        },
+        {
+          "airline": "UV",
+          "billed": 102
+        },
+        {
+          "airline": "RV",
+          "billed": 300.0
+        },
+        {
+          "airline": "UV",
+          "billed": 300.0
+        }
+      ]
+    },
+    {
+      "round": 13,
+      "lane": "HAM-DEL",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Borealis Freight Airways",
+      "winner_eur": 2752.3,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "BX",
+          "billed": 1619
+        },
+        {
+          "airline": "IB",
+          "billed": 1619
+        },
+        {
+          "airline": "BX",
+          "billed": 2000.0
+        },
+        {
+          "airline": "IB",
+          "billed": 2000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "BX",
+          "billed": 1619
+        },
+        {
+          "airline": "IB",
+          "billed": 1619
+        },
+        {
+          "airline": "BX",
+          "billed": 2000.0
+        },
+        {
+          "airline": "IB",
+          "billed": 2000.0
+        }
+      ]
+    },
+    {
+      "round": 14,
+      "lane": "DUS-PEK",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 1,
+      "winner": "Gannet Airways",
+      "winner_eur": 3003.86,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "GN",
+          "billed": 1341.01
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "GN",
+          "billed": 1341.01
+        }
+      ]
+    },
+    {
+      "round": 15,
+      "lane": "MUC-SGN",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 6,
+      "winner": "Polaris Air Logistics",
+      "winner_eur": 1058.2,
+      "baseline_winner_position": 2,
+      "priority_winner_position": 2,
+      "baseline_order": [
+        {
+          "airline": "NV",
+          "billed": 572
+        },
+        {
+          "airline": "PL",
+          "billed": 572
+        },
+        {
+          "airline": "TM",
+          "billed": 572
+        },
+        {
+          "airline": "NV",
+          "billed": 1000.0
+        },
+        {
+          "airline": "PL",
+          "billed": 1000.0
+        },
+        {
+          "airline": "TM",
+          "billed": 1000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "NV",
+          "billed": 572
+        },
+        {
+          "airline": "PL",
+          "billed": 572
+        },
+        {
+          "airline": "TM",
+          "billed": 572
+        },
+        {
+          "airline": "NV",
+          "billed": 1000.0
+        },
+        {
+          "airline": "PL",
+          "billed": 1000.0
+        },
+        {
+          "airline": "TM",
+          "billed": 1000.0
+        }
+      ]
+    },
+    {
+      "round": 16,
+      "lane": "MUC-PVG",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Meridian Freightways",
+      "winner_eur": 1442.88,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "MD",
+          "billed": 400.8
+        },
+        {
+          "airline": "XC",
+          "billed": 400.8
+        },
+        {
+          "airline": "MD",
+          "billed": 500.0
+        },
+        {
+          "airline": "XC",
+          "billed": 500.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "MD",
+          "billed": 400.8
+        },
+        {
+          "airline": "XC",
+          "billed": 400.8
+        },
+        {
+          "airline": "MD",
+          "billed": 500.0
+        },
+        {
+          "airline": "XC",
+          "billed": 500.0
+        }
+      ]
+    },
+    {
+      "round": 17,
+      "lane": "STR-EZE",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 6,
+      "winner": "Nova Atlas Cargo",
+      "winner_eur": 4638.85,
+      "baseline_winner_position": 3,
+      "priority_winner_position": 3,
+      "baseline_order": [
+        {
+          "airline": "AU",
+          "billed": 1805
+        },
+        {
+          "airline": "FQ",
+          "billed": 1805
+        },
+        {
+          "airline": "NV",
+          "billed": 1805
+        },
+        {
+          "airline": "AU",
+          "billed": 2000.0
+        },
+        {
+          "airline": "FQ",
+          "billed": 2000.0
+        },
+        {
+          "airline": "NV",
+          "billed": 2000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "AU",
+          "billed": 1805
+        },
+        {
+          "airline": "FQ",
+          "billed": 1805
+        },
+        {
+          "airline": "NV",
+          "billed": 1805
+        },
+        {
+          "airline": "AU",
+          "billed": 2000.0
+        },
+        {
+          "airline": "FQ",
+          "billed": 2000.0
+        },
+        {
+          "airline": "NV",
+          "billed": 2000.0
+        }
+      ]
+    },
+    {
+      "round": 18,
+      "lane": "CGN-SGN",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Lumen Air Cargo",
+      "winner_eur": 2150.0,
+      "baseline_winner_position": 4,
+      "priority_winner_position": 4,
+      "baseline_order": [
+        {
+          "airline": "JP",
+          "billed": 874
+        },
+        {
+          "airline": "LM",
+          "billed": 874
+        },
+        {
+          "airline": "JP",
+          "billed": 1000.0
+        },
+        {
+          "airline": "LM",
+          "billed": 1000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "JP",
+          "billed": 874
+        },
+        {
+          "airline": "LM",
+          "billed": 874
+        },
+        {
+          "airline": "JP",
+          "billed": 1000.0
+        },
+        {
+          "airline": "LM",
+          "billed": 1000.0
+        }
+      ]
+    },
+    {
+      "round": 19,
+      "lane": "CGN-DFW",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Lumen Air Cargo",
+      "winner_eur": 5819.38,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "LM",
+          "billed": 2100.86
+        },
+        {
+          "airline": "UV",
+          "billed": 2100.86
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "LM",
+          "billed": 2100.86
+        },
+        {
+          "airline": "UV",
+          "billed": 2100.86
+        }
+      ]
+    },
+    {
+      "round": 20,
+      "lane": "MUC-RUH",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Juniper Cargo Lines",
+      "winner_eur": 3283.25,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "JP",
+          "billed": 1513.02
+        },
+        {
+          "airline": "UV",
+          "billed": 1513.02
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "JP",
+          "billed": 1513.02
+        },
+        {
+          "airline": "UV",
+          "billed": 1513.02
+        }
+      ]
+    },
+    {
+      "round": 21,
+      "lane": "HAM-EZE",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Meridian Freightways",
+      "winner_eur": 2264.6,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "MD",
+          "billed": 676
+        },
+        {
+          "airline": "MD",
+          "billed": 1000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "MD",
+          "billed": 676
+        },
+        {
+          "airline": "MD",
+          "billed": 1000.0
+        }
+      ]
+    },
+    {
+      "round": 22,
+      "lane": "CGN-SGN",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 4,
+      "scheduled_rate_checks_per_policy": 2,
+      "winner": "Juniper Cargo Lines",
+      "winner_eur": 7137.45,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "JP",
+          "billed": 2244.48
+        },
+        {
+          "airline": "LM",
+          "billed": 2244.48
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "JP",
+          "billed": 2244.48
+        },
+        {
+          "airline": "LM",
+          "billed": 2244.48
+        }
+      ]
+    },
+    {
+      "round": 23,
+      "lane": "FRA-DEL",
+      "preference": "cheapest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 3,
+      "winner": "Meridian Freightways",
+      "winner_eur": 1987.7,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "MD",
+          "billed": 1148.96
+        },
+        {
+          "airline": "SL",
+          "billed": 1148.96
+        },
+        {
+          "airline": "SL",
+          "billed": 2000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "MD",
+          "billed": 1148.96
+        },
+        {
+          "airline": "SL",
+          "billed": 1148.96
+        },
+        {
+          "airline": "SL",
+          "billed": 2000.0
+        }
+      ]
+    },
+    {
+      "round": 24,
+      "lane": "DUS-ATL",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 6,
+      "winner": "Riverbend Airlines Cargo",
+      "winner_eur": 4160.0,
+      "baseline_winner_position": 5,
+      "priority_winner_position": 5,
+      "baseline_order": [
+        {
+          "airline": "MD",
+          "billed": 1754
+        },
+        {
+          "airline": "PL",
+          "billed": 1754
+        },
+        {
+          "airline": "RV",
+          "billed": 1754
+        },
+        {
+          "airline": "SL",
+          "billed": 1754
+        },
+        {
+          "airline": "RV",
+          "billed": 2000.0
+        },
+        {
+          "airline": "SL",
+          "billed": 2000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "MD",
+          "billed": 1754
+        },
+        {
+          "airline": "PL",
+          "billed": 1754
+        },
+        {
+          "airline": "RV",
+          "billed": 1754
+        },
+        {
+          "airline": "SL",
+          "billed": 1754
+        },
+        {
+          "airline": "RV",
+          "billed": 2000.0
+        },
+        {
+          "airline": "SL",
+          "billed": 2000.0
+        }
+      ]
+    },
+    {
+      "round": 25,
+      "lane": "STR-EZE",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 6,
+      "scheduled_rate_checks_per_policy": 6,
+      "winner": "Fjordline Air Cargo",
+      "winner_eur": 2317.44,
+      "baseline_winner_position": 2,
+      "priority_winner_position": 2,
+      "baseline_order": [
+        {
+          "airline": "AU",
+          "billed": 544
+        },
+        {
+          "airline": "FQ",
+          "billed": 544
+        },
+        {
+          "airline": "NV",
+          "billed": 544
+        },
+        {
+          "airline": "AU",
+          "billed": 1000.0
+        },
+        {
+          "airline": "FQ",
+          "billed": 1000.0
+        },
+        {
+          "airline": "NV",
+          "billed": 1000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "AU",
+          "billed": 544
+        },
+        {
+          "airline": "FQ",
+          "billed": 544
+        },
+        {
+          "airline": "NV",
+          "billed": 544
+        },
+        {
+          "airline": "FQ",
+          "billed": 1000.0
+        },
+        {
+          "airline": "AU",
+          "billed": 1000.0
+        },
+        {
+          "airline": "NV",
+          "billed": 1000.0
+        }
+      ]
+    },
+    {
+      "round": 26,
+      "lane": "MUC-BKK",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 3,
+      "winner": "Nova Atlas Cargo",
+      "winner_eur": 4987.36,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "NV",
+          "billed": 1708
+        },
+        {
+          "airline": "PL",
+          "billed": 1708
+        },
+        {
+          "airline": "NV",
+          "billed": 2000.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "NV",
+          "billed": 1708
+        },
+        {
+          "airline": "PL",
+          "billed": 1708
+        },
+        {
+          "airline": "NV",
+          "billed": 2000.0
+        }
+      ]
+    },
+    {
+      "round": 27,
+      "lane": "HAM-EZE",
+      "preference": "fastest",
+      "status": "no recorded portal offers"
+    },
+    {
+      "round": 28,
+      "lane": "CGN-DFW",
+      "preference": "cheapest",
+      "status": "no recorded portal offers"
+    },
+    {
+      "round": 29,
+      "lane": "FRA-PVG",
+      "preference": "cheapest",
+      "status": "no recorded portal offers"
+    },
+    {
+      "round": 30,
+      "lane": "MUC-PVG",
+      "preference": "fastest",
+      "status": "scored",
+      "recent_samples_on_lane": 0,
+      "scheduled_rate_checks_per_policy": 4,
+      "winner": "Meridian Freightways",
+      "winner_eur": 534.66,
+      "baseline_winner_position": 1,
+      "priority_winner_position": 1,
+      "baseline_order": [
+        {
+          "airline": "MD",
+          "billed": 134
+        },
+        {
+          "airline": "XC",
+          "billed": 134
+        },
+        {
+          "airline": "MD",
+          "billed": 300.0
+        },
+        {
+          "airline": "XC",
+          "billed": 300.0
+        }
+      ],
+      "priority_order": [
+        {
+          "airline": "MD",
+          "billed": 134
+        },
+        {
+          "airline": "XC",
+          "billed": 134
+        },
+        {
+          "airline": "MD",
+          "billed": 300.0
+        },
+        {
+          "airline": "XC",
+          "billed": 300.0
+        }
+      ]
+    }
+  ]
+}

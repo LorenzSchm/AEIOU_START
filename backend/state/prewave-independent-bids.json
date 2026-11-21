@@ -1,0 +1,78 @@
+{
+  "requested": {
+    "255": [
+      "ASU",
+      "pampero-air-cargo@hackloop.mail",
+      "airline"
+    ],
+    "256": [
+      "ASU",
+      "domblick-kurierdienst@hackloop.mail",
+      "trucker"
+    ],
+    "257": [
+      "ASU",
+      "westfalenroute@hackloop.mail",
+      "trucker"
+    ],
+    "258": [
+      "ASU",
+      "bodenseefracht@hackloop.mail",
+      "trucker"
+    ]
+  },
+  "bids": {
+    "255": {
+      "id": 259,
+      "from": "pampero-air-cargo@hackloop.mail",
+      "to": "aeiou@hackloop.mail",
+      "subject": "Re: Independent rate check | air freight from FRA to ASU",
+      "body": "All-in air freight from FRA to ASU: 602.00 EUR.\nEstimated transit time: 5 days.\nQuote valid until 21 Nov 2026 15:11 UTC.\nPlease quote R-qc6ohnhcEEkz1rmz if booking.\n\nPampero Air Cargo",
+      "in_reply_to": 255,
+      "references": [
+        255
+      ],
+      "received_at": "2026-11-21T14:57:02.540745+00:00",
+      "attachments": []
+    },
+    "258": {
+      "id": 260,
+      "from": "bodenseefracht@hackloop.mail",
+      "to": "aeiou@hackloop.mail",
+      "subject": "Re: Independent rate check | pickup from Frankfurt postcode 60311 to FRA",
+      "body": "All-in rate for pickup in Frankfurt and delivery to FRA: 71.00 EUR.\nEstimated transit time: 26 hours.\nRate valid until 21 Nov 2026 15:11 UTC.\nOffer reference: TRK-129. No booking required.\n\nBodenseefracht",
+      "in_reply_to": 258,
+      "references": [
+        258
+      ],
+      "received_at": "2026-11-21T14:57:02.872953+00:00",
+      "attachments": []
+    },
+    "256": {
+      "id": 261,
+      "from": "domblick-kurierdienst@hackloop.mail",
+      "to": "aeiou@hackloop.mail",
+      "subject": "Re: Independent rate check | pickup from Frankfurt postcode 60311 to FRA",
+      "body": "Hi Team AEIOU,\n\nThanks for checking with us! Our all-in price for pickup in Frankfurt and delivery to FRA is 123.00 EUR. The estimated pickup time is 15 hours.\n\nThe quote is valid until 21 Nov 2026 15:11 UTC. Your offer reference is TRK-128, and no booking is needed for pickup.\n\nBest wishes,\nDomblick Kurierdienst",
+      "in_reply_to": 256,
+      "references": [
+        256
+      ],
+      "received_at": "2026-11-21T14:57:02.872067+00:00",
+      "attachments": []
+    },
+    "257": {
+      "id": 262,
+      "from": "westfalenroute@hackloop.mail",
+      "to": "aeiou@hackloop.mail",
+      "subject": "Re: Independent rate check | pickup from Frankfurt postcode 60311 to FRA",
+      "body": "Dear Team AEIOU,\n\nOur all-in rate for pickup in Frankfurt and delivery to FRA is 77.00 EUR. The estimated time from pickup to delivery is 23 hours.\n\nThis offer is valid until 21 Nov 2026 15:11 UTC. Our offer reference is TRK-131. No booking is required for pickup.\n\nKind regards,\nWestfalenroute",
+      "in_reply_to": 257,
+      "references": [
+        257
+      ],
+      "received_at": "2026-11-21T14:57:02.872353+00:00",
+      "attachments": []
+    }
+  }
+}

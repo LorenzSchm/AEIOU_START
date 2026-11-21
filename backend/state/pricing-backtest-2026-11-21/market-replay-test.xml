@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ai.aeiou.dispatch.MarketReplayTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-21T18:56:17.876Z" hostname="Lorenzs-MacBook-Pro.local" time="0.61">
+  <properties/>
+  <testcase name="changedWinnerReopensTheLaneBeforeTheQuote()" classname="ai.aeiou.dispatch.MarketReplayTest" time="0.355"/>
+  <testcase name="partialLookupResumesOnTheSameVersionAndDiscardsCacheOnChange()" classname="ai.aeiou.dispatch.MarketReplayTest" time="0.039"/>
+  <testcase name="chronologicalPortalReplay()" classname="ai.aeiou.dispatch.MarketReplayTest" time="0.056"/>
+  <testcase name="sameVersionPriceDropAtUncheckedAirlineCanHideNewWinner()" classname="ai.aeiou.dispatch.MarketReplayTest" time="0.029"/>
+  <testcase name="aVersionChangeForcesFreshReadsEvenWithIdenticalPrices()" classname="ai.aeiou.dispatch.MarketReplayTest" time="0.03"/>
+  <testcase name="staleSamplesCannotShortenTheSearch()" classname="ai.aeiou.dispatch.MarketReplayTest" time="0.028"/>
+  <system-out><![CDATA[Portal replay: 7 rounds, 16/18 live reads, best in first two 6 vs 5.
+Stress test: read [Xenon Cargo Airlines, Aurelia Air Cargo]; selected EUR 1483.43; skipped winner EUR 1450.00.
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

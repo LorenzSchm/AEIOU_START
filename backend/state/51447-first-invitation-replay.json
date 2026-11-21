@@ -1,0 +1,143 @@
+{
+  "invitations": [
+    {
+      "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+      "to": "aurelia-air-cargo@hackloop.mail",
+      "subject": "Rate request AEIOU-1 | CGN to ORD",
+      "id": 101,
+      "elapsed": 1.05
+    },
+    {
+      "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+      "to": "borealis-freight-airways@hackloop.mail",
+      "subject": "Rate request AEIOU-1 | CGN to ORD",
+      "id": 103,
+      "elapsed": 1.06
+    },
+    {
+      "body": "Hi,\n\nCould you quote air freight from CGN to ORD for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+      "to": "elbflug-air-freight@hackloop.mail",
+      "subject": "Rate request AEIOU-1 | CGN to ORD",
+      "id": 105,
+      "elapsed": 1.07
+    },
+    {
+      "body": "Hi,\n\nCould you quote collection from postcode 51447 and delivery to CGN for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+      "to": "maintal-transport-logistik@hackloop.mail",
+      "subject": "Rate request AEIOU-1 | pickup from postcode 51447 to CGN",
+      "id": 107,
+      "elapsed": 1.08
+    },
+    {
+      "body": "Hi,\n\nCould you quote collection from postcode 51447 and delivery to CGN for a shipment weighing 676 kg gross, with a total volume of 5.79 cbm?\n\nPlease send your all-in rate in EUR and your estimated transit time.\n\nThanks,\nTeam AEIOU",
+      "to": "elbkante-logistik@hackloop.mail",
+      "subject": "Rate request AEIOU-1 | pickup from postcode 51447 to CGN",
+      "id": 109,
+      "elapsed": 1.09
+    }
+  ],
+  "ran_at": "2026-11-21T15:12:08.846068+00:00",
+  "cases": {
+    "1": [
+      "ORD",
+      "fastest",
+      676
+    ]
+  },
+  "calls": {
+    "1": {
+      "replayed": true
+    }
+  },
+  "quotes": [
+    {
+      "subject": "Re: Fastest air freight to ORD",
+      "to": "customer1@example.invalid",
+      "in_reply_to": 1,
+      "body": "Hi,\n\nThe quickest option we found for your 676 kg shipment from CGN to ORD is with Meridian Freightways at EUR 3316.54 all in.\n\nThat includes collection from postcode 51447. Allow about 1 day and 13 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+      "id": 111,
+      "elapsed": 2.14
+    }
+  ],
+  "decisions": [
+    {
+      "id": 1,
+      "stage": "sent",
+      "shipment": {
+        "origin": "CGN",
+        "destination": "ORD",
+        "weight_kg": 676,
+        "volume_cbm": 5.79,
+        "preference": "fastest",
+        "pickup_zone": "51",
+        "pickup_eur": null,
+        "pickup_days": 0.0
+      },
+      "proposal": {
+        "revision": "429b2233-87e3-4b03-9a8c-33003022f454",
+        "offer": {
+          "airline": "Meridian Freightways",
+          "days": 1.5416666666666665,
+          "total_eur": 3316.54,
+          "billed_kg": 966.93,
+          "source": "portal",
+          "rate_id": "R-UiSMrYYlpQcQfMSM",
+          "valid_until": "2026-11-21T15:22:07.255782Z"
+        },
+        "alternatives": [
+          {
+            "airline": "Meridian Freightways",
+            "days": 1.5416666666666665,
+            "total_eur": 3316.54,
+            "billed_kg": 966.93,
+            "source": "portal",
+            "rate_id": "R-UiSMrYYlpQcQfMSM",
+            "valid_until": "2026-11-21T15:22:07.255782Z"
+          },
+          {
+            "airline": "Aurelia Air Cargo",
+            "days": 2.5416666666666665,
+            "total_eur": 2610.68,
+            "billed_kg": 966.93,
+            "source": "portal",
+            "rate_id": "R-4ARIFw3HuSfZVZMh",
+            "valid_until": "2026-11-21T15:22:07.253387Z"
+          },
+          {
+            "airline": "Aurelia Air Cargo",
+            "days": 2.5416666666666665,
+            "total_eur": 2610.68,
+            "billed_kg": 966.93,
+            "source": "carrier bid",
+            "rate_id": null,
+            "valid_until": null
+          },
+          {
+            "airline": "Ibisair Cargo",
+            "days": 2.5416666666666665,
+            "total_eur": 3055.47,
+            "billed_kg": 966.93,
+            "source": "portal",
+            "rate_id": "R-TUldicIXGybCnBGQ",
+            "valid_until": "2026-11-21T15:22:07.254773Z"
+          },
+          {
+            "airline": "Xenon Cargo Airlines",
+            "days": 3.5416666666666665,
+            "total_eur": 2272.25,
+            "billed_kg": 966.93,
+            "source": "portal",
+            "rate_id": "R-lDyp49zcIGOd0Tv9",
+            "valid_until": "2026-11-21T15:22:07.256629Z"
+          }
+        ],
+        "notes": [],
+        "body": "Hi,\n\nThe quickest option we found for your 676 kg shipment from CGN to ORD is with Meridian Freightways at EUR 3316.54 all in.\n\nThat includes collection from postcode 51447. Allow about 1 day and 13 hours from collection to arrival.\n\nWould you like us to book it for you?\n\nBest regards,\nTeam AEIOU",
+        "trucker": "Maintal Transport Logistik",
+        "pickup_eur": 222.36,
+        "pickup_days": 0.5416666666666666
+      },
+      "reason": null
+    }
+  ]
+}
