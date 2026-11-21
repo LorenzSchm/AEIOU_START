@@ -70,3 +70,39 @@ Voice fixtures (`src/test/resources/voice/`) were made with Windows' built-in vo
 (PowerShell `System.Speech.Synthesis.SpeechSynthesizer`, Zira en-US and Hedda de-DE,
 16 kHz mono wav); the mp3s come from those wavs via `MakeVoiceFixtures` (test sources).
 Voice tests skip with a message if the model cannot be downloaded.
+
+## Gateway client
+
+`ai.aeiou.edgelab.gateway.Gateway` is the only part of edgelab that calls out (besides the
+one-time Whisper model download). It talks OpenAI-style to the 5U gateway with
+`Authorization: Bearer $TEAM_API_KEY` and never logs the key. Two operations, both never throw:
+
+```java
+Gateway gw = HttpGateway.fromSettings();                 // or Gateway.unavailable("...") / a fake in tests
+Gateway.Answer a = gw.transcribe(wavBytes, "wav");       // voice fallback
+Gateway.Answer b = gw.copyText(jpegBytes, "image/jpeg"); // photos: copy all visible text, low detail
+// a.ok(), a.text(), a.selfRating() (0..1 or null), a.model(), a.problem()
+```
+
+The key comes from the environment, else from the nearest `.env` (working folder or up to
+3 above, or `EDGELAB_ENV_FILE`). Without a key every call answers `TEAM_API_KEY not set`.
+
+| Setting (system property / env var) | Default |
+| --- | --- |
+| `edgelab.gateway.url` / `EDGELAB_GATEWAY_URL` | `https://api.start-hack.5u.ai/v1/gateway` |
+| `edgelab.audio.model` / `EDGELAB_AUDIO_MODEL` | `gpt-4o-mini-audio-preview` |
+| `edgelab.audio.method` / `EDGELAB_AUDIO_METHOD` | `chat` (input_audio part) or `transcriptions` (`/audio/transcriptions`, e.g. with `gpt-4o-mini-transcribe`) |
+| `edgelab.vision.model` / `EDGELAB_VISION_MODEL` | `gpt-4o-mini` |
+| `edgelab.gateway.timeout` / `EDGELAB_GATEWAY_TIMEOUT` | `15` seconds |
+| `edgelab.gateway.enabled` / `EDGELAB_GATEWAY_ENABLED` | `true`; the test task sets `false` |
+
+**Voice fallback:** when local Whisper fails, hears nothing, or hears almost nothing (fewer
+than 3 words for 3+ s of audio), the voice reader sends the decoded audio (16 kHz wav, max
+5 min) to the gateway audio model and notes `gateway fallback used (<model>)`. If that fails
+too, the Reading is `UNREADABLE` (or `PARTIAL` with Whisper's few words) with a note such as
+`gateway fallback failed: TEAM_API_KEY not set`.
+
+Tests never call the real gateway. The one real test (`RealGatewayTest`, tag `real-gateway`)
+runs only with `./gradlew test -PrealGateway --tests '*RealGatewayTest'` and costs points.
+`NoOutboundCallsTest` fails if main code mentions mailbox, portal or booking endpoints, or
+opens HTTP outside the gateway client and the model download.
