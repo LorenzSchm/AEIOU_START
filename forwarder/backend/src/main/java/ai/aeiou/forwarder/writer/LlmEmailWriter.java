@@ -43,7 +43,7 @@ public class LlmEmailWriter implements EmailWriter {
     @Autowired
     public LlmEmailWriter(LlmClient llm, SettingsService settings, EventLog events,
                           @Value("${app.llm.model-writer}") String model) {
-        this(llm, settings, events, model, RandomGenerator.getDefault());
+        this(llm, settings, events, model, new java.util.SplittableRandom());
     }
 
     LlmEmailWriter(LlmClient llm, SettingsService settings, EventLog events, String model, RandomGenerator random) {
