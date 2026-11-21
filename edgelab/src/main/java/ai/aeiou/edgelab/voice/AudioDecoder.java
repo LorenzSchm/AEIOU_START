@@ -14,6 +14,9 @@ import org.bytedeco.javacv.FrameGrabber;
  * Turns any audio file ffmpeg understands (mp3, wav, m4a, ogg, opus, flac, aac,
  * audio-only webm, ...) into 16 kHz mono float samples, which is what Whisper wants.
  * Uses the ffmpeg bundled with JavaCV; nothing is installed on the machine.
+ *
+ * <p>The input is opened seekable (like the video reader's sound track): m4a/mp4 from
+ * phones often keeps its index ("moov") at the end, and ffmpeg must jump there first.
  */
 public final class AudioDecoder {
 

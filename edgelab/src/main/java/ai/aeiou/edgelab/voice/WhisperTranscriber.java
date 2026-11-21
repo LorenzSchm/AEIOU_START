@@ -8,6 +8,7 @@ import io.github.givimad.whisperjni.WhisperContext;
 import io.github.givimad.whisperjni.WhisperFullParams;
 import io.github.givimad.whisperjni.WhisperJNI;
 import io.github.givimad.whisperjni.WhisperSamplingStrategy;
+import io.github.givimad.whisperjni.WhisperState;
 
 /**
  * Local speech-to-text with whisper.cpp (via whisper-jni, which bundles the native
@@ -39,7 +40,7 @@ public final class WhisperTranscriber implements LocalTranscriber {
         context = ctx;
     }
 
-    /** whisper.cpp keeps per-run state in the context, so runs are serialised. */
+    /** Runs are serialised; each gets its own whisper.cpp state. */
     @Override
     public synchronized List<Segment> transcribe(float[] samples) throws IOException, InterruptedException {
         load();
@@ -53,17 +54,22 @@ public final class WhisperTranscriber implements LocalTranscriber {
         p.printSpecial = false;
         p.suppressBlank = true;
         p.suppressNonSpeechTokens = true;
-        int rc = whisper.full(context, p, samples, samples.length);
-        if (rc != 0) throw new IOException("Whisper failed with code " + rc);
-        int n = whisper.fullNSegments(context);
-        List<Segment> segments = new ArrayList<>(n);
-        for (int i = 0; i < n; i++) {
-            // whisper.cpp timestamps are in 10 ms units.
-            segments.add(new Segment(
-                    whisper.fullGetSegmentTimestamp0(context, i) * 10,
-                    whisper.fullGetSegmentTimestamp1(context, i) * 10,
-                    whisper.fullGetSegmentText(context, i)));
+        // A fresh state per run, so the text depends only on this audio and not on what was
+        // transcribed before (a reused context state made results order-dependent).
+        try (WhisperState state = whisper.initState(context)) {
+            if (state == null) throw new IOException("Whisper could not create a run state");
+            int rc = whisper.fullWithState(context, state, p, samples, samples.length);
+            if (rc != 0) throw new IOException("Whisper failed with code " + rc);
+            int n = whisper.fullNSegmentsFromState(state);
+            List<Segment> segments = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                // whisper.cpp timestamps are in 10 ms units.
+                segments.add(new Segment(
+                        whisper.fullGetSegmentTimestamp0FromState(state, i) * 10,
+                        whisper.fullGetSegmentTimestamp1FromState(state, i) * 10,
+                        whisper.fullGetSegmentTextFromState(state, i)));
+            }
+            return segments;
         }
-        return segments;
     }
 }

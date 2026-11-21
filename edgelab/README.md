@@ -44,6 +44,107 @@ Every top-level `read` has a **20 s budget** (`EdgeReader.DEFAULT_BUDGET`; tests
 with `new EdgeReader(router, maxBytes, budget)`), shared by all parts inside the file. At the
 limit the call returns what it has, status `PARTIAL`, note `timed out after 20 s`.
 
+## Using it from the bot
+
+For Lorenz. Nothing in `backend/` has to be restructured; three small edits, all yours to make.
+
+**1. Dependency (composite build, no publishing).** Both builds use Gradle 9.3.1 and Java 21,
+and edgelab's coordinates are `ai.aeiou:edgelab` (group from `build.gradle`, name from
+`rootProject.name`). Add one line to `backend/settings.gradle` and one to `backend/app/build.gradle`:
+
+```groovy
+// backend/settings.gradle
+includeBuild '../edgelab'
+
+// backend/app/build.gradle, in dependencies { }
+implementation('ai.aeiou:edgelab') {
+    exclude group: 'org.slf4j', module: 'slf4j-nop'   // else it can swallow Spring's logback output
+}
+```
+
+Gradle swaps in the local `edgelab/` project automatically; `./gradlew bootJar` packs it in.
+(Alternative: `./gradlew publishToMavenLocal` would need the `maven-publish` plugin in edgelab,
+so the composite build is the simpler route.) Spring's BOM may lift shared libraries
+(Jackson, PostgreSQL, PDFBox via Tika); run your tests once after adding it.
+
+**2. The one call: `ShipmentDocuments.read(message)`**, where `PackingSafety.extract(filename,
+content)` runs today. Every attachment path goes through it: the quotation-request attachment
+(`withAttachedRequest`), trucker-offer attachments (`attachedOffer`, the "bid unreadable"
+path), and the packing / DG check (`inspect`, original and follow-ups). Trucker bid *mail
+bodies* (`Ledger.parseCarrierBid`) are plain text and need nothing. Safest form: keep your
+extractor, use edgelab only when it throws (today that adds `null`):
+
+```java
+private static final EdgeReader EDGE = new EdgeReader();   // reuse one; voice reads queue one at a time
+
+String name = Objects.toString(file.get("filename"), "");
+byte[] bytes = upstream.bytes(key.messageId(), key.attachmentId());
+String text;
+try {
+  text = PackingSafety.extract(name, bytes);
+} catch (IOException | XMLStreamException ex) {
+  Reading r = EDGE.read(name, bytes);                      // never throws, max 20 s
+  if (r.status() == Reading.Status.UNREADABLE || r.confidence() < 0.5)
+    throw new IOException("edgelab: " + String.join("; ", r.notes()));
+  text = r.text();
+}
+doc = new PackingSafety.Document(text);
+```
+
+Your `extracted` cache then also stops repeat calls. Note: photos, zips, msg etc. only reach
+`read()` where you don't filter by name; `hasRequestAttachment` (only `quotation-request.pdf/
+docx/txt`) and `attachedOffer` (`.txt|pdf|docx`) still filter them out until you widen those.
+edgelab's tables come out one row per line with cells joined by ` | ` (yours: spaces), so check
+your regexes if you ever let edgelab read xlsx first.
+
+**3. Settings** (env var, or the same name as system property, e.g. `-Dedgelab.vision.model=`):
+
+| Setting | Default | What |
+| --- | --- | --- |
+| `TEAM_API_KEY` | none (env, else nearest `.env` up to 3 folders up) | needed for photos, video frames, scanned PDF pages, voice fallback |
+| `EDGELAB_ENV_FILE` | search as above | explicit `.env` path |
+| `EDGELAB_GATEWAY_URL` | `https://api.start-hack.5u.ai/v1/gateway` | 5U gateway |
+| `EDGELAB_VISION_MODEL` | `gpt-4o-mini` (low detail) | photo text |
+| `EDGELAB_AUDIO_MODEL` | `gpt-4o-mini-audio-preview` | voice fallback only |
+| `EDGELAB_AUDIO_METHOD` | `chat` (or `transcriptions` with e.g. `gpt-4o-mini-transcribe`) | voice fallback only |
+| `EDGELAB_GATEWAY_TIMEOUT` | `15` s per call | |
+| `EDGELAB_GATEWAY_ENABLED` | `true` | `false` = no outside calls at all |
+| `EDGELAB_WHISPER_MODEL` | `base-q5_1` | local speech model |
+| `EDGELAB_WHISPER_DIR` | `~/.cache/edgelab/whisper` | model cache |
+| Gradle `ffmpegPlatforms` | `macosx-arm64,windows-x86_64` | Intel Mac: `ffmpegPlatforms=macosx-x86_64` in `~/.gradle/gradle.properties` (applies to the included build too) |
+
+**First run:** the Whisper model (~57 MB) downloads once from Hugging Face. It counts against
+the 20 s budget, so the first voice read can come back `PARTIAL`. Pre-load at startup with
+`WhisperModelCache.fromSettings().ensure();`.
+
+**Status and confidence.** `OK` = whole file read. `PARTIAL` = some text, something missing
+(scanned page, broken part inside a zip, cut audio, 20 s budget hit); `notes` say what.
+`UNREADABLE` = no usable text, `text` is `""`. Confidence 0..1: text files ~0.95, Whisper
+0.85 for normal speech, photos use the model's own rating (0.6 if none, capped at 0.95).
+**Suggested rule:** `OK` and ≥ 0.7 → use as is; `PARTIAL` or 0.5–0.7 → use, but send the mail
+to `review`; `UNREADABLE` or < 0.5 → treat like today's failure (`null`, "bid unreadable").
+
+**Cost.** Text, office, PDF with text, and voice (local Whisper): free. Photo: one gateway
+call, image shrunk to ≤ 1024 px at low detail, roughly 0.05 US cent at OpenAI list prices
+for `gpt-4o-mini` (not yet measured in gateway points). Video: up to 5 frame calls
+(duplicates and blanks skipped; a still video costs one). Scanned PDF: one call per scanned
+page, max 10. Voice fallback (only when Whisper hears nothing): one audio call, max 5 min.
+
+**Formats.** Text/CSV (UTF-8, Latin-1, Windows-1252), Word, Excel, PowerPoint (old and new),
+OpenOffice, RTF, HTML, markdown, PDF (text and scanned); photos jpg, png, gif, bmp, tiff, webp,
+heic; voice mp3, wav, m4a, ogg, opus, flac, aac; video mp4, mov, webm, avi, mkv; zip, tar, gz,
+7z, rar, eml, msg and files embedded in office files (3 levels, 20 files). Max 50 MB. Every
+`read` has a **20 s** budget for the whole file, including everything inside.
+
+**Known gaps / open manual checks.**
+- m4a voice files with the index at the end (typical phone voice notes) yield no audio yet;
+  a fix is in progress (ticket 02b). Videos are not affected.
+- Not yet run with the real gateway: which audio method it accepts (`RealGatewayTest`), photo
+  quality on the Danube Wings scans (small digits at low detail), a pptx with a photo, a video's
+  "What is shown" part.
+- Not yet tried: first run on an Apple-chip Mac (natives + model download), a real rotated
+  phone `.mov`, a real trucker-offer docx and round 68's `quotation-request.docx`.
+
 ## Office reader (`ai.aeiou.edgelab.office`)
 
 `OfficeReader` runs Apache Tika on Word, Excel, PowerPoint (old and new), OpenOffice, RTF,
@@ -199,7 +300,7 @@ gateway vision model (`gpt-4o-mini`, low detail) with the fixed prompt
   through the bundled ffmpeg (JavaCV); iPhone tile grids are stitched. First HEIC in a JVM
   takes a few seconds (ffmpeg natives load), then under a second.
 - Before sending: EXIF orientation applied, longest edge cut to 1024 px (low detail looks at
-  512 px anyway, ~85 tokens per photo), transparency flattened onto white, JPEG q=0.85.
+  512 px anyway, so the cost is the same), transparency flattened onto white, JPEG q=0.85.
 - Confidence: the model's own `CONFIDENCE:` rating (0.6 if it gives none), lowered when fewer
   than ~40 letters/digits come back. Empty answer, broken image or no key: `UNREADABLE` with a
   note, e.g. `photo not read: TEAM_API_KEY not set`.
