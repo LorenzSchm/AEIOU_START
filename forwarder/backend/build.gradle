@@ -42,4 +42,6 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// ./gradlew test --tests '*OpenApiExportTest' -DexportOpenApi=true writes ../frontend/openapi.json
+	systemProperty 'exportOpenApi', System.getProperty('exportOpenApi', 'false')
 }

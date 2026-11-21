@@ -169,5 +169,31 @@ interface Draft { sessionId: number; to: string; subject: string; body: string; 
 
 The frontend updates or invalidates TanStack Query caches from these events, so no page ever needs a manual refresh and nothing polls.
 
+## Admin
+A hidden admin page (not linked in the navigation) for the gateway key and the live switches.
+
+```ts
+interface AdminStatus {
+  openAiKeyRegistered: boolean|null;   // from GET {5U}/v1/gateway/openai-key; null if unknown/unreachable
+  openAiKeyMessage: string|null;
+  pollingEnabled: boolean;             // runtime setting "pollingEnabled"
+  autopilot: boolean;                  // runtime setting "autopilot": answer live mails automatically
+  envPollerEnabled: boolean;           // app.poller.enabled (POLLER_ENABLED), read-only
+  envSendEnabled: boolean;             // app.mail.send-enabled (SEND_ENABLED), read-only
+}
+interface OpenAiKeyRequest { apiKey: string; }
+interface OpenAiKeyResult { ok: boolean; message: string; }
+interface LiveUpdate { pollingEnabled?: boolean; autopilot?: boolean; }   // only present fields change
+```
+
+| Method & path | operationId | Body | Returns |
+|---|---|---|---|
+| GET `/api/admin/status` | `getAdminStatus` | | `AdminStatus` |
+| POST `/api/admin/openai-key` | `registerOpenAiKey` | `OpenAiKeyRequest` | `OpenAiKeyResult` (proxies `POST {5U}/v1/gateway/openai-key {"api_key"}`) |
+| PUT `/api/admin/live` | `setLive` | `LiveUpdate` | `AdminStatus` |
+
+- The OpenAI key is never logged, stored or put into an event. Registration writes only `admin.openai_key_registered` (actor human) with ok/failed and the key's last 4 characters.
+- `setLive` writes `human.live_toggled` with the changed switches.
+
 ## Auth
 There is no user auth. The frontend checks `APP_PASSWORD` from its env: a login page sets an httpOnly cookie, and the Next.js proxy (Next 16 renamed `middleware` to `proxy`) blocks every page and `/api/*` route without it. The browser never talks to the backend directly. The frontend proxies `/api/*` (including SSE) to `BACKEND_URL`. The backend trusts its network, and compose only publishes 8080 for local development.
