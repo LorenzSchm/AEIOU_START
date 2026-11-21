@@ -20,6 +20,8 @@ For fastest door-to-port requests, the worker can ask the 5U gateway to interpre
 
 The desk shows the official verdict, reason and available points from the 5U board alongside the RFQ. The worker polls the board once a minute and matches results using the original RFQ timestamp.
 
+When a customer confirms the packing document in the original thread, the worker can apply documented corrections to destination airport, total gross weight and total volume independently. Matching corrections can arrive in one reply or across replies about the same document. Conflicting totals keep the quote on hold.
+
 ## Architecture
 
 | Component | Responsibility | Production reuse |

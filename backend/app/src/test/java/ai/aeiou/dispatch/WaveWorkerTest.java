@@ -1477,6 +1477,27 @@ class WaveWorkerTest {
   }
 
   @Test
+  void appliesMatchingWeightAndVolumeTogetherFromOnePackingReply() {
+    receiveDocument(7, null, "packing.txt",
+        "Cheapest air freight from FRA to LAX. The shipment weighs 2644 kg and measures 14.90 cbm.",
+        "Packing Specification\nDestination airport: LAX\nTotal gross weight (kg): 1751\n"
+            + "Total volume (cbm): 11.97\nDangerous goods: Not restricted");
+    worker.work();
+    long parent = Ledger.id(outbound.getLast().get("id"));
+    receive(2001, "buyer@example.invalid", "Re: RFQ",
+        "The attached packing specification is correct. Total gross weight: 1,751 kg."
+            + " Total volume: 11.970 cbm.", parent);
+    worker.work();
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("1751", shipment.weightKg().toPlainString());
+    assertEquals("11.97", shipment.volumeCbm().toPlainString());
+    verify(upstream).rates(eq(shipment), any());
+  }
+
+  @Test
   void reconcilesRouteAndBothTotalsAcrossPackingRepliesAndHoldsConflictingValues() {
     receiveDocument(7, null, "packing.txt",
         "Fastest air freight from FRA to LAX. The shipment weighs 2644 kg and measures 14.90 cbm.",
