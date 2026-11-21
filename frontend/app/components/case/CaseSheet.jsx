@@ -7,6 +7,7 @@ import EmailPreview from "../../email-preview";
 import Icon from "../ui/Icon";
 import { Chip, CountdownRing, RouteBadge, Section } from "../ui/primitives";
 import OfferBars from "./OfferBars";
+import Select from "../ui/Select";
 import Timeline from "./Timeline";
 import { deriveProcess } from "../../lib/process";
 import { api } from "../../lib/api";
@@ -27,7 +28,9 @@ export default function CaseSheet(props) {
       aria-label={"Case " + m.id}
       initial={{ opacity: 0, x: 32, scale: 0.985 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 24, transition: { duration: 0.16 } }}
+      // Dismissal mirrors the entrance (same path, scale, opacity) — just faster and
+      // accelerating out, as HIG/Material recommend for exits.
+      exit={{ opacity: 0, x: 32, scale: 0.985, transition: { duration: 0.24, ease: [0.4, 0, 1, 1] } }}
       transition={spring}
     >
       <motion.div
@@ -42,9 +45,14 @@ export default function CaseSheet(props) {
   );
 }
 
-function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
+function CaseContent({ m, messages, directory, refresh, onClose, now, intro, onDirtyChange }) {
   const [fields, setFields] = useState(m.fields || {});
   const [dirty, setDirty] = useState(false);
+  // Report unsaved edits upward so navigation can ask before discarding them.
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const [bid, setBid] = useState({ airline: "", air_total_eur: "", transit_days: "" });
   const [recipient, setRecipient] = useState("");
   const [reply, setReply] = useState("");
@@ -212,14 +220,19 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
                 {input("destination", "Destination", "text", 3)}
                 {input("weight_kg", "Weight · kg", "number")}
                 {input("volume_cbm", "Volume · m³", "number")}
-                <label className="field">
+                <div className="field">
                   <span>Priority</span>
-                  <select value={fields.preference || ""} onChange={(e) => set("preference", e.target.value)}>
-                    <option value="">Choose</option>
-                    <option value="cheapest">Cheapest</option>
-                    <option value="fastest">Fastest</option>
-                  </select>
-                </label>
+                  <Select
+                    ariaLabel="Priority"
+                    value={fields.preference || ""}
+                    onChange={(v) => set("preference", v)}
+                    disabled={busy || closed}
+                    options={[
+                      { value: "cheapest", label: "Cheapest" },
+                      { value: "fastest", label: "Fastest" },
+                    ]}
+                  />
+                </div>
                 {input("pickup_zone", "Pickup zone", "text", 2)}
                 {fields.pickup_zone && (
                   <>
@@ -272,15 +285,17 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
             )}
             <fieldset disabled={busy || closed}>
               <div className="bid-row">
-                <label className="field">
+                <div className="field">
                   <span>Invite carrier</span>
-                  <select value={recipient} onChange={(e) => setRecipient(e.target.value)}>
-                    <option value="">Choose carrier</option>
-                    {suitable.map((c) => (
-                      <option value={c.email} key={c.email}>{c.name} · {c.kind}</option>
-                    ))}
-                  </select>
-                </label>
+                  <Select
+                    ariaLabel="Invite carrier"
+                    placeholder="Choose carrier"
+                    value={recipient}
+                    onChange={setRecipient}
+                    disabled={busy || closed}
+                    options={suitable.map((c) => ({ value: c.email, label: c.name, hint: c.kind }))}
+                  />
+                </div>
                 <button
                   className="btn"
                   disabled={!recipient || Boolean(m.bid_requests?.[recipient])}

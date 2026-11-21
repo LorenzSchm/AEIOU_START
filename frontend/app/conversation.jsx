@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import EmailPreview from "./email-preview";
-import { spring } from "./lib/motion";
+import { disclosure, previewSwap, spring } from "./lib/motion";
 import Icon from "./components/ui/Icon";
 
 const inboxLabels = {
@@ -117,7 +117,9 @@ function EntryHead({ entry, showPreview }) {
           {issue && <span className="cv-issue">{issue}</span>}
           {entry.attachments?.length > 0 && <span className="cv-clip">{entry.attachments.length} attachment{entry.attachments.length > 1 ? "s" : ""}</span>}
         </span>
-        {showPreview && <span className="cv-preview">{preview(entry.body)}</span>}
+        <motion.span className="cv-preview" initial={false} animate={previewSwap(showPreview)} aria-hidden={!showPreview}>
+          {preview(entry.body)}
+        </motion.span>
       </span>
     </>
   );
@@ -157,10 +159,9 @@ function Entry({ entry, defaultOpen, onExpand }) {
         {open && (
           <motion.div
             className="cv-body-wrap"
-            initial={reduce ? false : { height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={reduce ? undefined : { height: 0, opacity: 0, transition: { duration: 0.16 } }}
-            transition={spring}
+            initial={reduce ? false : disclosure.initial}
+            animate={disclosure.animate}
+            exit={reduce ? undefined : disclosure.exit}
           >
             <div className="cv-body">
               <div className="cv-body-head">

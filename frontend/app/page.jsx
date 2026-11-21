@@ -6,6 +6,7 @@ import Icon from "./components/ui/Icon";
 import Overview from "./components/overview/Overview";
 import Queue from "./components/queue/Queue";
 import CaseSheet from "./components/case/CaseSheet";
+import ConfirmDialog from "./components/ui/ConfirmDialog";
 import { useDispatchData, useNow } from "./lib/api";
 import { clock, needsAttention } from "./lib/format";
 import { spring } from "./lib/motion";
@@ -64,11 +65,33 @@ export default function Page() {
     setNav(next);
   }, []);
 
+  // Unsaved manual edits in the open case: confirm before switching or closing.
+  const dirtyRef = useRef(false);
+  const onDirtyChange = useCallback((d) => {
+    dirtyRef.current = d;
+  }, []);
+  const [pending, setPending] = useState(null);
+  const guardedGo = useCallback(
+    (patch, opts) => {
+      const leavesCase = "caseId" in patch && patch.caseId !== navRef.current.caseId;
+      if (leavesCase && dirtyRef.current) setPending({ patch, opts });
+      else go(patch, opts);
+    },
+    [go],
+  );
+  const confirmLeave = useCallback(() => {
+    dirtyRef.current = false;
+    const p = pending;
+    setPending(null);
+    if (p) go(p.patch, p.opts);
+  }, [go, pending]);
+  const cancelLeave = useCallback(() => setPending(null), []);
+
   const messages = data?.messages || [];
   const current = messages.find((m) => m.id === nav.caseId);
   const attention = messages.filter(needsAttention).length;
   const bad = error || data?.status?.error;
-  const closeCase = useCallback(() => go({ caseId: null }), [go]);
+  const closeCase = useCallback(() => guardedGo({ caseId: null }), [guardedGo]);
 
   return (
     <div className="app">
@@ -133,10 +156,10 @@ export default function Page() {
                         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }} transition={spring}>
               {nav.view === "overview" ? (
-                <Overview messages={messages} now={now} onOpen={(id) => go({ caseId: id })} />
+                <Overview messages={messages} now={now} onOpen={(id) => guardedGo({ caseId: id })} />
               ) : (
                 <Queue messages={messages} now={now} selectedId={nav.caseId} scope={nav.scope}
-                       setScope={(scope) => go({ scope })} onSelect={(id, opts) => go({ caseId: id }, opts)} />
+                       setScope={(scope) => go({ scope })} onSelect={(id, opts) => guardedGo({ caseId: id }, opts)} />
               )}
             </motion.div>
           </AnimatePresence>
@@ -149,12 +172,21 @@ export default function Page() {
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
         )}
       </AnimatePresence>
-      <AnimatePresence mode="popLayout">
+      <AnimatePresence>
         {current && (
           <CaseSheet key="case-sheet" m={current} messages={messages} directory={data.directory}
-                     refresh={refresh} onClose={closeCase} now={now} />
+                     refresh={refresh} onClose={closeCase} now={now} onDirtyChange={onDirtyChange} />
         )}
       </AnimatePresence>
+      <ConfirmDialog
+        open={Boolean(pending)}
+        title="Discard your edits?"
+        message="This case has manual changes that weren't repriced yet. Leaving now discards them."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+        onCancel={cancelLeave}
+        onConfirm={confirmLeave}
+      />
     </div>
   );
 }

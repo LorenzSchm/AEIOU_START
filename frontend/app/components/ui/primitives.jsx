@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Icon from "./Icon";
-import { spring } from "../../lib/motion";
+import { disclosure, spring } from "../../lib/motion";
 import { WINDOW_MS } from "../../lib/format";
 
 const toneIcon = { ok: "check", warn: "alert", bad: "alert", info: "send", accent: "bolt", muted: null };
@@ -38,10 +38,9 @@ export function Section({ title, icon, summary, defaultOpen = false, children, b
           <motion.div
             id={id}
             className="section-body-wrap"
-            initial={reduce ? false : { height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={reduce ? undefined : { height: 0, opacity: 0, transition: { duration: 0.18 } }}
-            transition={spring}
+            initial={reduce ? false : disclosure.initial}
+            animate={disclosure.animate}
+            exit={reduce ? undefined : disclosure.exit}
           >
             <div className="section-body">{children}</div>
           </motion.div>
