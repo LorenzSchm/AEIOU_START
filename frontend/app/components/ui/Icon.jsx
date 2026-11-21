@@ -24,6 +24,9 @@ const paths = {
   euro: <><path d="M17 6a6 6 0 1 0 0 12" /><path d="M4 10h9M4 14h9" /></>,
   pin: <><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></>,
   reply: <><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></>,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14a6.5 6.5 0 0 1 3 6" /></>,
+  funnel: <path d="M3 4h18l-7 8.5V19l-4 2v-8.5z" />,
+  sort: <><path d="m7 15 5 5 5-5" /><path d="m7 9 5-5 5 5" /></>,
 };
 
 export default function Icon({ name, size = 18, className, title }) {
