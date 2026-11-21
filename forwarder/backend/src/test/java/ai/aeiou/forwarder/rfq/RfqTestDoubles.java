@@ -125,6 +125,10 @@ final class RfqTestDoubles {
         }
 
         @Override
+        public void setType(long sessionId, String type, OffsetDateTime deadlineAt) {
+        }
+
+        @Override
         public void flagNeedsHuman(long sessionId, String reason) {
             needsHuman = true;
             needsHumanReason = reason;

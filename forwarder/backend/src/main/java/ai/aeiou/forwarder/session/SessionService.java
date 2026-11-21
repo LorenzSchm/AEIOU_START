@@ -17,6 +17,13 @@ public interface SessionService {
 
     void setMode(long sessionId, String mode);
 
+    /**
+     * Sets the session type once the router has classified the first mail (sessions of new threads
+     * are created as OTHER before the LLM call, so the call's cost is attributed to them).
+     * {@code deadlineAt} null leaves the deadline unchanged.
+     */
+    void setType(long sessionId, String type, OffsetDateTime deadlineAt);
+
     /** Flags the session for a human (shown on top of the control panel) and writes a human.needed event. */
     void flagNeedsHuman(long sessionId, String reason);
 

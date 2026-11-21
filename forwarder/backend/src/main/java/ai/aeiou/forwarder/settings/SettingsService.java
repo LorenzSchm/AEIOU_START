@@ -2,8 +2,9 @@ package ai.aeiou.forwarder.settings;
 
 /**
  * Runtime-tunable settings stored in the {@code setting} table (cached in memory, editable from the UI).
- * Known keys: bidWaitSeconds (90), routerConfidenceThreshold (0.75), autopilot (true),
- * quoteDeadlineSeconds (300), portalEnabled (true), bidsEnabled (true).
+ * Known keys: bidWaitSeconds (90), routerConfidenceThreshold (0.75), autopilot (false),
+ * quoteDeadlineSeconds (300), portalEnabled (true), bidsEnabled (true), pollingEnabled (true),
+ * routerMinDispatchConfidence (0.5), llmModelRouter (app.llm.model-router).
  */
 public interface SettingsService {
 

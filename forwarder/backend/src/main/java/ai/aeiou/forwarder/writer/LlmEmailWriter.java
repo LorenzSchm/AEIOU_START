@@ -1,5 +1,7 @@
 package ai.aeiou.forwarder.writer;
 
+import org.springframework.beans.factory.annotation.Autowired;
+
 import ai.aeiou.forwarder.event.Actor;
 import ai.aeiou.forwarder.event.EventLog;
 import ai.aeiou.forwarder.llm.LlmClient;
@@ -38,6 +40,7 @@ public class LlmEmailWriter implements EmailWriter {
     private final String model;
     private final RandomGenerator random;
 
+    @Autowired
     public LlmEmailWriter(LlmClient llm, SettingsService settings, EventLog events,
                           @Value("${app.llm.model-writer}") String model) {
         this(llm, settings, events, model, RandomGenerator.getDefault());
