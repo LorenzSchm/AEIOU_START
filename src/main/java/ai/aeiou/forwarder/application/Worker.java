@@ -168,7 +168,8 @@ public class Worker implements ApplicationRunner {
           || (!shipment.path("requestRevision").equals(j.payload.path("revision"))
               && !(j.action.equals("EXTRACT")
                   && j.payload.path("revision").asInt() == 1
-                  && shipment.path("hasSourceAttachments").asBoolean()
+                  && (shipment.path("hasSourceAttachments").asBoolean()
+                      || shipment.path("customerClarified").asBoolean())
                   && shipment.path("gatewayLog").isEmpty()))
           || (j.action.equals("PORTAL") && shipment.has("quote"))) {
         state(j, "CANCELLED", at);
@@ -178,9 +179,20 @@ public class Worker implements ApplicationRunner {
     if (j.action.equals("SEND") || j.action.equals("BOOK")) {
       var d = flow.store.shipment(j.id);
       boolean quote = str(j.payload, "category").equals("QUOTE");
+      if (j.key.startsWith(j.id + ":clarify-r")
+          && (!at.isBefore(deadline(d))
+              || d.has("quote")
+              || !str(j.payload, "id").equals(d.at("/clarification/outgoing").asText())
+              || d.has("documentHold")
+              || !d.path("pendingSourceDocs").isEmpty())) {
+        state(j, "CANCELLED", at);
+        return j;
+      }
       if (str(j.payload, "category").equals("BID_REQUEST")
           && (!at.isBefore(deadline(d))
               || d.has("quote")
+              || (j.key.matches(java.util.regex.Pattern.quote(j.id) + ":r[0-9]+-.*")
+                  && !j.key.startsWith(j.id + ":r" + d.path("requestRevision").asInt() + "-"))
               || (j.key.startsWith(j.id + ":break-r")
                   && !j.key.startsWith(
                       j.id + ":break-r" + d.path("requestRevision").asInt() + "-")))) {
@@ -329,6 +341,10 @@ public class Worker implements ApplicationRunner {
       return;
     }
     var d = flow.store.shipment(j.id);
+    if (j.action.equals("EXTRACT")
+        && !retry
+        && d.path("requestRevision").equals(j.payload.path("revision")))
+      live.clarify(d, j.payload.get("message"), at);
     if (j.action.equals("ATTACH")
         && !retry
         && d.path("pendingSourceDocs").has(str(j.payload.path("meta"), "id")))

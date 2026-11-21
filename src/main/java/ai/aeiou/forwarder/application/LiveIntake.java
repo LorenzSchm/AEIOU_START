@@ -341,6 +341,7 @@ public class LiveIntake {
       if (d.has("hasSourceAttachments")) flow.store.save(d);
       flow.store.schedule(
           sid(d) + ":extract:1", sid(d), "EXTRACT", flow.clock.now(), extraction(d, m));
+      if (Clarification.missing(d).contains("pickupPostcode")) clarify(d, m, at);
       source(d, at);
       return true;
     }
@@ -379,6 +380,40 @@ public class LiveIntake {
         }
       } else flow.accepted(d, id, at);
     } else if (!carrier
+        && raw.path("attachments").isEmpty()
+        && d.has("clarification")
+        && !d.has("quote")
+        && str(session(d), "phase").equals("SOURCING")
+        && raw.hasNonNull("in_reply_to")
+        && (str(d.get("clarification"), "outgoing").equals(localParent)
+            || str(d, "parent").equals(localParent))
+        && flow.clock.now().isBefore(deadline(d))) {
+      var answer = Clarification.answer(fresh, d.at("/clarification/fields"));
+      if (!answer.isEmpty()
+          && answer.properties().stream()
+              .anyMatch(f -> !d.path("inputs").path(f.getKey()).equals(f.getValue()))) {
+        m.put("category", "CORRECTION");
+        int rev = d.path("requestRevision").asInt();
+        d.withArray("history")
+            .add(
+                obj(
+                    "revision",
+                    rev,
+                    "inputs",
+                    d.get("inputs").deepCopy(),
+                    "facts",
+                    d.get("facts").deepCopy(),
+                    "at",
+                    at.toString()));
+        d.put("requestRevision", rev + 1).put("customerClarified", true);
+        d.remove("pin");
+        if (d.path("reviewedRevision").asInt(-1) == rev) d.put("reviewedRevision", rev + 1);
+        flow.facts(d, answer, m, at);
+        clarify(d, m, at);
+        source(d, at);
+        scheduleFast(d);
+      }
+    } else if (!carrier
         && (lower.matches("(?s).*(correct(?:ed|ion)|revised|amend|korrektur|änderung).*")
             || !raw.path("attachments").isEmpty())
         && !d.has("quote")) {
@@ -397,7 +432,11 @@ public class LiveIntake {
       d.put("requestRevision", d.get("requestRevision").asInt() + 1);
       d.remove("pin");
       flow.facts(d, ShipmentFacts.extract(fresh), m, at);
-      if (raw.path("attachments").isEmpty()) source(d, at);
+      if (raw.path("attachments").isEmpty()) {
+        if (d.has("clarification") || Clarification.missing(d).contains("pickupPostcode"))
+          clarify(d, m, at);
+        source(d, at);
+      }
       if (raw.path("attachments").isEmpty())
         flow.store.schedule(
             sid(d) + ":extract:" + d.get("requestRevision"),
@@ -528,15 +567,45 @@ public class LiveIntake {
     return true;
   }
 
+  void clarify(ObjectNode d, JsonNode parent, Instant at) {
+    if (d.has("quote")
+        || !str(session(d), "phase").equals("SOURCING")
+        || d.has("documentHold")
+        || !d.path("pendingSourceDocs").isEmpty()
+        || d.path("inputs").has("dgReference")
+        || d.path("inputs").has("constraints")
+        || !flow.clock.now().isBefore(deadline(d))) return;
+    var fields = Clarification.missing(d);
+    if (fields.isEmpty()) {
+      if (d.remove("clarification") != null) flow.store.save(d);
+      return;
+    }
+    var list = M.valueToTree(fields);
+    if (list.equals(d.at("/clarification/fields"))) return;
+    String key = "clarify-r" + d.path("requestRevision").asInt() + "-" + String.join("-", fields);
+    d.set("clarification", obj("fields", list, "outgoing", sid(d) + "_" + key));
+    flow.queueMail(
+        d,
+        key,
+        "OTHER",
+        str(d, "customer"),
+        str(parent, "id"),
+        Clarification.question(fields, str(session(d), "language").equals("de")),
+        at);
+    flow.store.save(d);
+  }
+
   private void source(ObjectNode d, Instant at) {
     var s = session(d);
     var facts = d.get("inputs");
     int rev = d.get("requestRevision").asInt();
     if (!flow.clock.now().isBefore(deadline(d))
         || d.has("documentHold")
+        || d.has("clarification")
         || !d.path("pendingSourceDocs").isEmpty()
         || facts.has("dgReference")
-        || (str(s, "scope").equals("DOOR_TO_PORT") && facts.path("pickupAmbiguous").asBoolean())
+        || (str(s, "scope").equals("DOOR_TO_PORT")
+            && (facts.path("pickupAmbiguous").asBoolean() || !facts.hasNonNull("pickupPostcode")))
         || facts.path("lotManifestIncomplete").asBoolean()
         || !facts.has("grossKg")
         || !facts.has("volumeCbm")
@@ -560,6 +629,12 @@ public class LiveIntake {
       if (str(lane, "origin").equals(str(s, "origin"))
           && str(lane, "destination").equals(str(s, "destination")))
         for (var airline : lane.path("airlines")) knownCarriers.add(str(airline, "name"));
+    for (var candidate : d.path("candidates"))
+      if ("TARIFF".equals(str(candidate, "source"))
+          && candidate.path("requestRevision").asInt() == rev
+          && candidate.hasNonNull("validUntil")
+          && Instant.parse(str(candidate, "validUntil")).isAfter(flow.clock.now()))
+        knownCarriers.add(str(candidate, "provider"));
     if (d.has("quote") || !str(s, "phase").equals("SOURCING")) return;
     String route = str(s, "origin") + "-" + str(s, "destination");
     var denied = new HashSet<String>();
@@ -980,6 +1055,7 @@ public class LiveIntake {
               "at",
               at.toString()),
           at);
+      if (d.has("clarification")) clarify(d, d.get("original"), at);
       source(d, at);
       if (d.at("/latestDecision/action").asText().equals("WAIT")) flow.decide(d, at);
       return;
@@ -1104,7 +1180,7 @@ public class LiveIntake {
         return;
       }
       var verified = obj();
-      var body = str(p.get("message"), "bodyText");
+      var body = ShipmentFacts.fresh(str(p.get("message"), "bodyText"));
       for (String key :
           List.of(
               "origin",
@@ -1121,6 +1197,11 @@ public class LiveIntake {
             && !p.get("missing").valueStream().anyMatch(n -> n.asText().equals(key))) continue;
         String excerpt = str(extracted.path("evidence"), key), v = str(extracted, key);
         if (v.isBlank() || excerpt.isBlank() || !body.contains(excerpt)) continue;
+        if (key.equals("origin")
+            && d.at("/clarification/fields")
+                .valueStream()
+                .anyMatch(f -> f.asText().equals("pickupPostcode"))
+            && !excerpt.contains(v)) continue;
         boolean valid =
             switch (key) {
               case "origin", "destination" -> v.matches("[A-Z]{3}");
@@ -1152,6 +1233,7 @@ public class LiveIntake {
       if (extracted != null && extracted.isObject())
         d.set("reviewedRevision", d.get("requestRevision"));
       flow.facts(d, verified, p.get("message"), at);
+      clarify(d, p.get("message"), at);
       source(d, at);
       scheduleFast(d);
       return;

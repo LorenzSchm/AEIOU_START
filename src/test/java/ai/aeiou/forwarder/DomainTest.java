@@ -11,6 +11,14 @@ import org.junit.jupiter.api.Test;
 class DomainTest {
   @Test
   void pickupRequiresAnUnambiguousAddress() {
+    assertFalse(
+        ShipmentFacts.extract(
+                "Please arrange collection from our warehouse.\n\n"
+                    + "Cheers,\n"
+                    + "Example, 90402 Nuremberg\n"
+                    + "-----Original Message-----\n"
+                    + "Pickup postcode 93047")
+            .has("pickupPostcode"));
     assertTrue(
         ShipmentFacts.extract("Pickup in 51447 Bergisch Gladbach or 51103 Köln.")
             .path("pickupAmbiguous")

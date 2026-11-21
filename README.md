@@ -35,7 +35,9 @@ Das Skript liest die PostgreSQL-JDBC-URL (mit dem vereinbarten `currentSchema`),
 
 ## Version 1.1
 
-Version 1.1.6 reconciles customer packing lists with the RFQ, requests readable or corrected copies, and follows up on incomplete dangerous-goods paperwork. Matching documents close the request when no confirmed service is available. Booking requires unconditional customer approval. Ambiguous collection addresses are held for clarification.
+Version 1.1.7 asks for a missing pickup postcode in the original customer thread and processes partial answers. Forwarded messages and signature addresses are excluded from pickup matching. Initial airline invitations prefer carriers with a current tariff or portal listing for the exact route.
+
+The forwarder reconciles customer packing lists with the RFQ, requests readable or corrected copies, and follows up on incomplete dangerous-goods paperwork. Matching documents close the request when no confirmed service is available. Booking requires unconditional customer approval. Ambiguous collection addresses are held for clarification.
 
 For cheapest requests, the forwarder checks the next airline billing break above the actual chargeable weight. The portal receives the real gross weight. The airline can confirm an alternative by email with both weights, an all-in EUR price, transit and a booking reference. Confirmed terms can be booked in that thread. The fast path allows up to six seconds for this comparison once it starts. A gateway timeout or ambiguous server error records an uncertain extraction attempt to avoid paying twice.
 
@@ -55,7 +57,7 @@ From this repository with JDK 21 installed, run `./mvnw spring-boot:run` on Linu
 .\mvnw.cmd spring-boot:run
 ```
 
-The API listens at `http://127.0.0.1:8080`. The local demo uses a file-backed H2 database under `var/`, a public demo bearer value of `demo`, and a simulated clock starting on 21 November 2026. Once Maven has cached the dependencies and plug-ins, add `-o` for an offline build. The packaged JAR runs offline with `java -jar target/forwarder-1.1.6.jar` from the repository root. For a fresh PostgreSQL demo, run `docker compose --profile demo up --build`. Compose uses a persistent database volume.
+The API listens at `http://127.0.0.1:8080`. The local demo uses a file-backed H2 database under `var/`, a public demo bearer value of `demo`, and a simulated clock starting on 21 November 2026. Once Maven has cached the dependencies and plug-ins, add `-o` for an offline build. The packaged JAR runs offline with `java -jar target/forwarder-1.1.7.jar` from the repository root. For a fresh PostgreSQL demo, run `docker compose --profile demo up --build`. Compose uses a persistent database volume.
 
 Five simulated seconds pass per real second by default. In session `s_100`, 100 kg from MUC to LAX costs EUR 304.00 with Yellowtail. The worker issues its first offer at virtual second 90, then processes acceptance, carrier confirmation and a tracking question. Session `s_101` arrives while the first booking awaits confirmation. Its EUR 270 air-only offer lacks pickup. The complete EUR 330 option wins, and the cheaper bid arrives after the quote. Session events also show shadow timing estimates. The demo uses synthetic customers and organizer replies with the actual starter tariffs.
 

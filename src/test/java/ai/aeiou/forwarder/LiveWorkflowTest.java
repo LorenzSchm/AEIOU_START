@@ -484,6 +484,14 @@ class LiveWorkflowTest {
                                 && str(m, "body").contains("booking instructions for"))
                     .count()
                 == 5);
+    assertTrue(
+        sent.stream()
+            .anyMatch(
+                m ->
+                    str(m, "to").equals("wayzata-air-cargo@hackloop.mail")
+                        && str(m, "body").contains("AE-600")
+                        && str(m, "body").contains("booking instructions for")),
+        "Published FRA-JFK tariff should place Wayzata in the first invitation group");
     var original =
         sent.stream()
             .filter(
@@ -782,6 +790,112 @@ class LiveWorkflowTest {
     assertEquals("CLOSED", store.shipment("s_1200").at("/session/phase").asText());
     assertFalse(store.shipment("s_1200").has("quote"));
     assertEquals(3, sent.stream().filter(m -> str(m, "to").equals(buyer)).count());
+  }
+
+  @Test
+  @Order(13)
+  void recoversMissingPickupForBothMissedRoundPatternsWithOneGatewayCallEach() {
+    for (boolean forwarded : List.of(true, false)) {
+      int id = forwarded ? 1500 : 2000;
+      String dest = forwarded ? "SGN" : "RUH", buyer = "pickup-" + id + "@hackloop.mail";
+      String body =
+          forwarded
+              ? "Cheapest air freight to SGN. Ready for pickup from our warehouse, 572 kg gross and"
+                  + " 2.29 cbm. Please arrange the truck.\n\n"
+                  + "-----Original Message-----\n"
+                  + "Old shipment to HKG, postcode 93047, 165 kg and 11.8 cbm."
+              : "Fastest air freight to RUH. 970 kg and 9.06 cbm. Ready for pickup. Arrange the"
+                  + " truck from our warehouse.\n\n"
+                  + "Cheers,\n"
+                  + "Example, Nuremberg";
+      var rfq = (com.fasterxml.jackson.databind.node.ObjectNode) inbound(id, buyer, body, null);
+      rfq.put(
+          "subject",
+          forwarded ? "RE: FW: AMSTERDAM - HKG / 128 PCS 165 KGS" : "Air freight quote to RUH");
+      int calls = gateway.get();
+      inbox.add(rfq);
+      waitFor(() -> replyTo(id) != null && gateway.get() == calls + 1);
+      var question = replyTo(id);
+      assertTrue(str(question, "body").contains("five-digit pickup postcode"));
+      assertFalse(str(question, "body").contains("departure airport"));
+      assertFalse(store.shipment("s_" + id).has("quote"));
+      long parent = question.path("id").asLong();
+      inbox.add(inbound(id + 1, "other@hackloop.mail", "Pickup postcode 60311.", parent));
+      inbox.add(inbound(id + 2, buyer, forwarded ? "Sorry, it is 80287 Munich." : "80287", parent));
+      String ref = "AE-" + id;
+      var sentForCase = (java.util.function.Predicate<JsonNode>) m -> str(m, "body").contains(ref);
+      waitFor(
+          () ->
+              sent.stream()
+                      .filter(sentForCase)
+                      .anyMatch(m -> str(m, "body").contains("trucking from postcode 80287"))
+                  && sent.stream()
+                      .filter(sentForCase)
+                      .anyMatch(m -> str(m, "body").contains("booking instructions for")));
+      var air =
+          sent.stream()
+              .filter(sentForCase)
+              .filter(m -> str(m, "body").contains("booking instructions for"))
+              .findFirst()
+              .orElseThrow();
+      var truck =
+          sent.stream()
+              .filter(sentForCase)
+              .filter(m -> str(m, "body").contains("trucking from postcode"))
+              .findFirst()
+              .orElseThrow();
+      assertTrue(str(air, "subject").contains("MUC to " + dest));
+      assertFalse(str(air, "subject").contains("HKG"));
+      assertEquals(
+          forwarded ? "572" : "970", store.shipment("s_" + id).at("/inputs/grossKg").asText());
+      inbox.add(
+          inbound(
+              id + 3,
+              str(air, "to"),
+              "All-in EUR 900. Estimated transit 2 days. Reference R-air.",
+              air.path("id").asLong()));
+      inbox.add(
+          inbound(
+              id + 4,
+              str(truck, "to"),
+              "All-in EUR 100. Transit from collection to airport 8 hours.",
+              truck.path("id").asLong()));
+      waitFor(
+          () ->
+              store
+                  .shipment("s_" + id)
+                  .path("candidates")
+                  .valueStream()
+                  .anyMatch(c -> c.has("airTotal")));
+      offset.addAndGet(46);
+      waitFor(() -> store.shipment("s_" + id).at("/quote/sendState").asText().equals("SENT"));
+      assertEquals("1000.00", store.shipment("s_" + id).at("/quote/total/amount").asText());
+      assertEquals(calls + 1, gateway.get());
+      assertEquals(
+          1,
+          sent.stream()
+              .filter(m -> str(m, "to").equals(buyer) && str(m, "body").contains("five-digit"))
+              .count());
+    }
+  }
+
+  @Test
+  @Order(14)
+  void asksOnlyForRemainingMissingFieldsAfterPartialCustomerAnswer() {
+    String buyer = "partial@hackloop.mail";
+    inbox.add(inbound(2100, buyer, "Please quote cheapest airport-to-airport MUC to LAX.", null));
+    waitFor(() -> replyTo(2100) != null);
+    var first = replyTo(2100);
+    assertTrue(
+        str(first, "body").contains("gross weight") && str(first, "body").contains("volume"));
+    inbox.add(inbound(2101, buyer, "100 kg gross.", first.path("id").asLong()));
+    waitFor(() -> replyTo(2101) != null);
+    var remaining = replyTo(2101);
+    assertTrue(str(remaining, "body").contains("total volume"));
+    assertFalse(str(remaining, "body").contains("gross weight"));
+    inbox.add(inbound(2102, buyer, "0.2 cbm.", remaining.path("id").asLong()));
+    waitFor(() -> store.shipment("s_2100").at("/quote/sendState").asText().equals("SENT"));
+    assertEquals("300.00", store.shipment("s_2100").at("/quote/total/amount").asText());
   }
 
   JsonNode solicitation(String to) {

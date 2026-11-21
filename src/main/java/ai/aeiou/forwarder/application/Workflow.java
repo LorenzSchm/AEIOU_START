@@ -255,8 +255,10 @@ public class Workflow {
       }
     }
     var zone = str(known, "zone");
-    if (!known.has("origin") && catalog.airport(zone) != null)
-      s.put("origin", catalog.airport(zone));
+    if (!known.has("origin")) {
+      if (catalog.airport(zone) != null) s.put("origin", catalog.airport(zone));
+      else s.remove("origin");
+    }
     if (known.has("grossKg") && known.has("volumeCbm")) {
       var kg = Pricing.decimal(known, "grossKg");
       var cbm = Pricing.decimal(known, "volumeCbm");
@@ -480,7 +482,8 @@ public class Workflow {
             d.get("requestRevision").asInt(),
             str(d, "pin"));
     boolean documentsPending = !d.path("pendingSourceDocs").isEmpty();
-    if (documentsPending
+    if (d.has("clarification")
+        || documentsPending
         || d.has("documentHold")
         || facts.has("dgReference")
         || d.has("dgRequest")
@@ -598,7 +601,16 @@ public class Workflow {
       String parent,
       String body,
       Instant at) {
-    queueMail(d, key, category, to, parent, body, at, str(session(d), "subject"));
+    String subject =
+        category.equals("BID_REQUEST") && parent == null
+            ? "Freight rate request "
+                + str(session(d), "reference")
+                + " | "
+                + str(session(d), "origin")
+                + " to "
+                + str(session(d), "destination")
+            : str(session(d), "subject");
+    queueMail(d, key, category, to, parent, body, at, subject);
   }
 
   private void queueMail(

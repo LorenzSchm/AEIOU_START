@@ -125,13 +125,14 @@ public class ShipmentFacts {
           Pattern.compile("(?i)\\b(\\d{1,6})\\s+(?:pieces?|pcs|packages?|stück)\\b").matcher(text);
       if (count.find()) result.put("pieces", Integer.parseInt(count.group(1)));
     }
-    if (lower.matches("(?s).*(cheapest|günstigst|preiswert|billigst).*"))
+    if (lower.matches("(?s).*(cheapest|lowest (?:price|cost)|günstigst|preiswert|billigst).*"))
       result.put("objective", "CHEAPEST");
     if (lower.matches("(?s).*(fastest|schnellst).*")) result.put("objective", "FASTEST");
     if (lower.matches("(?s).*(airport[- ]to[- ]airport|flughafen zu flughafen|airport only).*"))
       result.put("scope", "AIRPORT_TO_AIRPORT");
-    if (lower.matches("(?s).*(door[- ]to[- ]port|pickup|abholung).*"))
-      result.put("scope", "DOOR_TO_PORT");
+    if (lower.matches(
+        "(?s).*(door[- ]to[- ]port|pick[- ]?up|abholung|collection from|arrange (?:the"
+            + " )?(?:truck|collection)).*")) result.put("scope", "DOOR_TO_PORT");
     if (lower.matches(
         "(?s).*\\b(?:we (?:will |can )?(?:deliver|bring)"
             + " [^.]{0,70}ourselves|self.delivery|selbstanlieferung)\\b.*"))
@@ -172,12 +173,17 @@ public class ShipmentFacts {
         result.put(quote ? "quoteDeadline" : "deliveryDeadline", stamp);
       } catch (java.time.DateTimeException ignored) {
       }
+    String addressText =
+        text.split(
+                "(?im)^\\h*(?:best (?:greetings|regards|wishes)|kind regards|regards|cheers|viele"
+                    + " gr(?:ü|ue)|mit freundlichen|bestens|--)(?:\\b|\\h*$)",
+                2)[0];
     var postal =
         Pattern.compile(
                 "(?iu:\\b(?:plz|post\\s*code|postal code|zip(?:"
                     + " code)?|from|ab)\\s*[:=]?\\s*)(\\d{5})\\b"
                     + "|(?<![\\p{L}\\d.,-])(?:D-)?(\\d{5})\\h+\\(?(?=\\p{Lu}\\p{Ll})")
-            .matcher(text);
+            .matcher(addressText);
     var postcodes = new HashSet<String>();
     while (postal.find())
       postcodes.add(postal.group(1) != null ? postal.group(1) : postal.group(2));
