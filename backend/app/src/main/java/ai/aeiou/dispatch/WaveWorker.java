@@ -26,9 +26,12 @@ class WaveWorker {
   private final boolean counteroffers;
   private final ShipmentDocuments documents;
   private final CustomerClarifications clarifications;
+  private final CarrierRestrictions carrierRestrictions;
   // Cloudline HTML quotes; plain text until a 5U test thread shows the HTML rendered.
   @Value("${dispatch.quote-html:false}")
   boolean quoteHtml;
+  @Value("${dispatch.webhook-secret:}")
+  private String webhookSecret = "";
   private volatile Instant lastPoll;
   private volatile String error;
   private Instant pollAfter = Instant.EPOCH;
@@ -54,6 +57,7 @@ class WaveWorker {
     this.counteroffers = counteroffers;
     this.documents = new ShipmentDocuments(ledger, upstream, catalog);
     this.clarifications = new CustomerClarifications(ledger, catalog);
+    this.carrierRestrictions = new CarrierRestrictions(ledger);
   }
 
   record Status(
@@ -99,6 +103,7 @@ class WaveWorker {
   @Scheduled(fixedDelayString = "${dispatch.poll-ms}")
   void poll() {
     if (clock.instant().isBefore(pollAfter)) return;
+    long interval = webhookSecret.isBlank() ? 6 : 60;
     try {
       ledger.ingest(
           upstream.get("/v1/mailbox/messages?since_id={id}&limit=200", ledger.cursor()),
@@ -106,10 +111,17 @@ class WaveWorker {
           clock.instant());
       lastPoll = clock.instant();
       error = null;
+      pollAfter = lastPoll.plusSeconds(interval);
     } catch (RuntimeException ex) {
       error = "Mailbox poll failed (" + ex.getClass().getSimpleName() + ")";
       log.warn("{}", error);
-      pollAfter = clock.instant().plusSeconds(5);
+      if (ex instanceof HttpClientErrorException.TooManyRequests limit
+          && limit.getResponseHeaders() != null) {
+        String retry = limit.getResponseHeaders().getFirst("Retry-After");
+        if (retry != null && retry.matches("[0-9]{1,9}"))
+          interval = Math.max(interval, Long.parseLong(retry));
+      }
+      pollAfter = clock.instant().plusSeconds(interval);
     }
   }
 
@@ -155,6 +167,8 @@ class WaveWorker {
         /* Confirmed rate limit. Try again on a later tick. */
       } catch (DocumentHold ex) {
         // The document workflow already persisted its stage and reply.
+      } catch (ExcludedCarrier ex) {
+        // Recalculate after restrictions changed while the draft was being sent.
       } catch (Conflict ex) {
         ledger.stage(id, "review", ex.getMessage());
       } catch (RuntimeException ex) {
@@ -168,6 +182,12 @@ class WaveWorker {
   static class Conflict extends RuntimeException {
     Conflict(String msg) {
       super(msg);
+    }
+  }
+
+  private static class ExcludedCarrier extends Conflict {
+    ExcludedCarrier() {
+      super("This customer excluded the selected carrier.");
     }
   }
 
@@ -232,6 +252,10 @@ class WaveWorker {
         && !Ledger.instant(mail.get("received")).isBefore(start)
         && ledger.delivery("quote:" + id) == null
         && ledger.delivery(decision.action() + ":" + id) == null) {
+      if (decision.gatewayReview() != null && clock.instant().isBefore(ageLimit(mail).minusSeconds(23))) {
+        gateway.checkDangerousGoods(id, decision.gatewayReview());
+        target(id);
+      }
       long parent = replies.isEmpty() ? id : Ledger.id(replies.getLast().get("id"));
       send(
           decision.action() + ":" + id,
@@ -598,13 +622,16 @@ class WaveWorker {
   }
 
   private List<Catalog.Carrier> invitations(long id, Shipment shipment, boolean confirmedPickup) {
-    var selected = catalog.invitations(shipment, ledger.airlineRoutesBefore(id));
+    var excluded = carrierRestrictions.forRequest(id, ledger.mail(id));
+    var selected = catalog.invitations(shipment, ledger.airlineRoutesBefore(id),
+        carrier -> !CarrierRestrictions.excludes(excluded, carrier.name()));
     if (!confirmedPickup || shipment.pickupZone() == null) return selected;
     var airlines = selected.stream().filter(c -> !c.truck()).toList();
     var trucks = new LinkedHashSet<Catalog.Carrier>();
     for (var tender : ledger.tenders(id))
       catalog.contact(Ledger.str(tender, "email"))
-          .filter(c -> c.truck() && c.serves(shipment.pickupZone())).ifPresent(trucks::add);
+          .filter(c -> c.truck() && c.serves(shipment.pickupZone()))
+          .filter(c -> !CarrierRestrictions.excludes(excluded, c.name())).ifPresent(trucks::add);
     selected.stream().filter(Catalog.Carrier::truck).forEach(trucks::add);
     var result = new ArrayList<>(airlines);
     result.addAll(trucks.stream().limit(5 - airlines.size()).toList());
@@ -676,6 +703,7 @@ class WaveWorker {
     String problem = catalog.problem(s);
     if (problem != null) throw new IllegalArgumentException(problem);
     var m = target(id);
+    var excluded = carrierRestrictions.forRequest(id, m);
     var offers =
         new ArrayList<>(
             catalog.price(
@@ -689,6 +717,7 @@ class WaveWorker {
         .filter(
             o -> o.validUntil() != null && o.validUntil().isAfter(clock.instant().plusSeconds(4)))
         .forEach(offers::add);
+    offers.removeIf(offer -> CarrierRestrictions.excludes(excluded, offer.airline()));
     var details = clarifications.details(id, m);
     var airBids = new ArrayList<Offer>();
     var trucks = new ArrayList<Offer>();
@@ -701,6 +730,7 @@ class WaveWorker {
         WHERE t.request_id=? AND t.euros IS NOT NULL ORDER BY t.email
         """, id)) {
       var c = catalog.contact(Ledger.str(t, "email")).orElseThrow();
+      if (CarrierRestrictions.excludes(excluded, c.name())) continue;
       if (!matchesTender(t, s, details, c.truck())) continue;
       Instant validUntil;
       try {
@@ -741,6 +771,7 @@ class WaveWorker {
           || manual.airTotalEur().signum() <= 0
           || manual.transitDays() <= 0)
         throw new IllegalArgumentException("Confirm carrier name, total and transit.");
+      if (CarrierRestrictions.excludes(excluded, manual.airline())) throw new ExcludedCarrier();
       airBids.add(
           new Offer(
               manual.airline(),
@@ -972,10 +1003,11 @@ class WaveWorker {
     var d = ledger.read(m.get("proposal"), Draft.class);
     if (d == null || d.offer() == null || !d.revision().equals(revision))
       throw new Conflict("Calculate a current quote first.");
+    checkCarrierRestrictions(id, m, d);
     if (d.offer().validUntil() != null && !d.offer().validUntil().isAfter(clock.instant()))
       throw new Conflict("Quote rate expired.");
     gateway.checkQuote(id, clarifications.details(id, m).message(), shipment);
-    target(id);
+    checkCarrierRestrictions(id, target(id), d);
     if (d.offer().validUntil() != null && !d.offer().validUntil().isAfter(clock.instant()))
       throw new Conflict("Quote rate expired.");
     var result =
@@ -994,6 +1026,13 @@ class WaveWorker {
     return result;
   }
 
+  private void checkCarrierRestrictions(long id, Map<String, Object> mail, Draft draft) {
+    var restrictions = carrierRestrictions.forRequest(id, mail);
+    if (CarrierRestrictions.excludes(restrictions, draft.offer().airline())
+        || (draft.trucker() != null && CarrierRestrictions.excludes(restrictions, draft.trucker())))
+      throw new ExcludedCarrier();
+  }
+
   // The all-in total exactly as quoteBody writes it, so Cloudline can bold it.
   static String cloudline(Draft d, Shipment s) {
     return Cloudline.renderMailHtml(
@@ -1009,6 +1048,8 @@ class WaveWorker {
 
   private Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c,
       CustomerClarifications.Details details) {
+    if (CarrierRestrictions.excludes(carrierRestrictions.forRequest(id, details.message()), c.name()))
+      throw new ExcludedCarrier();
     if (catalog.problem(s) != null || !c.serves(c.truck() ? s.pickupZone() : s.destination()))
       throw new IllegalArgumentException("Check shipment and carrier coverage.");
     var previous = ledger.tenders(id).stream().filter(t -> c.email().equals(t.get("email"))).findFirst();

@@ -108,14 +108,21 @@ public final class Catalog {
   }
 
   public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes) {
+    return invitations(s, airlineRoutes, carrier -> true);
+  }
+
+  public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes,
+      java.util.function.Predicate<Carrier> eligible) {
     String route = s.origin() + "-" + s.destination();
     var airlines = carriers.stream()
         .filter(c -> !c.truck())
+        .filter(eligible)
         .filter(c -> airlineRoutes.containsKey(c.email())
             ? airlineRoutes.get(c.email()).contains(route) : c.serves(s.destination()))
         .sorted(Comparator.comparing(c -> !airlineRoutes.containsKey(c.email())))
         .toList();
-    var trucks = carriers.stream().filter(c -> c.truck() && c.serves(s.pickupZone())).toList();
+    var trucks = carriers.stream().filter(c -> c.truck() && c.serves(s.pickupZone()))
+        .filter(eligible).toList();
     // In zone 60 these truckers returned the lowest initial bids in the pre-wave comparison.
     // This is an invitation preference only. Each shipment still needs a fresh confirmed rate.
     if ("60".equals(s.pickupZone()) && "cheapest".equals(s.preference())) {
