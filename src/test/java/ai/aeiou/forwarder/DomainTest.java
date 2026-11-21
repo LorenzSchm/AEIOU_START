@@ -1,0 +1,87 @@
+package ai.aeiou.forwarder;
+
+import static ai.aeiou.forwarder.domain.Json.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+import ai.aeiou.forwarder.domain.*;
+import java.time.*;
+import java.util.*;
+import org.junit.jupiter.api.Test;
+
+class DomainTest {
+  @Test
+  void piecesAndCorrectionsDoNotDoubleCountTotals() {
+    var facts =
+        ShipmentFacts.extract(
+            "Bitte günstigste Option MUC nach LAX. 2 Stück je 120 × 80 × 100 cm, 150 kg gesamt.\n"
+                + "> 900 kg");
+    assertEquals("150", str(facts, "grossKg"));
+    assertEquals("1.92", str(facts, "volumeCbm"));
+    assertEquals("CHEAPEST", str(facts, "objective"));
+    assertEquals("de", str(facts, "language"));
+    facts = ShipmentFacts.extract("MUC to LAX 2 pieces each 120 x 80 x 100 cm, 150 kg each");
+    assertEquals("300", str(facts, "grossKg"));
+    facts = ShipmentFacts.extract("10 kg per piece or 20 kg, 1 cbm");
+    assertTrue(facts.has("grossAlternatives"));
+    assertFalse(facts.has("grossKg"));
+    assertEquals("4.5359237", str(ShipmentFacts.extract("10 lb gross"), "grossKg"));
+    assertEquals(
+        "1234.50",
+        new java.math.BigDecimal(str(ShipmentFacts.extract("1.234,50 kg gesamt"), "grossKg"))
+            .setScale(2)
+            .toPlainString());
+  }
+
+  @Test
+  void shadowWindowAvoidsHindsightAndCensorBias() {
+    Instant at = Instant.parse("2026-11-21T15:00:00Z");
+    List<BidTiming.Observation> rows = new ArrayList<>();
+    for (int i = 0; i < 12; i++) {
+      Instant start = at.minusSeconds(1200 + i);
+      rows.add(new BidTiming.Observation("A", start, at, start.plusSeconds(95), true));
+    }
+    rows.add(new BidTiming.Observation("A", at.minusSeconds(30), at, null, false));
+    rows.add(
+        new BidTiming.Observation(
+            "A", at.plusSeconds(6), at.plusSeconds(500), at.plusSeconds(105), true));
+    var p = BidTiming.estimate(rows, "A", at, 90, 15, 200);
+    assertEquals(12, p.samples());
+    assertTrue(p.waitForBid());
+    assertEquals(1.0, p.probability());
+    assertFalse(BidTiming.estimate(rows, "A", at, 90, 15, 20).waitForBid());
+  }
+
+  @Test
+  void bidBalanceAndCustomerObjectiveAreIndependent() {
+    var now = Instant.EPOCH;
+    var values =
+        List.<com.fasterxml.jackson.databind.JsonNode>of(
+            candidate("slow", "BID", "200", 6),
+            candidate("fast", "BID", "400", 2),
+            candidate("balanced", "BID", "240", 3),
+            candidate("sheet", "TARIFF", "220", 5));
+    assertEquals("sheet", str(Pricing.choose(values, "CHEAPEST", now, 1, "").orElseThrow(), "id"));
+    assertEquals(
+        "balanced", str(Pricing.choose(values, "FASTEST", now, 1, "").orElseThrow(), "id"));
+    assertTrue(Pricing.choose(values, "CHEAPEST", now, 2, "").isEmpty());
+  }
+
+  private com.fasterxml.jackson.databind.JsonNode candidate(
+      String id, String source, String total, int days) {
+    return obj(
+        "id",
+        id,
+        "provider",
+        id,
+        "source",
+        source,
+        "eligible",
+        true,
+        "comparisonTotal",
+        obj("amount", total, "currency", "EUR"),
+        "transitDays",
+        days,
+        "requestRevision",
+        1);
+  }
+}

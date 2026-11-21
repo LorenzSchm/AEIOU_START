@@ -1,4 +1,70 @@
-# Team AEIOU kit card
+# AEIOU autonomous air freight forwarder
+
+Java 21 and Spring Boot service for air export requests. A persistent worker sources offers, quotes the customer, books accepted shipments and answers tracking questions. The browser application consumes the [frontend contract](docs/forwarder.openapi.json).
+
+## Start the offline demo
+
+From this repository with JDK 21 installed, run `./mvnw spring-boot:run` on Linux or macOS, or the following command in PowerShell.
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+The API listens at `http://127.0.0.1:8080`. The local demo uses a file-backed H2 database under `var/`, a public demo bearer value of `demo`, and a simulated clock starting on 21 November 2026. Once Maven has cached the dependencies and plug-ins, add `-o` for an offline build. The packaged JAR runs offline with `java -jar target/forwarder-1.0.0.jar` from the repository root. For a fresh PostgreSQL demo, run `docker compose --profile demo up --build`. Compose uses a persistent database volume.
+
+Five simulated seconds pass per real second by default. In session `s_100`, 100 kg from MUC to LAX costs EUR 304.00 with Yellowtail. The worker issues its first offer at virtual second 90, then processes acceptance, carrier confirmation and a tracking question. Session `s_101` arrives while the first booking awaits confirmation. Its EUR 270 air-only offer lacks pickup. The complete EUR 330 option wins, and the cheaper bid arrives after the quote. Session events also show shadow timing estimates. The demo uses synthetic customers and organizer replies with the actual starter tariffs.
+
+## Frontend handoff
+
+```powershell
+$base = 'http://127.0.0.1:8080'
+$ui = @{Authorization='Bearer demo'}
+Invoke-RestMethod "$base/health"
+Invoke-WebRequest "$base/openapi.json" -OutFile "$env:TEMP/forwarder.openapi.json"
+Invoke-RestMethod "$base/api/v1/sessions" -Headers $ui
+$shipment = Invoke-RestMethod "$base/api/v1/sessions/s_100" -Headers $ui
+$shipment.quote
+curl.exe -N --max-time 5 -H 'Authorization: Bearer demo' "$base/api/v1/events/stream?after=$($shipment.snapshotCursor)"
+Invoke-RestMethod "$base/api/v1/replays" -Method Post -Headers ($ui + @{'Idempotency-Key'='demo-replay-100'}) -ContentType application/json -Body '{"sessionId":"s_100","scenario":"RECORDED"}'
+```
+
+Replay becomes available when a quote decision is recorded. The stream stays open until the client disconnects. Its timed curl example exits after five seconds. Use a same-origin server proxy in production. For direct browser development, set `UI_ORIGINS` to comma-separated frontend origins and use authenticated fetch for both snapshots and SSE. On reconnect, send the last applied event ID. Mutation retries reuse the original idempotency key and payload.
+
+## Build and test
+
+```powershell
+.\mvnw.cmd verify
+```
+
+JUnit covers the ten source tariffs, exact freight arithmetic, scope and bid selection, extraction, controls, replay, recovery after an interrupted mail send, and a full organizer workflow against a local HTTP stub. The Testcontainers test uses PostgreSQL 16 when Docker is available. Optional independent checks for a running demo:
+
+```sh
+python -m pip install openapi-spec-validator==0.7.2
+python src/test/python/verify_contract.py
+node src/test/frontend-smoke.mjs
+npx --yes openapi-typescript@7.10.1 docs/forwarder.openapi.json -o target/forwarder.d.ts
+npx --yes --package typescript@5.9.3 tsc --noEmit --strict target/forwarder.d.ts
+```
+
+The service imports the spreadsheets, PDFs, Word document and text tariff from `start-kit/`. The November Danube transcription is tied to the hashes of both reviewed image pages. The container includes Tesseract for new scans. Set `START_KIT` to use a different input directory. Rates carry source rows or page locations and currency. The bid policy uses equal-weight min-max normalization of cost and transit. The shadow wait policy records forecasts and evaluates a 15-second counterfactual against observed offers. Baseline decisions control dispatch.
+
+## Live deployment
+
+Create the ignored `.env` from `.env.example` for the live deployment. Set `TEAM_API_KEY`, a separate private `UI_TOKEN`, a gateway-supported `GATEWAY_MODEL`, and `DATABASE_PASSWORD`. The live runtime uses the team's existing organizer gateway registration. The deployment operator handles registration through the kit-card instructions below. A live startup checks the mailbox identity, gateway registration, supported model and portal lanes. Starting this profile enables real mailbox sends, bookings and gateway usage.
+
+```sh
+docker compose --profile live up --build
+```
+
+The Compose profiles use separate PostgreSQL schemas. On the same machine, stop the demo service before binding the live service to port 8080. For an external PostgreSQL installation, supply JDBC `DATABASE_URL`, `DATABASE_USER`, `DATABASE_PASSWORD` and `SPRING_PROFILES_ACTIVE=live` to the JAR. `GET /health` reports database, worker and upstream status. Use `DECISION_SECONDS` and `RESERVE_SECONDS` to tune the default 90-second decision and 20-second dispatch reserve.
+
+## Verification from this checkout
+
+The Java build passed on JDK 21. Eight JUnit tests passed. The Docker-dependent Testcontainers test was skipped because the Docker engine was stopped. A separate run used native PostgreSQL 16.6, processed both demo shipments, terminated the JVM and restarted it against the same database. The replay idempotency record and the single first quote survived. All 12 API operations were exercised over HTTP and validated against the OpenAPI schemas. Direct authenticated fetch and the same-origin proxy both resumed the SSE stream. The generated TypeScript definitions type-checked.
+
+The organizer's public OpenAPI schema was retrieved read-only. Mailbox, rate, gateway, booking and confirmation exchanges were exercised with a local HTTP organizer stub. Authenticated organizer responses, delivery, paid usage, official scoring and performance of the shadow policy on competition traffic still require a live deployment. The actual number of organizer sends, bookings and paid requests during verification was zero.
+
+## Team AEIOU kit card
 
 Fehmi at 5U AI sent this card to Lorenz Walter Schmidt. The first request arrives at **16:00**. Before then, the team can read the API docs, try the portal, and download the start kit.
 

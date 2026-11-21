@@ -1,0 +1,2849 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "AEIOU Autonomous Freight Forwarder",
+    "version": "1.0.0",
+    "description": "Team-owned frontend contract. Default base /api/v1. UTC timestamps, decimal strings, opaque identifiers. Omit unavailable optional fields. Synthetic examples. All operations are scoped to the configured team."
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "Same-origin team backend"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Overview"
+    },
+    {
+      "name": "Sessions"
+    },
+    {
+      "name": "Tariffs"
+    },
+    {
+      "name": "Replay"
+    }
+  ],
+  "security": [
+    {
+      "teamUiBearer": []
+    }
+  ],
+  "paths": {
+    "/dashboard": {
+      "get": {
+        "operationId": "getDashboard",
+        "tags": [
+          "Overview"
+        ],
+        "summary": "Read dashboard metrics",
+        "description": "UTC clock-hour by default. Counts refer to RFQs received in the window; gateway usage refers to calls charged in the window. Unavailable metrics are omitted.",
+        "parameters": [
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CURRENT_HOUR",
+                "EVENT"
+              ]
+            },
+            "description": "Defaults to CURRENT_HOUR. EVENT starts at the first locally received RFQ."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                },
+                "example": {
+                  "mode": "DEMO",
+                  "asOf": "2026-11-21T15:01:31Z",
+                  "snapshotCursor": "7",
+                  "windowStart": "2026-11-21T15:00:00Z",
+                  "received": 1,
+                  "answered": 1,
+                  "accepted": 0,
+                  "booked": 0,
+                  "expired": 0,
+                  "trackingAnswered": 0,
+                  "usage": {
+                    "calls": 1,
+                    "inputTokens": 340,
+                    "outputTokens": 74,
+                    "spendUsd": "0.00048",
+                    "costBasis": "ESTIMATED"
+                  },
+                  "p95QuoteSeconds": 90,
+                  "worker": "HEALTHY"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "get": {
+        "operationId": "listSessions",
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Find shipment sessions",
+        "description": "Newest received first, then id descending. q matches reference, tracking/booking reference, subject and airports case-insensitively. Filters combine with AND.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Maximum items per page."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from the preceding page. Keep filters unchanged."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search text."
+          },
+          {
+            "name": "phase",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Phase"
+            },
+            "description": "Current lifecycle phase."
+          },
+          {
+            "name": "control",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Control"
+            },
+            "description": "Autonomy state."
+          },
+          {
+            "name": "verdict",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Verdict"
+            },
+            "description": "Official outcome."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "s_100",
+                      "reference": "AE-100",
+                      "subject": "100 kg from Munich to Los Angeles",
+                      "phase": "QUOTED",
+                      "control": "AUTO",
+                      "version": 7,
+                      "verdict": "PENDING",
+                      "receivedAt": "2026-11-21T15:00:00Z",
+                      "deadlineAt": "2026-11-21T15:06:00Z",
+                      "updatedAt": "2026-11-21T15:01:31Z",
+                      "origin": "MUC",
+                      "destination": "LAX",
+                      "objective": "CHEAPEST",
+                      "scope": "AIRPORT_TO_AIRPORT",
+                      "language": "en"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}": {
+      "get": {
+        "operationId": "getSession",
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Read shipment and decision evidence",
+        "description": "Returns a transactionally consistent snapshot. Optional sections appear when known. Use snapshotCursor to start or resume the global change stream.",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                },
+                "example": {
+                  "session": {
+                    "id": "s_100",
+                    "reference": "AE-100",
+                    "subject": "100 kg from Munich to Los Angeles",
+                    "phase": "QUOTED",
+                    "control": "AUTO",
+                    "version": 7,
+                    "verdict": "PENDING",
+                    "receivedAt": "2026-11-21T15:00:00Z",
+                    "deadlineAt": "2026-11-21T15:06:00Z",
+                    "updatedAt": "2026-11-21T15:01:31Z",
+                    "origin": "MUC",
+                    "destination": "LAX",
+                    "objective": "CHEAPEST",
+                    "scope": "AIRPORT_TO_AIRPORT",
+                    "language": "en"
+                  },
+                  "snapshotCursor": "7",
+                  "requestRevision": 1,
+                  "facts": [
+                    {
+                      "field": "grossKg",
+                      "value": "100 kg",
+                      "state": "KNOWN",
+                      "alternatives": [],
+                      "evidence": [
+                        {
+                          "source": "MAIL",
+                          "sourceId": "m_1",
+                          "locator": "body line 1",
+                          "excerpt": "100 kg total",
+                          "observedAt": "2026-11-21T15:00:00Z"
+                        }
+                      ]
+                    }
+                  ],
+                  "candidates": [
+                    {
+                      "id": "c_yel",
+                      "provider": "Yellowtail Air Freight",
+                      "source": "TARIFF",
+                      "requestRevision": 1,
+                      "eligible": true,
+                      "reasons": [],
+                      "quotedTotal": {
+                        "amount": "304.00",
+                        "currency": "EUR"
+                      },
+                      "comparisonTotal": {
+                        "amount": "304.00",
+                        "currency": "EUR"
+                      },
+                      "transitDays": 5,
+                      "billedKg": "100",
+                      "tariffVersion": "2026-11",
+                      "lineItems": [
+                        {
+                          "kind": "FREIGHT",
+                          "label": "Air freight",
+                          "amount": {
+                            "amount": "173.00",
+                            "currency": "EUR"
+                          },
+                          "basis": "100 × 1.73, minimum 82",
+                          "evidence": [
+                            {
+                              "source": "TARIFF",
+                              "sourceId": "tf_yel_nov",
+                              "locator": "MUC-LAX row and surcharge row",
+                              "excerpt": "100 kg bracket 1.73; fuel 1.17; security 0.14",
+                              "observedAt": "2026-11-21T15:00:00Z"
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "FUEL",
+                          "label": "Fuel",
+                          "amount": {
+                            "amount": "117.00",
+                            "currency": "EUR"
+                          },
+                          "basis": "100 × 1.17",
+                          "evidence": [
+                            {
+                              "source": "TARIFF",
+                              "sourceId": "tf_yel_nov",
+                              "locator": "MUC-LAX row and surcharge row",
+                              "excerpt": "100 kg bracket 1.73; fuel 1.17; security 0.14",
+                              "observedAt": "2026-11-21T15:00:00Z"
+                            }
+                          ]
+                        },
+                        {
+                          "kind": "SECURITY",
+                          "label": "Security",
+                          "amount": {
+                            "amount": "14.00",
+                            "currency": "EUR"
+                          },
+                          "basis": "100 × 0.14",
+                          "evidence": [
+                            {
+                              "source": "TARIFF",
+                              "sourceId": "tf_yel_nov",
+                              "locator": "MUC-LAX row and surcharge row",
+                              "excerpt": "100 kg bracket 1.73; fuel 1.17; security 0.14",
+                              "observedAt": "2026-11-21T15:00:00Z"
+                            }
+                          ]
+                        }
+                      ],
+                      "evidence": [
+                        {
+                          "source": "TARIFF",
+                          "sourceId": "tf_yel_nov",
+                          "locator": "MUC-LAX row and surcharge row",
+                          "excerpt": "100 kg bracket 1.73; fuel 1.17; security 0.14",
+                          "observedAt": "2026-11-21T15:00:00Z"
+                        }
+                      ]
+                    }
+                  ],
+                  "latestDecision": {
+                    "action": "QUOTE",
+                    "at": "2026-11-21T15:01:30Z",
+                    "reason": "Lowest complete feasible offer before send cut-off.",
+                    "policyVersion": "baseline-v1",
+                    "chosenCandidateId": "c_yel",
+                    "pendingSources": [],
+                    "cutoff": "6"
+                  },
+                  "quote": {
+                    "candidateId": "c_yel",
+                    "at": "2026-11-21T15:01:30Z",
+                    "total": {
+                      "amount": "304.00",
+                      "currency": "EUR"
+                    },
+                    "body": "We can fly your 100 kg shipment from Munich to Los Angeles in five days for EUR 304.00 all in.",
+                    "sendState": "SENT",
+                    "requestRevision": 1
+                  },
+                  "milestones": [],
+                  "usage": {
+                    "calls": 1,
+                    "inputTokens": 340,
+                    "outputTokens": 74,
+                    "spendUsd": "0.00048",
+                    "costBasis": "ESTIMATED"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/messages": {
+      "get": {
+        "operationId": "listMessages",
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Read the correlated correspondence",
+        "description": "All related customer, desk and carrier threads, ordered by local receipt or dispatch time, then local id, ascending. Plain text is untrusted display data.",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Maximum items per page."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from the preceding page. Keep filters unchanged."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "m_1",
+                      "direction": "IN",
+                      "category": "RFQ",
+                      "from": "customer@example.test",
+                      "to": "forwarder@example.test",
+                      "subject": "100 kg from Munich to Los Angeles",
+                      "bodyText": "100 kg total, 0.2 cbm. Please quote your cheapest airport-to-airport service MUC to LAX.",
+                      "at": "2026-11-21T15:00:00Z",
+                      "attachments": []
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/events": {
+      "get": {
+        "operationId": "listSessionEvents",
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Read the session timeline",
+        "description": "Ascending event sequence. Page through historical events independently of live delivery.",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Maximum items per page."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from the preceding page. Keep filters unchanged."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "sequence": "7",
+                      "at": "2026-11-21T15:01:31Z",
+                      "kind": "QUOTE",
+                      "sessionId": "s_100",
+                      "sessionVersion": 7,
+                      "resourceId": "c_yel",
+                      "summary": "First quote sent in the customer thread."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/attachments/{attachmentId}": {
+      "get": {
+        "operationId": "getAttachment",
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Download a session attachment",
+        "description": "Only attachments associated with this session. Serve as attachment with a sanitized filename and nosniff. Bytes are opaque.",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attachment bytes.",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Attachment with safe filename."
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/control": {
+      "post": {
+        "operationId": "controlSession",
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Intervene in one autonomous session",
+        "description": "Apply atomically. Replay of identical key and body returns original 200. Reusing key for different input or stale expectedVersion returns 409. Control commands return the new version. A session always starts AUTO.",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100
+            },
+            "description": "Generate one key per user action and reuse only on retry."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlCommand"
+              },
+              "example": {
+                "action": "PAUSE",
+                "expectedVersion": 4,
+                "reason": "Inspect pending bids during demo."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                },
+                "example": {
+                  "id": "s_100",
+                  "reference": "AE-100",
+                  "subject": "100 kg from Munich to Los Angeles",
+                  "phase": "SOURCING",
+                  "control": "PAUSED",
+                  "version": 5,
+                  "verdict": "OPEN",
+                  "receivedAt": "2026-11-21T15:00:00Z",
+                  "deadlineAt": "2026-11-21T15:06:00Z",
+                  "updatedAt": "2026-11-21T15:00:40Z",
+                  "origin": "MUC",
+                  "destination": "LAX",
+                  "objective": "CHEAPEST",
+                  "scope": "AIRPORT_TO_AIRPORT",
+                  "language": "en"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "422": {
+            "$ref": "#/components/responses/E422"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/events/stream": {
+      "get": {
+        "operationId": "streamEvents",
+        "tags": [
+          "Overview"
+        ],
+        "summary": "Subscribe to live changes",
+        "description": "SSE with event: change, id: global decimal sequence, data: one Event JSON. Comment heartbeat every 15 seconds. Last-Event-ID takes precedence over after. With neither, stream new events from connection time. Resume strictly after the cursor; delivery may repeat at reconnect boundaries. Expired cursor receives 410 before stream starts.",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Unsigned decimal global event sequence. Compare as BigInt.",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            },
+            "description": "Last applied global sequence."
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Unsigned decimal global event sequence. Compare as BigInt.",
+              "pattern": "^(0|[1-9][0-9]*)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UTF-8 SSE until client disconnect. Event data schema is provided as x-event-schema.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "x-event-schema": {
+                  "$ref": "#/components/schemas/Event"
+                },
+                "example": "id: 7\nevent: change\ndata: {\"sequence\":\"7\",\"at\":\"2026-11-21T15:01:31Z\",\"kind\":\"QUOTE\",\"sessionId\":\"s_100\",\"sessionVersion\":7,\"resourceId\":\"c_yel\",\"summary\":\"First quote sent in the customer thread.\"}\n\n"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/tariffs": {
+      "get": {
+        "operationId": "listTariffs",
+        "tags": [
+          "Tariffs"
+        ],
+        "summary": "Browse tariff versions",
+        "description": "Newest ingested first, then id descending. A superseded version remains available for decision replay.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Maximum items per page."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from the preceding page. Keep filters unchanged."
+          },
+          {
+            "name": "carrier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Exact carrier name, case-insensitive."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffPage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "tf_yel_nov",
+                      "carrier": "Yellowtail Air Freight",
+                      "version": "2026-11",
+                      "state": "ACTIVE",
+                      "filename": "yellowtail-air-freight-tariff-2026-11.txt",
+                      "validFrom": "2026-11-01",
+                      "validTo": "2026-11-30",
+                      "ingestedAt": "2026-11-21T15:00:00Z",
+                      "laneCount": 15,
+                      "issues": [],
+                      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/tariffs/{tariffId}/lanes": {
+      "get": {
+        "operationId": "listTariffLanes",
+        "tags": [
+          "Tariffs"
+        ],
+        "summary": "Inspect extracted rates and evidence",
+        "description": "Sorted by origin, destination, then source row. Omitted charges mean unknown or inapplicable, never an implicit zero.",
+        "parameters": [
+          {
+            "name": "tariffId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Maximum items per page."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from the preceding page. Keep filters unchanged."
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "description": "Exact IATA origin."
+          },
+          {
+            "name": "destination",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$"
+            },
+            "description": "Exact IATA destination."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TariffLanePage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "origin": "MUC",
+                      "destination": "LAX",
+                      "currency": "EUR",
+                      "minimum": "82.00",
+                      "breaks": [
+                        {
+                          "fromKg": "0",
+                          "ratePerKg": "3.12"
+                        },
+                        {
+                          "fromKg": "45",
+                          "ratePerKg": "2.28"
+                        },
+                        {
+                          "fromKg": "100",
+                          "ratePerKg": "1.73"
+                        },
+                        {
+                          "fromKg": "250",
+                          "ratePerKg": "1.40"
+                        },
+                        {
+                          "fromKg": "500",
+                          "ratePerKg": "1.08"
+                        },
+                        {
+                          "fromKg": "1000",
+                          "ratePerKg": "0.98"
+                        },
+                        {
+                          "fromKg": "2000",
+                          "ratePerKg": "0.83"
+                        }
+                      ],
+                      "fuelPerKg": "1.17",
+                      "securityPerKg": "0.14",
+                      "transitDays": 5,
+                      "ruleSummary": "Minimum before surcharges; surcharges per billed kg.",
+                      "evidence": [
+                        {
+                          "source": "TARIFF",
+                          "sourceId": "tf_yel_nov",
+                          "locator": "MUC-LAX row and surcharge row",
+                          "excerpt": "100 kg bracket 1.73; fuel 1.17; security 0.14",
+                          "observedAt": "2026-11-21T15:00:00Z"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/scores": {
+      "get": {
+        "operationId": "listScores",
+        "tags": [
+          "Overview"
+        ],
+        "summary": "Read synchronized team results",
+        "description": "Latest round first, stable round id as tie-breaker. Use only official fields when present. Pending or delayed components are omitted.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "description": "Maximum items per page."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor from the preceding page. Keep filters unchanged."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScorePage"
+                },
+                "example": {
+                  "items": [
+                    {
+                      "verdict": "PENDING",
+                      "sessionId": "s_100",
+                      "round": "demo-1",
+                      "at": "2026-11-21T15:01:31Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "410": {
+            "$ref": "#/components/responses/E410"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    },
+    "/replays": {
+      "post": {
+        "operationId": "createReplay",
+        "tags": [
+          "Replay"
+        ],
+        "summary": "Replay a recorded quote decision",
+        "description": "Synchronous bounded simulation. Network-disabled snapshot, local clock, no external mail, bookings or paid calls. Requires a recorded decision. Same key and input returns original result. Historical feasibility and timing are recomputed.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 100
+            },
+            "description": "Generate one key per user action and reuse only on retry."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplayRequest"
+              },
+              "example": {
+                "sessionId": "s_100",
+                "scenario": "RECORDED"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayResult"
+                },
+                "example": {
+                  "id": "replay_1",
+                  "sessionId": "s_100",
+                  "scenario": "RECORDED",
+                  "historicalCutoff": "6",
+                  "baseline": {
+                    "action": "QUOTE",
+                    "at": "2026-11-21T15:01:30Z",
+                    "reason": "Lowest complete feasible offer before send cut-off.",
+                    "policyVersion": "baseline-v1",
+                    "chosenCandidateId": "c_yel",
+                    "pendingSources": [],
+                    "cutoff": "6"
+                  },
+                  "simulated": {
+                    "action": "QUOTE",
+                    "at": "2026-11-21T15:01:30Z",
+                    "reason": "Lowest complete feasible offer before send cut-off.",
+                    "policyVersion": "baseline-v1",
+                    "chosenCandidateId": "c_yel",
+                    "pendingSources": [],
+                    "cutoff": "6"
+                  },
+                  "baselineTotal": {
+                    "amount": "304.00",
+                    "currency": "EUR"
+                  },
+                  "simulatedTotal": {
+                    "amount": "304.00",
+                    "currency": "EUR"
+                  },
+                  "explanation": "Recorded inputs reproduce the selected candidate and total.",
+                  "events": [
+                    {
+                      "sequence": "7",
+                      "at": "2026-11-21T15:01:31Z",
+                      "kind": "QUOTE",
+                      "sessionId": "s_100",
+                      "sessionVersion": 7,
+                      "resourceId": "c_yel",
+                      "summary": "First quote sent in the customer thread."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/E400"
+          },
+          "401": {
+            "$ref": "#/components/responses/E401"
+          },
+          "403": {
+            "$ref": "#/components/responses/E403"
+          },
+          "404": {
+            "$ref": "#/components/responses/E404"
+          },
+          "409": {
+            "$ref": "#/components/responses/E409"
+          },
+          "422": {
+            "$ref": "#/components/responses/E422"
+          },
+          "429": {
+            "$ref": "#/components/responses/E429"
+          },
+          "503": {
+            "$ref": "#/components/responses/E503"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "teamUiBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Backend-issued/configured UI credential, distinct from 5U/OpenAI keys. A same-origin frontend proxy can attach it server side."
+      }
+    },
+    "responses": {
+      "E400": {
+        "description": "Malformed parameter or request.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Malformed parameter or request.",
+              "status": 400,
+              "code": "INVALID_REQUEST",
+              "detail": "Malformed parameter or request.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      },
+      "E401": {
+        "description": "Missing or invalid local API access.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Missing or invalid local API access.",
+              "status": 401,
+              "code": "UNAUTHENTICATED",
+              "detail": "Missing or invalid local API access.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      },
+      "E403": {
+        "description": "Credential lacks access to this action.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Credential lacks access to this action.",
+              "status": 403,
+              "code": "FORBIDDEN",
+              "detail": "Credential lacks access to this action.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      },
+      "E404": {
+        "description": "Unknown or inaccessible resource.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Unknown or inaccessible resource.",
+              "status": 404,
+              "code": "NOT_FOUND",
+              "detail": "Unknown or inaccessible resource.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      },
+      "E409": {
+        "description": "Version, state, or idempotency-key conflict. Refresh resource before issuing a new command.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Version, state, or idempotency-key conflict. Refresh resource before issuing a new command.",
+              "status": 409,
+              "code": "CONFLICT",
+              "detail": "Version, state, or idempotency-key conflict. Refresh resource before issuing a new command.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      },
+      "E410": {
+        "description": "Cursor expired. Reload a full snapshot and reconnect.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Cursor expired. Reload a full snapshot and reconnect.",
+              "status": 410,
+              "code": "CURSOR_EXPIRED",
+              "detail": "Cursor expired. Reload a full snapshot and reconnect.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      },
+      "E422": {
+        "description": "Invalid modifier combination or ineligible candidate.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Invalid modifier combination or ineligible candidate.",
+              "status": 422,
+              "code": "INVALID_ACTION",
+              "detail": "Invalid modifier combination or ineligible candidate.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      },
+      "E429": {
+        "description": "Too many requests. Honor Retry-After.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Too many requests. Honor Retry-After.",
+              "status": 429,
+              "code": "RATE_LIMITED",
+              "detail": "Too many requests. Honor Retry-After.",
+              "requestId": "req_demo"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "description": "Seconds until retry.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "E503": {
+        "description": "Temporarily unavailable.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            },
+            "example": {
+              "type": "about:blank",
+              "title": "Temporarily unavailable.",
+              "status": 503,
+              "code": "UNAVAILABLE",
+              "detail": "Temporarily unavailable.",
+              "requestId": "req_demo"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Money": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ],
+        "description": "Nonnegative decimal string in the stated currency. Preserve trailing zeros for display."
+      },
+      "Phase": {
+        "type": "string",
+        "enum": [
+          "RECEIVED",
+          "SOURCING",
+          "QUOTED",
+          "ACCEPTED",
+          "BOOKING",
+          "BOOKED",
+          "CLOSED"
+        ]
+      },
+      "Control": {
+        "type": "string",
+        "enum": [
+          "AUTO",
+          "PAUSED"
+        ]
+      },
+      "Mode": {
+        "type": "string",
+        "enum": [
+          "DEMO",
+          "LIVE"
+        ]
+      },
+      "Objective": {
+        "type": "string",
+        "enum": [
+          "CHEAPEST",
+          "FASTEST",
+          "UNKNOWN"
+        ]
+      },
+      "Scope": {
+        "type": "string",
+        "enum": [
+          "AIRPORT_TO_AIRPORT",
+          "DOOR_TO_PORT",
+          "UNKNOWN"
+        ]
+      },
+      "Verdict": {
+        "type": "string",
+        "enum": [
+          "OPEN",
+          "PENDING",
+          "ACCEPTED",
+          "REJECTED",
+          "NO_ANSWER",
+          "VOIDED",
+          "UNKNOWN"
+        ]
+      },
+      "Source": {
+        "type": "string",
+        "enum": [
+          "MAIL",
+          "TARIFF",
+          "PORTAL",
+          "BID",
+          "TRACKING",
+          "SYSTEM",
+          "OPERATOR",
+          "BOARD"
+        ]
+      },
+      "Evidence": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "locator": {
+            "type": "string",
+            "description": "Cell, table row, page/region, JSON field or message span."
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "Short safe plain-text excerpt."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "source",
+          "sourceId",
+          "locator",
+          "excerpt",
+          "observedAt"
+        ]
+      },
+      "Fact": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Stable path such as packages[0].grossKg"
+          },
+          "value": {
+            "type": "string",
+            "description": "Normalized display value with unit where relevant."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "KNOWN",
+              "AMBIGUOUS",
+              "MISSING"
+            ]
+          },
+          "alternatives": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          }
+        },
+        "required": [
+          "field",
+          "state",
+          "alternatives",
+          "evidence"
+        ]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "reference": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/Phase"
+          },
+          "control": {
+            "$ref": "#/components/schemas/Control"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deadlineAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "origin": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "destination": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/Objective"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "language": {
+            "type": "string",
+            "description": "BCP 47 language tag when detected."
+          },
+          "outcomeReason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "subject",
+          "phase",
+          "control",
+          "version",
+          "verdict",
+          "receivedAt",
+          "deadlineAt",
+          "updatedAt",
+          "objective",
+          "scope"
+        ]
+      },
+      "LineItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "FREIGHT",
+              "FUEL",
+              "SECURITY",
+              "PICKUP",
+              "OTHER",
+              "INCLUSIVE"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "basis": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "amount",
+          "basis",
+          "evidence"
+        ]
+      },
+      "Candidate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "provider": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "requestRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "quotedTotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "comparisonTotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "transitDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "billedKg": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "rateId": {
+            "type": "string"
+          },
+          "validUntil": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tariffVersion": {
+            "type": "string"
+          },
+          "lineItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LineItem"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "source",
+          "requestRevision",
+          "eligible",
+          "reasons",
+          "lineItems",
+          "evidence"
+        ],
+        "description": "An eligible candidate must carry both totals, comparable transit for fastest, complete scope and a supported booking path. Inclusion of a portal ID depends on source.",
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "eligible": {
+                  "const": true
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "quotedTotal",
+                "comparisonTotal"
+              ]
+            }
+          }
+        ]
+      },
+      "Decision": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "WAIT",
+              "QUOTE",
+              "CLARIFY",
+              "CLOSE"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "chosenCandidateId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "pendingSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "wakeAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cutoff": {
+            "type": "string",
+            "description": "Unsigned decimal global event sequence. Compare as BigInt.",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          }
+        },
+        "required": [
+          "action",
+          "at",
+          "reason",
+          "policyVersion",
+          "pendingSources",
+          "cutoff"
+        ]
+      },
+      "Quote": {
+        "type": "object",
+        "properties": {
+          "candidateId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "total": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "body": {
+            "type": "string"
+          },
+          "sendState": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "SENT",
+              "UNCERTAIN",
+              "FAILED"
+            ]
+          },
+          "requestRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "candidateId",
+          "at",
+          "total",
+          "body",
+          "sendState",
+          "requestRevision"
+        ]
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "REQUESTED",
+              "ACKNOWLEDGED",
+              "CONFIRMED",
+              "FAILED",
+              "UNCERTAIN"
+            ]
+          },
+          "teamReference": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "bookingReference": {
+            "type": "string"
+          },
+          "rateId": {
+            "type": "string"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "state",
+          "teamReference",
+          "provider"
+        ]
+      },
+      "Milestone": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SCHEDULED",
+              "ESTIMATED",
+              "CONFIRMED"
+            ]
+          },
+          "effectiveAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          }
+        },
+        "required": [
+          "label",
+          "kind",
+          "effectiveAt",
+          "observedAt",
+          "evidence"
+        ]
+      },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "calls": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "inputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "spendUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "costBasis": {
+            "type": "string",
+            "enum": [
+              "REPORTED",
+              "ESTIMATED",
+              "UNKNOWN"
+            ]
+          }
+        },
+        "required": [
+          "calls",
+          "inputTokens",
+          "outputTokens",
+          "costBasis"
+        ]
+      },
+      "SessionDetail": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/Session"
+          },
+          "snapshotCursor": {
+            "type": "string",
+            "description": "Unsigned decimal global event sequence. Compare as BigInt.",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "requestRevision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "facts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            }
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Candidate"
+            }
+          },
+          "latestDecision": {
+            "$ref": "#/components/schemas/Decision"
+          },
+          "quote": {
+            "$ref": "#/components/schemas/Quote"
+          },
+          "booking": {
+            "$ref": "#/components/schemas/Booking"
+          },
+          "milestones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Milestone"
+            }
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          }
+        },
+        "required": [
+          "session",
+          "snapshotCursor",
+          "requestRevision",
+          "facts",
+          "candidates",
+          "milestones",
+          "usage"
+        ]
+      },
+      "Attachment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "filename",
+          "mediaType",
+          "sizeBytes"
+        ]
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "upstreamId": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "IN",
+              "OUT"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "RFQ",
+              "CORRECTION",
+              "BID_REQUEST",
+              "BID",
+              "DESK",
+              "TARIFF",
+              "QUOTE",
+              "ACCEPTANCE",
+              "BOOKING",
+              "TRACKING",
+              "OTHER"
+            ]
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "bodyText": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "category",
+          "from",
+          "to",
+          "subject",
+          "bodyText",
+          "at",
+          "attachments"
+        ]
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "string",
+            "description": "Unsigned decimal global event sequence. Compare as BigInt.",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SESSION",
+              "MESSAGE",
+              "FACTS",
+              "CANDIDATE",
+              "DECISION",
+              "QUOTE",
+              "BOOKING",
+              "TRACKING",
+              "TARIFF",
+              "CONTROL",
+              "SCORE",
+              "HEALTH"
+            ]
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "sessionVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "resourceId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "at",
+          "kind",
+          "summary"
+        ],
+        "description": "Resource invalidation and audit event. Session events include sessionId and sessionVersion."
+      },
+      "Tariff": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "carrier": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PROCESSING",
+              "ACTIVE",
+              "SUPERSEDED",
+              "PARTIAL",
+              "FAILED"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date"
+          },
+          "ingestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "laneCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hash": {
+            "type": "string",
+            "description": "SHA-256 of source bytes."
+          }
+        },
+        "required": [
+          "id",
+          "carrier",
+          "version",
+          "state",
+          "filename",
+          "ingestedAt",
+          "laneCount",
+          "issues",
+          "hash"
+        ]
+      },
+      "Break": {
+        "type": "object",
+        "properties": {
+          "fromKg": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "ratePerKg": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          }
+        },
+        "required": [
+          "fromKg",
+          "ratePerKg"
+        ]
+      },
+      "TariffLane": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "destination": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "minimum": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "breaks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Break"
+            }
+          },
+          "fuelPerKg": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "securityPerKg": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "transitDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ruleSummary": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Evidence"
+            }
+          }
+        },
+        "required": [
+          "origin",
+          "destination",
+          "currency",
+          "breaks",
+          "ruleSummary",
+          "evidence"
+        ]
+      },
+      "Score": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "round": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "accuracyPoints": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "timePoints": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "costPoints": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "trackingPoints": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "verdict",
+          "round",
+          "at"
+        ]
+      },
+      "Dashboard": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshotCursor": {
+            "type": "string",
+            "description": "Unsigned decimal global event sequence. Compare as BigInt.",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "windowStart": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "answered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "accepted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "booked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expired": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "trackingAnswered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "spendPerAcceptedUsd": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "p95QuoteSeconds": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "boardUpdatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "boardFrozenAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "worker": {
+            "type": "string",
+            "enum": [
+              "HEALTHY",
+              "DEGRADED",
+              "OFFLINE"
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "asOf",
+          "snapshotCursor",
+          "windowStart",
+          "received",
+          "answered",
+          "accepted",
+          "booked",
+          "expired",
+          "trackingAnswered",
+          "usage",
+          "worker"
+        ]
+      },
+      "ControlCommand": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "PAUSE",
+              "RESUME",
+              "SELECT_CANDIDATE"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "candidateId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          }
+        },
+        "required": [
+          "action",
+          "expectedVersion",
+          "reason"
+        ],
+        "description": "SELECT_CANDIDATE requires candidateId and a paused sourcing session. Revalidates and pins a candidate for RESUME; selection alone sends nothing.",
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "action": {
+                  "const": "SELECT_CANDIDATE"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "candidateId"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "candidateId"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "ReplayRequest": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "RECORDED",
+              "DELAY_BID",
+              "EXCLUDE_SOURCE"
+            ]
+          },
+          "candidateId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "delaySeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          }
+        },
+        "required": [
+          "sessionId",
+          "scenario"
+        ],
+        "description": "DELAY_BID requires a BID candidateId and delaySeconds. EXCLUDE_SOURCE requires TARIFF, PORTAL or BID in source. RECORDED accepts neither modifier. Reject unrelated fields.",
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "scenario": {
+                "const": "RECORDED"
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "source"
+                  ]
+                },
+                {
+                  "required": [
+                    "candidateId"
+                  ]
+                },
+                {
+                  "required": [
+                    "delaySeconds"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "properties": {
+              "scenario": {
+                "const": "DELAY_BID"
+              }
+            },
+            "required": [
+              "candidateId",
+              "delaySeconds"
+            ],
+            "not": {
+              "required": [
+                "source"
+              ]
+            }
+          },
+          {
+            "properties": {
+              "scenario": {
+                "const": "EXCLUDE_SOURCE"
+              },
+              "source": {
+                "enum": [
+                  "BID",
+                  "PORTAL",
+                  "TARIFF"
+                ]
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "candidateId"
+                  ]
+                },
+                {
+                  "required": [
+                    "delaySeconds"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "ReplayResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "Opaque stable local identifier."
+          },
+          "scenario": {
+            "type": "string",
+            "enum": [
+              "RECORDED",
+              "DELAY_BID",
+              "EXCLUDE_SOURCE"
+            ]
+          },
+          "historicalCutoff": {
+            "type": "string",
+            "description": "Unsigned decimal global event sequence. Compare as BigInt.",
+            "pattern": "^(0|[1-9][0-9]*)$"
+          },
+          "baseline": {
+            "$ref": "#/components/schemas/Decision"
+          },
+          "simulated": {
+            "$ref": "#/components/schemas/Decision"
+          },
+          "baselineTotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "simulatedTotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "scenario",
+          "historicalCutoff",
+          "baseline",
+          "simulated",
+          "explanation",
+          "events"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "currentVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "detail",
+          "requestId"
+        ]
+      },
+      "SessionPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Session"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor. Omitted at end of collection."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "MessagePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor. Omitted at end of collection."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "TariffPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tariff"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor. Omitted at end of collection."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "TariffLanePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TariffLane"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor. Omitted at end of collection."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "EventPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor. Omitted at end of collection."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ScorePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Score"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "description": "Opaque cursor. Omitted at end of collection."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      }
+    }
+  }
+}

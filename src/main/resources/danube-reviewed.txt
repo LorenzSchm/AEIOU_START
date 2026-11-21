@@ -1,0 +1,15 @@
+Danube Wings Cargo | Air export tariff
+Currency EUR
+Valid from 2026-11-01
+Valid to 2026-11-30
+Chargeable weight: 1 cbm = 167 kg
+Lane Transit Minimum from 0 kg from 45 kg from 100 kg from 300 kg from 500 kg from 1000 kg Fuel Security
+CGN-SYD 4 134,00 6,28 5,34 4,28 3,89 3,27 2,84 1,13 0,23
+DUS-MEX 5 101,00 3,02 2,36 1,89 1,57 1,32 1,00 0,74 0,24
+DUS-SYD 5 110,00 5,78 4,45 3,92 2,90 2,20 1,89 0,69 0,16
+DUS-YYZ 4 62,00 3,08 2,62 2,07 1,61 1,22 0,96 0,88 0,21
+FRA-DXB 2 138,86 2,90 2,23 2,05 1,66 1,45 1,33 1,12 0,22
+FRA-EZE 2 126,00 4,57 3,34 2,74 2,52 1,92 1,48 1,06 0,21
+MUC-JNB 7 105,00 3,74 2,81 2,19 1,62 1,39 1,22 0,85 0,24
+MUC-TPE 5 69,00 4,10 3,73 3,21 2,57 2,36 2,03 1,15 0,21
+STR-SGN 5 83,00 4,63 4,21 3,45 2,93 2,40 2,18 1,09 0,11

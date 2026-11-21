@@ -1,0 +1,15 @@
+create table stream_clock (id integer primary key, seq bigint not null, demo_seconds bigint not null, mail_cursor bigint not null);
+insert into stream_clock values (1,0,0,0);
+create table shipment (id varchar(150) primary key, data text not null);
+create table change_event (seq bigint primary key, shipment_id varchar(150), data text not null);
+create index change_by_shipment on change_event(shipment_id,seq);
+create table tariff (id varchar(150) primary key, digest varchar(64) not null unique, data text not null, lanes text not null);
+create table mail (id varchar(150) primary key, shipment_id varchar(150), upstream_id varchar(150) unique, data text not null);
+create index mail_by_shipment on mail(shipment_id);
+create table attachment (id varchar(150) primary key, shipment_id varchar(150) not null, filename varchar(200) not null, mime varchar(150) not null, bytes bytea not null);
+create table job (id varchar(220) primary key, shipment_id varchar(150), action varchar(40) not null, due_at timestamp with time zone not null, state varchar(20) not null, attempts integer not null default 0, payload text not null);
+create index due_jobs on job(state,due_at);
+create table command_result (scope varchar(220) not null, key_id varchar(100) not null, digest varchar(64) not null, response text not null, primary key(scope,key_id));
+create table page_snapshot (id varchar(40) primary key, scope text not null, expires_at timestamp with time zone not null, items text not null);
+create table inbox (upstream_id bigint primary key, payload text not null, processed boolean not null default false);
+create table score_row (round_id varchar(150) primary key, data text not null);

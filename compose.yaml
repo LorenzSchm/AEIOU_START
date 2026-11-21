@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: freight
+      POSTGRES_USER: forwarder
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-local-demo}
+    volumes:
+      - freight-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forwarder -d freight"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  demo:
+    profiles: [demo]
+    build: .
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      SPRING_PROFILES_ACTIVE: demo
+      DATABASE_URL: jdbc:postgresql://db/freight?currentSchema=demo
+      SPRING_FLYWAY_SCHEMAS: demo
+      DATABASE_USER: forwarder
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-local-demo}
+  live:
+    profiles: [live]
+    build: .
+    env_file: .env
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      SPRING_PROFILES_ACTIVE: live
+      DATABASE_URL: jdbc:postgresql://db/freight?currentSchema=live
+      SPRING_FLYWAY_SCHEMAS: live
+      DATABASE_USER: forwarder
+volumes:
+  freight-db: {}
