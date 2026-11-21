@@ -60,7 +60,7 @@ npm start -- --hostname 127.0.0.1 --port 3000
 | `DISPATCH_DB` | `backend/state/dispatch.sqlite3`. Preserve this file across restarts so the worker remembers sent quotes and pending bids. |
 | `FIVEU_GATEWAY_MODEL` | `gpt-4o-mini`. The worker sends up to 8,000 characters of email. Structured extraction allows up to 240 completion tokens and the quote check allows up to 24. |
 | `FIVEU_BASE_URL` | `https://api.start-hack.5u.ai`. Integration tests use an isolated local HTTP fixture and temporary database. |
-| `DISPATCH_WEBHOOK_SECRET` | Unset. Configure the 5U webhook signing secret here to receive pushes and reconcile once per minute. Without a webhook, the worker polls every six seconds and honors the server's retry delay. |
+| `DISPATCH_WEBHOOK_SECRET` | Unset. Set the signing secret for webhook-only mailbox delivery. An installation without a signing secret polls every six seconds and honors the server's retry delay. |
 | `DISPATCH_API_URL` | `http://127.0.0.1:8000`. Set before building Next.js to point the desk to another backend. |
 | `SUPABASE_URL` | Unset. With `SUPABASE_SECRET_KEY`, the backend mirrors the carrier directory and every carrier invitation and bid to Supabase every 5 seconds. Apply [the migration](backend/supabase/migrations/) first. SQLite stays the worker's source of truth, and a failed sync never blocks the wave. |
 | `SUPABASE_SECRET_KEY` | Unset. The project's secret (or legacy `service_role`) key. Keep it in the Git-ignored root `.env`. |
@@ -115,7 +115,7 @@ Keep the key within the team. Everything sent with it counts as team AEIOU activ
 | Subscribe a public receiver URL | PUT | `/v1/mailbox/webhook` |
 | Verify signed delivery | POST | `/v1/mailbox/webhook/test` |
 
-Expose only `POST /api/v1/mailbox/webhook` through your public proxy or tunnel. Set `DISPATCH_WEBHOOK_SECRET` to the same secret used to subscribe. The receiver verifies the signature and timestamp before saving each message to SQLite for processing. The reconciliation poll recovers older or missed deliveries.
+Expose only `POST /api/v1/mailbox/webhook` through your public proxy or tunnel. Set `DISPATCH_WEBHOOK_SECRET` to the same secret used to subscribe. The receiver verifies the signature and timestamp before saving each message to SQLite for processing. Subscribe before live operation so it receives every new delivery.
 
 ## LLM gateway
 

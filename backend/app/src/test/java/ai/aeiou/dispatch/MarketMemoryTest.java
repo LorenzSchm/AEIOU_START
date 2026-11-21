@@ -62,8 +62,33 @@ class MarketMemoryTest {
     assertEquals(List.of("Alpha:800", "Bravo:800", "Charlie:800"), stale.reads.subList(0, 3));
   }
 
+  @Test
+  void discardsVerifiedOffersWhenThePortalDatasetChanges() throws Exception {
+    var ledger = new Ledger(temp.resolve("market.sqlite").toString(), new ObjectMapper());
+    var portal = new Portal(ledger);
+    var shipment = shipment("cheapest", 700);
+    var first = portal.rates(shipment, START);
+    var verified = List.of(first.offers().getFirst());
+    portal.version = "v2";
+    portal.reads.clear();
+
+    var changed = portal.rates(shipment, START.plusSeconds(35), verified, first.version());
+    assertTrue(changed.reset());
+    assertFalse(changed.complete());
+    assertTrue(changed.offers().isEmpty());
+    assertNull(changed.version());
+    assertEquals(1, portal.reads.size());
+    assertFalse(portal.reads.contains(verified.getFirst().rateId()));
+
+    var fresh = portal.rates(shipment, START.plusSeconds(36));
+    assertTrue(fresh.complete());
+    assertEquals("v2", fresh.version());
+    assertEquals(6, fresh.offers().size());
+  }
+
   private static final class Portal extends FiveU {
     final List<String> reads = new ArrayList<>();
+    String version = "v1";
     final Map<String, Integer> basePrices = new HashMap<>(
         Map.of("Alpha", 1500, "Bravo", 1200, "Charlie", 1800));
     private static final Map<String, Integer> TRANSIT = Map.of("Alpha", 2, "Bravo", 4, "Charlie", 1);
@@ -88,7 +113,8 @@ class MarketMemoryTest {
       int price = basePrices.get(airline) + (weight == 1000 ? 1000 : 0);
       return Map.of("airline", airline, "currency", "EUR", "total", price,
           "chargeable_weight_kg", weight, "transit_days", TRANSIT.get(airline),
-          "valid_until", START.plusSeconds(5400).toString(), "rate_id", id);
+          "valid_until", START.plusSeconds(5400).toString(), "rate_id", id,
+          "dataset_version", version);
     }
   }
 }

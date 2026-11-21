@@ -15,11 +15,14 @@ import org.springframework.web.client.*;
 class WaveWorker {
   private static final Logger log = LoggerFactory.getLogger(WaveWorker.class);
   private static final long PORTAL_COMPARISON_SECONDS = 95;
+  private static final int MAILBOX_PAGE_SIZE = 200;
+  private static final long MAILBOX_POLL_SECONDS = 6;
   private final Ledger ledger;
   private final Catalog catalog;
   private final FiveU upstream;
   private final Clock clock;
   private final RfqGateway gateway;
+  private final MailboxWebhook webhook;
   private final boolean automatic;
   private final Instant start;
   private final long waitSeconds;
@@ -30,8 +33,6 @@ class WaveWorker {
   // Cloudline HTML quotes; plain text until a 5U test thread shows the HTML rendered.
   @Value("${dispatch.quote-html:false}")
   boolean quoteHtml;
-  @Value("${dispatch.webhook-secret:}")
-  private String webhookSecret = "";
   private volatile Instant lastPoll;
   private volatile String error;
   private Instant pollAfter = Instant.EPOCH;
@@ -42,6 +43,7 @@ class WaveWorker {
       FiveU upstream,
       Clock clock,
       RfqGateway gateway,
+      MailboxWebhook webhook,
       @Value("${dispatch.auto}") boolean automatic,
       @Value("${dispatch.start-at}") Instant start,
       @Value("${dispatch.bid-wait-seconds}") long waitSeconds,
@@ -51,17 +53,20 @@ class WaveWorker {
     this.upstream = upstream;
     this.clock = clock;
     this.gateway = gateway;
+    this.webhook = webhook;
     this.automatic = automatic;
     this.start = start;
     this.waitSeconds = waitSeconds;
     this.counteroffers = counteroffers;
     this.documents = new ShipmentDocuments(ledger, upstream, catalog);
     this.clarifications = new CustomerClarifications(ledger, catalog);
-    this.carrierRestrictions = new CarrierRestrictions(ledger);
+    this.carrierRestrictions = new CarrierRestrictions(ledger, upstream, clock);
   }
 
   record Status(
       Instant lastPoll,
+      Instant lastWebhook,
+      boolean webhookEnabled,
       String error,
       boolean autoSend,
       long cursor,
@@ -73,6 +78,8 @@ class WaveWorker {
   Status status() {
     return new Status(
         lastPoll,
+        webhook.lastProcessed(),
+        webhook.enabled(),
         error,
         automatic,
         ledger.cursor(),
@@ -102,19 +109,18 @@ class WaveWorker {
 
   @Scheduled(fixedDelayString = "${dispatch.poll-ms}")
   void poll() {
-    if (clock.instant().isBefore(pollAfter)) return;
-    long interval = webhookSecret.isBlank() ? 6 : 60;
+    if (webhook.enabled() || clock.instant().isBefore(pollAfter)) return;
     try {
-      ledger.ingest(
-          upstream.get("/v1/mailbox/messages?since_id={id}&limit=200", ledger.cursor()),
-          catalog,
-          clock.instant());
+      int cursor = ledger.cursor();
+      var page = upstream.get("/v1/mailbox/messages?since_id={id}&limit=" + MAILBOX_PAGE_SIZE, cursor);
+      ledger.ingest(page, catalog, clock.instant());
       lastPoll = clock.instant();
       error = null;
-      pollAfter = lastPoll.plusSeconds(interval);
+      pollAfter = lastPoll.plusSeconds(MAILBOX_POLL_SECONDS);
     } catch (RuntimeException ex) {
       error = "Mailbox poll failed (" + ex.getClass().getSimpleName() + ")";
       log.warn("{}", error);
+      long interval = MAILBOX_POLL_SECONDS;
       if (ex instanceof HttpClientErrorException.TooManyRequests limit
           && limit.getResponseHeaders() != null) {
         String retry = limit.getResponseHeaders().getFirst("Retry-After");
@@ -332,8 +338,9 @@ class WaveWorker {
       ledger.jdbc().update(
           """
           UPDATE wave_case SET customer_reply=?,reason=?,offers=CASE WHEN ? THEN offers END,
-            queried=CASE WHEN ? THEN queried ELSE 0 END WHERE id=?
-          """, replyId, parsed.issue(), keepAirRates, keepAirRates, id);
+            queried=CASE WHEN ? THEN queried ELSE 0 END,
+            portal_version=CASE WHEN ? THEN portal_version END WHERE id=?
+          """, replyId, parsed.issue(), keepAirRates, keepAirRates, keepAirRates, id);
       if (parsed.issue() == null)
         ledger.jdbc().update("""
             INSERT OR IGNORE INTO rfq_parse(request_id,state,model) VALUES(?,'done','java')
@@ -421,8 +428,11 @@ class WaveWorker {
         || (queried > 0
             && clock.instant().getEpochSecond() - queried >= 35
             && clock.instant().isBefore(deadline.minusSeconds(35)))) {
-      var result = upstream.rates(s, clock.instant());
       var offers = new ArrayList<Offer>(Arrays.asList(cached(w)));
+      var now = clock.instant();
+      var result = offers.isEmpty() ? upstream.rates(s, now)
+          : upstream.rates(s, now, offers, (String) w.get("portal_version"));
+      if (result.reset()) offers.clear();
       for (var o : result.offers()) {
         offers.removeIf(
             old ->
@@ -430,12 +440,14 @@ class WaveWorker {
         offers.add(o);
       }
       queried = result.complete() ? -1 : clock.instant().getEpochSecond();
+      if (result.reset() && offers.isEmpty()) queried = 0;
       ledger
           .jdbc()
           .update(
-              "UPDATE wave_case SET offers=?,queried=? WHERE id=?",
+              "UPDATE wave_case SET offers=?,queried=?,portal_version=? WHERE id=?",
               ledger.write(offers),
               queried,
+              result.version(),
               id);
     }
     var tenders = ledger.tenders(id);
@@ -501,12 +513,15 @@ class WaveWorker {
 
   private void askTruckTransit(long id, Shipment shipment, CustomerClarifications.Details details,
       List<Map<String, Object>> tenders, Instant deadline) {
+    var excluded = carrierRestrictions.forRequest(id, details.message());
     var active = new HashSet<String>();
     boolean awaitingReply = false;
     for (var tender : tenders) {
       if (!clock.instant().isBefore(deadline.minusSeconds(38))) return;
       if (!"trucker".equals(tender.get("leg")) || !matchesTender(tender, shipment, details, true)) continue;
-      active.add(Ledger.str(tender, "email"));
+      var carrier = catalog.contact(Ledger.str(tender, "email")).orElse(null);
+      if (carrier == null || carrierRestrictions.excludes(excluded, carrier.name())) continue;
+      active.add(carrier.email());
       if (tender.get("reply_id") == null) {
         awaitingReply |= stillAwaitingCarrier(Ledger.bidAction(tender));
         continue;
@@ -536,7 +551,8 @@ class WaveWorker {
     long initialSlots = invitations(id, shipment, false).stream().filter(Catalog.Carrier::truck).count();
     for (var carrier : catalog.carriers) {
       if (active.size() >= initialSlots + 2 || !clock.instant().isBefore(deadline.minusSeconds(38))) return;
-      if (!carrier.truck() || !carrier.serves(shipment.pickupZone()) || !active.add(carrier.email())) continue;
+      if (!carrier.truck() || !carrier.serves(shipment.pickupZone())
+          || carrierRestrictions.excludes(excluded, carrier.name()) || !active.add(carrier.email())) continue;
       try {
         invite(id, shipment, carrier, details);
       } catch (Conflict ex) {
@@ -624,14 +640,14 @@ class WaveWorker {
   private List<Catalog.Carrier> invitations(long id, Shipment shipment, boolean confirmedPickup) {
     var excluded = carrierRestrictions.forRequest(id, ledger.mail(id));
     var selected = catalog.invitations(shipment, ledger.airlineRoutesBefore(id),
-        carrier -> !CarrierRestrictions.excludes(excluded, carrier.name()));
+        carrier -> !carrierRestrictions.excludes(excluded, carrier.name()));
     if (!confirmedPickup || shipment.pickupZone() == null) return selected;
     var airlines = selected.stream().filter(c -> !c.truck()).toList();
     var trucks = new LinkedHashSet<Catalog.Carrier>();
     for (var tender : ledger.tenders(id))
       catalog.contact(Ledger.str(tender, "email"))
           .filter(c -> c.truck() && c.serves(shipment.pickupZone()))
-          .filter(c -> !CarrierRestrictions.excludes(excluded, c.name())).ifPresent(trucks::add);
+          .filter(c -> !carrierRestrictions.excludes(excluded, c.name())).ifPresent(trucks::add);
     selected.stream().filter(Catalog.Carrier::truck).forEach(trucks::add);
     var result = new ArrayList<>(airlines);
     result.addAll(trucks.stream().limit(5 - airlines.size()).toList());
@@ -717,7 +733,7 @@ class WaveWorker {
         .filter(
             o -> o.validUntil() != null && o.validUntil().isAfter(clock.instant().plusSeconds(4)))
         .forEach(offers::add);
-    offers.removeIf(offer -> CarrierRestrictions.excludes(excluded, offer.airline()));
+    offers.removeIf(offer -> carrierRestrictions.excludes(excluded, offer.airline()));
     var details = clarifications.details(id, m);
     var airBids = new ArrayList<Offer>();
     var trucks = new ArrayList<Offer>();
@@ -730,7 +746,7 @@ class WaveWorker {
         WHERE t.request_id=? AND t.euros IS NOT NULL ORDER BY t.email
         """, id)) {
       var c = catalog.contact(Ledger.str(t, "email")).orElseThrow();
-      if (CarrierRestrictions.excludes(excluded, c.name())) continue;
+      if (carrierRestrictions.excludes(excluded, c.name())) continue;
       if (!matchesTender(t, s, details, c.truck())) continue;
       Instant validUntil;
       try {
@@ -771,7 +787,7 @@ class WaveWorker {
           || manual.airTotalEur().signum() <= 0
           || manual.transitDays() <= 0)
         throw new IllegalArgumentException("Confirm carrier name, total and transit.");
-      if (CarrierRestrictions.excludes(excluded, manual.airline())) throw new ExcludedCarrier();
+      if (carrierRestrictions.excludes(excluded, manual.airline())) throw new ExcludedCarrier();
       airBids.add(
           new Offer(
               manual.airline(),
@@ -897,8 +913,8 @@ class WaveWorker {
               ledger
                   .jdbc()
                   .update(
-                      "UPDATE wave_case SET reason=NULL,operator=0,queried=0,offers=NULL WHERE"
-                          + " id=?",
+                      "UPDATE wave_case SET reason=NULL,operator=0,queried=0,offers=NULL,"
+                          + " portal_version=NULL WHERE id=?",
                       id);
             });
   }
@@ -1028,8 +1044,8 @@ class WaveWorker {
 
   private void checkCarrierRestrictions(long id, Map<String, Object> mail, Draft draft) {
     var restrictions = carrierRestrictions.forRequest(id, mail);
-    if (CarrierRestrictions.excludes(restrictions, draft.offer().airline())
-        || (draft.trucker() != null && CarrierRestrictions.excludes(restrictions, draft.trucker())))
+    if (carrierRestrictions.excludes(restrictions, draft.offer().airline())
+        || (draft.trucker() != null && carrierRestrictions.excludes(restrictions, draft.trucker())))
       throw new ExcludedCarrier();
   }
 
@@ -1048,7 +1064,7 @@ class WaveWorker {
 
   private Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c,
       CustomerClarifications.Details details) {
-    if (CarrierRestrictions.excludes(carrierRestrictions.forRequest(id, details.message()), c.name()))
+    if (carrierRestrictions.excludes(carrierRestrictions.forRequest(id, details.message()), c.name()))
       throw new ExcludedCarrier();
     if (catalog.problem(s) != null || !c.serves(c.truck() ? s.pickupZone() : s.destination()))
       throw new IllegalArgumentException("Check shipment and carrier coverage.");

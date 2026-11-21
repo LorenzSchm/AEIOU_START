@@ -1,6 +1,7 @@
 package ai.aeiou.dispatch;
 
 import ai.aeiou.freight.MailParser;
+import java.time.Clock;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -16,11 +17,34 @@ final class CarrierRestrictions {
       "(?iu)[,;]?\\h+(?:(?:for|on|in)\\h+(?:this|the|any|our|all|future)\\b"
           + "|going forward\\b|from now on\\b|ever again\\b)");
   private static final Pattern CODE_SUFFIX = Pattern.compile("(?iu)\\h*\\(([A-Z0-9]{2,3})\\)\\h*$");
+  private static final Pattern CODE = Pattern.compile("[a-z0-9]{2,3}");
+  // Known kit carriers can still be identified when the portal directory is unavailable.
+  private static final Map<String, String> KNOWN_AIRLINES = Map.ofEntries(
+      Map.entry("au", "Aurelia Air Cargo"),
+      Map.entry("bx", "Borealis Freight Airways"),
+      Map.entry("fq", "Fjordline Air Cargo"),
+      Map.entry("gn", "Gannet Airways"),
+      Map.entry("ib", "Ibisair Cargo"),
+      Map.entry("jp", "Juniper Cargo Lines"),
+      Map.entry("lm", "Lumen Air Cargo"),
+      Map.entry("md", "Meridian Freightways"),
+      Map.entry("nv", "Nova Atlas Cargo"),
+      Map.entry("pl", "Polaris Air Logistics"),
+      Map.entry("rv", "Riverbend Airlines Cargo"),
+      Map.entry("sl", "Solace Air Cargo"),
+      Map.entry("tm", "Tamarind Airways"),
+      Map.entry("uv", "Ultraviolet Air Freight"),
+      Map.entry("xc", "Xenon Cargo Airlines"),
+      Map.entry("zs", "Zephyr Steppe Cargo"));
 
   private final Ledger ledger;
+  private final FiveU upstream;
+  private final Clock clock;
 
-  CarrierRestrictions(Ledger ledger) {
+  CarrierRestrictions(Ledger ledger, FiveU upstream, Clock clock) {
     this.ledger = ledger;
+    this.upstream = upstream;
+    this.clock = clock;
   }
 
   Set<String> forRequest(long request, Map<String, Object> original) {
@@ -45,19 +69,29 @@ final class CarrierRestrictions {
     return aliases;
   }
 
-  static boolean excludes(Set<String> restrictions, String carrier) {
-    return aliases(carrier).stream().anyMatch(restrictions::contains);
+  boolean excludes(Set<String> restrictions, String carrier) {
+    return !restrictions.isEmpty() && aliases(carrier).stream().anyMatch(restrictions::contains);
   }
 
-  private static Set<String> aliases(String carrier) {
+  private Set<String> aliases(String carrier) {
     var names = new HashSet<String>();
     var code = CODE_SUFFIX.matcher(carrier);
     if (code.find()) {
       names.add(code.group(1).toLowerCase(Locale.ROOT));
       carrier = carrier.substring(0, code.start());
     }
-    String name = carrier.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").strip();
+    String name = normalize(carrier);
     if (!name.isEmpty()) names.add(name);
+    for (String alias : List.copyOf(names)) {
+      if (!CODE.matcher(alias).matches()) continue;
+      String fullName = KNOWN_AIRLINES.get(alias);
+      if (fullName == null) fullName = upstream.airlineName(alias, clock.instant());
+      if (fullName != null && !fullName.isBlank()) names.add(normalize(fullName));
+    }
     return names;
+  }
+
+  private static String normalize(String carrier) {
+    return carrier.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]+", " ").strip();
   }
 }

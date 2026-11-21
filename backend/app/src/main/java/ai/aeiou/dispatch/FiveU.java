@@ -15,6 +15,9 @@ class FiveU {
   private final RestClient gateway;
   private final MarketMemory marketMemory;
   private Instant retryAt = Instant.EPOCH;
+  private List<?> lanes = List.of();
+  private Instant lanesExpire = Instant.EPOCH;
+  private Instant directoryRetryAt = Instant.EPOCH;
 
   FiveU(@Value("${dispatch.base-url}") String base, @Value("${dispatch.key}") String key,
       MarketMemory marketMemory) {
@@ -61,13 +64,28 @@ class FiveU {
         .body(byte[].class);
   }
 
-  record Rates(List<Offer> offers, boolean complete) {}
+  record Rates(List<Offer> offers, boolean complete, boolean reset, String version) {
+    Rates(List<Offer> offers, boolean complete) {
+      this(offers, complete, false, null);
+    }
+  }
 
-  private record RateQuery(String airline, BigDecimal weight, BigDecimal billed, BigDecimal bracket) {
+  private record RateQuery(
+      String airline, String name, BigDecimal weight, BigDecimal billed, BigDecimal bracket) {
     MarketMemory.Key key() {
       return bracket == null ? null : new MarketMemory.Key(airline, bracket);
     }
+
+    boolean coveredBy(Offer offer, Instant now) {
+      return (airline.equalsIgnoreCase(offer.airline())
+              || (!name.isBlank() && name.equalsIgnoreCase(offer.airline())))
+          && billed.compareTo(offer.billedKg()) == 0
+          && offer.rateId() != null && !offer.rateId().isBlank()
+          && offer.validUntil() != null && offer.validUntil().isAfter(now.plusSeconds(4));
+    }
   }
+
+  private record LiveRate(Offer offer, String version) {}
 
   private static Comparator<RateQuery> queryOrder(Shipment shipment,
       Map<MarketMemory.Key, MarketMemory.Sample> samples) {
@@ -83,7 +101,7 @@ class FiveU {
     return byTransit.thenComparing(byPrice);
   }
 
-  private Offer rate(Shipment shipment, RateQuery query, Instant now) {
+  private LiveRate rate(Shipment shipment, RateQuery query, Instant now) {
     var r =
         get(
             "/v1/portal/rates?origin={o}&destination={d}&airline={a}&weight_kg={w}&volume_cbm={v}",
@@ -102,7 +120,7 @@ class FiveU {
     var price = new BigDecimal(Ledger.str(r, "total")).multiply(fx);
     if (fx.signum() <= 0 || price.signum() <= 0 || expiry == null || !expiry.isAfter(now))
       throw new IllegalArgumentException("Invalid rate");
-    return new Offer(
+    var offer = new Offer(
         Ledger.str(r, "airline"),
         Integer.parseInt(Ledger.str(r, "transit_days")),
         price,
@@ -110,24 +128,63 @@ class FiveU {
         "portal",
         Ledger.str(r, "rate_id"),
         expiry);
+    return new LiveRate(offer, Ledger.str(r, "dataset_version"));
   }
 
-  synchronized Rates rates(Shipment shipment, Instant now) {
+  private List<?> portalLanes(Instant now) {
+    if (!now.isBefore(lanesExpire)) {
+      var ports = get("/v1/portal/ports");
+      if (ports == null || !(ports.get("lanes") instanceof List<?> published))
+        throw new IllegalArgumentException("Missing portal lanes");
+      lanes = published;
+      lanesExpire = now.plusSeconds(30);
+    }
+    return lanes;
+  }
+
+  synchronized String airlineName(String code, Instant now) {
+    if (!now.isBefore(directoryRetryAt)) {
+      try {
+        portalLanes(now);
+      } catch (RestClientException | IllegalArgumentException ex) {
+        directoryRetryAt = now.plusSeconds(30);
+      }
+    }
+    for (Object raw : lanes) {
+      if (!(raw instanceof Map<?, ?> lane) || !(lane.get("airlines") instanceof List<?> airlines))
+        continue;
+      for (Object airline : airlines) {
+        if (airline instanceof Map<?, ?> carrier && code.equalsIgnoreCase(Ledger.str(carrier, "code"))) {
+          String name = Ledger.str(carrier, "name");
+          if (!name.isBlank()) return name;
+        }
+      }
+    }
+    return null;
+  }
+
+  Rates rates(Shipment shipment, Instant now) {
+    return rates(shipment, now, List.of(), null);
+  }
+
+  synchronized Rates rates(Shipment shipment, Instant now, List<Offer> verified, String priorVersion) {
     List<Offer> offers = new ArrayList<>();
-    if (now.isBefore(retryAt)) return new Rates(offers, false);
+    if (now.isBefore(retryAt)) return new Rates(offers, false, false, priorVersion);
     var confirmed = new LinkedHashMap<MarketMemory.Key, Offer>();
     boolean complete = true;
+    String version = priorVersion;
     try {
       var queries = new ArrayList<RateQuery>();
       var higherBreaks = new ArrayList<RateQuery>();
       var chargeable = shipment.chargeableKg();
-      var ports = get("/v1/portal/ports");
-      for (Object raw : (List<?>) ports.get("lanes")) {
+      for (Object raw : portalLanes(now)) {
         var lane = (Map<?, ?>) raw;
         if (!shipment.origin().equals(lane.get("origin"))
             || !shipment.destination().equals(lane.get("destination"))) continue;
         for (Object airline : (List<?>) lane.get("airlines")) {
-          String code = ((Map<?, ?>) airline).get("code").toString();
+          var carrier = (Map<?, ?>) airline;
+          String code = Ledger.str(carrier, "code");
+          String name = Ledger.str(carrier, "name");
           BigDecimal bracket = null;
           try {
             var brackets = get("/v1/portal/brackets?airline={a}", code);
@@ -139,12 +196,12 @@ class FiveU {
               breaks.add(BigDecimal.ZERO);
               bracket = breaks.floor(chargeable);
               var next = breaks.higher(chargeable);
-              if (next != null) higherBreaks.add(new RateQuery(code, next, next, next));
+              if (next != null) higherBreaks.add(new RateQuery(code, name, next, next, next));
             }
           } catch (RestClientException | IllegalArgumentException ex) {
             complete = false;
           }
-          queries.add(new RateQuery(code, shipment.weightKg(), chargeable, bracket));
+          queries.add(new RateQuery(code, name, shipment.weightKg(), chargeable, bracket));
         }
       }
       // Confirm base rates for every airline before comparing optional buy-ups.
@@ -156,8 +213,16 @@ class FiveU {
       }
       queries.addAll(higherBreaks);
       for (var query : queries) {
+        if (priorVersion != null && verified.stream().anyMatch(offer -> query.coveredBy(offer, now)))
+          continue;
         try {
-          var offer = rate(shipment, query, now);
+          var live = rate(shipment, query, now);
+          if (version != null && !version.equals(live.version())) {
+            // The next pass must verify all offers against a single dataset.
+            return new Rates(List.of(), false, true, null);
+          }
+          version = live.version();
+          var offer = live.offer();
           offers.add(offer);
           var key = query.key();
           if (key != null && !offer.rateId().isBlank()
@@ -178,10 +243,12 @@ class FiveU {
           complete = false;
         }
       }
-    } catch (RestClientException ex) {
+    } catch (RestClientException | IllegalArgumentException ex) {
       complete = false;
     }
     marketMemory.record(shipment, confirmed, now);
-    return new Rates(offers, complete);
+    // Replace offers from before dataset versions were stored once fresh rates are available.
+    boolean replaceLegacyOffers = priorVersion == null && !verified.isEmpty() && !offers.isEmpty();
+    return new Rates(offers, complete, replaceLegacyOffers, version);
   }
 }

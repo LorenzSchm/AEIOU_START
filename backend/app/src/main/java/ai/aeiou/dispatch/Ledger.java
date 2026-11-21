@@ -85,6 +85,7 @@ class Ledger {
         """);
     ensureColumn("tender", "bid_action", "TEXT");
     ensureColumn("wave_case", "customer_reply", "INTEGER");
+    ensureColumn("wave_case", "portal_version", "TEXT");
     db.execute(
         "CREATE TABLE IF NOT EXISTS retry(action TEXT PRIMARY KEY, after_epoch INTEGER NOT NULL)");
     db.execute(
@@ -240,9 +241,9 @@ class Ledger {
         """, id, write(message), id);
   }
 
-  void ingestPushes(Catalog catalog, Instant now) {
+  boolean ingestPushes(Catalog catalog, Instant now) {
     var pending = db.queryForList("SELECT id,payload FROM mailbox_push ORDER BY id LIMIT 200");
-    if (pending.isEmpty()) return;
+    if (pending.isEmpty()) return false;
     var messages = pending.stream().map(row -> read(row.get("payload"), Map.class)).toList();
     var ids = pending.stream().map(row -> row.get("id")).toArray();
     var placeholders = String.join(",", Collections.nCopies(ids.length, "?"));
@@ -250,6 +251,7 @@ class Ledger {
       ingest(Map.of("messages", messages), catalog, now);
       db.update("DELETE FROM mailbox_push WHERE id IN (" + placeholders + ")", ids);
     });
+    return true;
   }
 
   void ingest(Map<String, Object> page, Catalog catalog, Instant now) {

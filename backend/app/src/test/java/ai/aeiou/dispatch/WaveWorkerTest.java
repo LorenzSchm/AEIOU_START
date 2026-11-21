@@ -63,6 +63,7 @@ class WaveWorkerTest {
             upstream,
             clock,
             new RfqGateway(upstream, ledger, catalog, mapper, clock, "gpt-4o-mini"),
+            new MailboxWebhook(ledger, catalog, clock, mapper, ""),
             true,
             START,
             75,
@@ -399,6 +400,37 @@ class WaveWorkerTest {
     assertEquals(4, contacted.size());
     assertEquals(4, new HashSet<>(contacted).size());
     assertNull(ledger.delivery("quote:7"));
+  }
+
+  @Test
+  void skipsExcludedTruckersBeforeSpendingBackupSlots() {
+    receive(7, "buyer@example.invalid", "RFQ FRA to LAX",
+        "Please quote the fastest air freight from FRA to LAX for 100 kg and 0.2 cbm. "
+            + "Pickup from postcode 60311. Please exclude Domblick Kurierdienst and Westfalenroute.",
+        null);
+    worker.work();
+    var initialTrucks = outbound.stream()
+        .filter(m -> m.get("subject").toString().contains("pickup from")).toList();
+    assertEquals(List.of("taunusfracht@hackloop.mail", "isarwelle-spedition@hackloop.mail"),
+        initialTrucks.stream().map(m -> m.get("to")).toList());
+    long reply = 31;
+    for (var invite : initialTrucks) {
+      receive(reply++, invite.get("to").toString(), "Re: Rate request AEIOU-7",
+          "Unfortunately we cannot quote this shipment.", Ledger.id(invite.get("id")));
+    }
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    var backup = outbound.stream().filter(m -> "bodenseefracht@hackloop.mail".equals(m.get("to")))
+        .findFirst().orElseThrow();
+    assertNull(ledger.delivery("bid:7:domblick-kurierdienst@hackloop.mail"));
+    assertNull(ledger.delivery("bid:7:westfalenroute@hackloop.mail"));
+    receive(reply, backup.get("to").toString(), "Re: Rate request AEIOU-7",
+        "All-in EUR 120. Road transit: 5 hours.", Ledger.id(backup.get("id")));
+    clock.current = START.plusSeconds(152);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals("Bodenseefracht", ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class)
+        .trucker());
   }
 
   @Test
@@ -1229,6 +1261,52 @@ class WaveWorkerTest {
   }
 
   @Test
+  void resumesPortalSearchFromVerifiedRatesAfterRestart() throws Exception {
+    var successfulReads = new ArrayList<String>();
+    var names = Map.of("AU", "Aurelia Air Cargo", "BX", "Borealis Freight Airways",
+        "JP", "Juniper Cargo Lines");
+    var prices = Map.of("AU", 40, "BX", 50, "JP", 20);
+    var portal = new FiveU("http://localhost", "fixture", new MarketMemory(ledger)) {
+      private int readsThisAttempt;
+
+      @Override
+      Map<String, Object> get(String uri, Object... args) {
+        if (uri.endsWith("/ports")) {
+          readsThisAttempt = 0;
+          return Map.of("lanes", List.of(Map.of("origin", "MUC", "destination", "CAI",
+              "airlines", List.of("AU", "BX", "JP").stream()
+                  .map(code -> Map.of("code", code, "name", names.get(code))).toList())));
+        }
+        if (uri.contains("/brackets")) return Map.of("breaks_kg", List.of(0, 45, 100));
+        if (readsThisAttempt++ >= 2) throw rateLimited("35");
+        String code = args[2].toString();
+        successfulReads.add(code);
+        return Map.of("currency", "EUR", "total", prices.get(code), "dataset_version", "v1",
+            "valid_until", START.plusSeconds(900).toString(), "rate_id", "rate-" + code,
+            "chargeable_weight_kg", args[3], "airline", names.get(code), "transit_days", "3");
+      }
+    };
+    when(upstream.rates(any(), any()))
+        .thenAnswer(call -> portal.rates(call.getArgument(0), call.getArgument(1)));
+    when(upstream.rates(any(), any(), anyList(), nullable(String.class)))
+        .thenAnswer(call -> portal.rates(call.getArgument(0), call.getArgument(1),
+            call.getArgument(2), call.getArgument(3)));
+    receive(7, "buyer@example.invalid", "RFQ MUC to CAI",
+        "Please quote the cheapest air freight from MUC to CAI for 100 kg and 0.2 cbm.", null);
+    worker.work();
+    assertEquals(List.of("AU", "BX"), successfulReads);
+    restart();
+    clock.current = START.plusSeconds(35);
+    worker.work();
+    assertEquals(List.of("AU", "BX", "JP"), successfulReads);
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals("rate-JP",
+        ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class).offer().rateId());
+  }
+
+  @Test
   void roundEightUsesTheCheaperBookablePortalWeightBreakOnTheFirstPass() {
     // Round 8 portal observations. Only the HTTP boundary and rate IDs are fixtures.
     var rateReads = new ArrayList<String>();
@@ -1678,14 +1756,48 @@ class WaveWorkerTest {
   }
 
   @Test
-  void shipmentOnlyCarrierExclusionDoesNotApplyToTheCustomersNextRequest() {
+  void airlineCodeBlocksNamedInvitationsAndOffersOnlyForThisShipment() {
+    var blocked = new Offer("Zephyr Steppe Cargo", 1, new java.math.BigDecimal("100"),
+        new java.math.BigDecimal("911"), "portal", "BLOCKED-RATE", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(blocked), true));
     receive(7, "buyer@example.invalid", "RFQ FRA to ULN",
         "Cheapest FRA to ULN for 911 kg and 3.27 cbm. Please exclude ZS for this shipment.", null);
     receive(8, "buyer@example.invalid", "RFQ FRA to ULN",
         "Cheapest FRA to ULN for 911 kg and 3.27 cbm.", null);
-    var restrictions = new CarrierRestrictions(ledger);
-    assertTrue(CarrierRestrictions.excludes(restrictions.forRequest(7, ledger.mail(7)), "ZS"));
-    assertTrue(restrictions.forRequest(8, ledger.mail(8)).isEmpty());
+    worker.work();
+    assertNull(ledger.delivery("bid:7:zephyr-steppe-cargo@hackloop.mail"));
+    assertEquals("sent", ledger.delivery("bid:8:zephyr-steppe-cargo@hackloop.mail"));
+    var lagoon = outbound.stream().filter(m -> "lagoon-isles-airways@hackloop.mail".equals(m.get("to"))
+        && m.get("subject").toString().contains("AEIOU-7")).findFirst().orElseThrow();
+    receive(31, "lagoon-isles-airways@hackloop.mail", "Re: Rate request AEIOU-7",
+        "Our all-in rate is EUR 3210. Transit: 3 days.", Ledger.id(lagoon.get("id")));
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals("Lagoon Isles Airways",
+        ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class).offer().airline());
+    assertEquals("sent", ledger.delivery("quote:8"));
+    assertEquals("BLOCKED-RATE",
+        ledger.read(ledger.mail(8).get("proposal"), WaveWorker.Draft.class).offer().rateId());
+  }
+
+  @Test
+  void resolvesAdditionalAirlineCodesFromThePortalDirectory() {
+    var directory = new FiveU("http://localhost", "fixture", new MarketMemory(ledger)) {
+      @Override
+      Map<String, Object> get(String uri, Object... args) {
+        assertEquals("/v1/portal/ports", uri);
+        return Map.of("lanes", List.of(Map.of("airlines",
+            List.of(Map.of("code", "L8", "name", "Lagoon Isles Airways")))));
+      }
+    };
+    when(upstream.airlineName(anyString(), any()))
+        .thenAnswer(call -> directory.airlineName(call.getArgument(0), call.getArgument(1)));
+    receive(7, "buyer@example.invalid", "RFQ FRA to ULN",
+        "Cheapest FRA to ULN for 911 kg and 3.27 cbm. Please exclude L8 for this shipment.", null);
+    worker.work();
+    assertNull(ledger.delivery("bid:7:lagoon-isles-airways@hackloop.mail"));
+    assertEquals("sent", ledger.delivery("bid:7:zephyr-steppe-cargo@hackloop.mail"));
   }
 
   @Test

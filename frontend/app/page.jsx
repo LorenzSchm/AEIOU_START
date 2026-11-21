@@ -1,592 +1,230 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Conversation from "./conversation";
-import EmailPreview from "./email-preview";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import Icon from "./components/ui/Icon";
+import Overview from "./components/overview/Overview";
+import Queue from "./components/queue/Queue";
+import CaseSheet from "./components/case/CaseSheet";
+import ConfirmDialog from "./components/ui/ConfirmDialog";
+import { useDispatchData, useNow } from "./lib/api";
+import { clock, needsAttention } from "./lib/format";
+import { spring } from "./lib/motion";
 
-function transitLabel(days) {
-  const hours = Math.round(days * 24);
-  const whole = Math.floor(hours / 24);
-  const rest = hours % 24;
-  const parts = [];
-  if (whole || !rest) parts.push(whole + (whole === 1 ? " day" : " days"));
-  if (rest) parts.push(rest + (rest === 1 ? " hour" : " hours"));
-  return parts.join(" ");
-}
-const base = "/api/v1";
-const stamp = (value) =>
-  value ? new Date(value).toLocaleTimeString([], { hour12: false }) : "—";
-const secondsLeft = (m) =>
-  m.received
-    ? Math.ceil((Date.parse(m.received) + 360000 - Date.now()) / 1000)
-    : null;
-const state = (m) =>
-  m.delivery ||
-  (m.kind === "request" && secondsLeft(m) !== null && secondsLeft(m) <= 0
-    ? "expired"
-    : m.stage);
-const tone = (s) =>
-  ["sent", "booked", "quoted"].includes(s)
-    ? "ok"
-    : ["expired", "review", "operator review", "uncertain", "pending"].includes(s)
-      ? "warn"
-      : "";
-const countdown = (n) =>
-  n === null
-    ? "Time unknown"
-    : n <= 0
-      ? "Window closed"
-      : Math.floor(n / 60) + "m " + (n % 60) + "s left";
+const NAV = [
+  { id: "overview", label: "Overview", icon: "overview" },
+  { id: "queue", label: "Queue", icon: "queue" },
+];
 
-async function api(path, data) {
-  const r = await fetch(
-    base + path,
-    data === undefined
-      ? { cache: "no-store" }
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        },
-  );
-  if (!r.ok) {
-    let detail;
-    try {
-      detail = (await r.json()).detail;
-    } catch {}
-    throw Error(
-      Array.isArray(detail)
-        ? detail.map((e) => e.loc.slice(1).join(".") + " — " + e.msg).join("\n")
-        : detail || "Service returned HTTP " + r.status,
-    );
-  }
-  return r.json();
-}
-
-function Case({ m, messages, directory, refresh }) {
-  const [fields, setFields] = useState(m.fields);
-  const [dirty, setDirty] = useState(false);
-  const [bid, setBid] = useState({
-    airline: "",
-    air_total_eur: "",
-    transit_days: "",
-  });
-  const [recipient, setRecipient] = useState("");
-  const [reply, setReply] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  const remaining = secondsLeft(m);
-  const closed = Boolean(m.delivery) || (remaining !== null && remaining <= 0);
-  const request = m.kind === "request";
-  const proposal = m.proposal;
-  const suitable = directory.carriers.filter((c) =>
-    c.serves
-      .split(" ")
-      .includes(c.kind === "trucker" ? fields.pickup_zone : fields.destination),
-  );
-  const set = (key, value) => {
-    setDirty(true);
-    setFields((old) => {
-      const updated = { ...old, [key]: value };
-      if (key === "pickup_zone" && directory.zones[value])
-        updated.origin = directory.zones[value];
-      return updated;
-    });
+function readUrl() {
+  if (typeof window === "undefined") return { view: "overview", caseId: null, scope: "attention" };
+  const p = new URLSearchParams(window.location.search);
+  return {
+    view: p.get("view") === "queue" ? "queue" : "overview",
+    caseId: p.get("case") ? Number(p.get("case")) : null,
+    scope: ["attention", "requests", "all"].includes(p.get("scope")) ? p.get("scope") : "attention",
   };
-  function shipment() {
-    return {
-      ...fields,
-      pickup_zone: fields.pickup_zone || null,
-      pickup_eur: fields.pickup_eur === "" ? null : fields.pickup_eur,
-      pickup_days: Number(fields.pickup_days || 0),
-    };
-  }
-  async function act(endpoint, payload, done, success) {
-    setNotice("");
-    setBusy(true);
-    try {
-      await api("/messages/" + m.id + "/" + endpoint, payload);
-      if (done) done();
-      setNotice(success);
-      await refresh();
-    } catch (e) {
-      setNotice(e.message);
-    } finally {
-      setBusy(false);
+}
+
+function modeLabel(status) {
+  if (!status) return "—";
+  if (!status.auto_send) return "Operator review";
+  if (status.start_at && Date.parse(status.start_at) > Date.now())
+    return "Armed · " + new Date(status.start_at).toLocaleTimeString([], {
+      timeZone: "Europe/Berlin", hour12: false, hour: "2-digit", minute: "2-digit",
+    }) + " Berlin";
+  return "Automatic";
+}
+
+/**
+ * A view that stays mounted while hidden. On re-entry its top-level glass panels fade/slide in
+ * individually. Animating the panels themselves (not a wrapper) keeps backdrop-filter working:
+ * an ancestor with opacity < 1 would turn the blur off until the animation ends.
+ */
+function KeptView({ active, children }) {
+  const ref = useRef(null);
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    if (!active) return;
+    if (first.current) {
+      first.current = false; // first mount: components run their own entrance
+      return;
     }
-  }
-  function input(key, title, type = "text", maxLength) {
-    return (
-      <label>
-        {title}
-        <input
-          type={type}
-          step={type === "number" ? "any" : undefined}
-          min={type === "number" ? "0" : undefined}
-          value={fields[key] ?? ""}
-          maxLength={maxLength}
-          onChange={(e) =>
-            set(
-              key,
-              type === "text" ? e.target.value.toUpperCase() : e.target.value,
-            )
-          }
-        />
-      </label>
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const panels = [...ref.current.querySelectorAll(".glass")].filter((g) => !g.parentElement.closest(".glass"));
+    panels.forEach((g, i) =>
+      g.animate(
+        [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "translateY(0)" }],
+        { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)", delay: Math.min(i, 8) * 30, fill: "backwards" },
+      ),
     );
-  }
+  }, [active]);
   return (
-    <article>
-      <header className="case-head">
-        <div className="meta">
-          {m.kind} · #{m.id} · {stamp(m.received)}
-        </div>
-        <h2>{m.subject || "(No subject)"}</h2>
-        <div className="sender">{m.sender || "Unknown sender"}</div>
-        {request && (
-          <strong className={"timer " + (closed ? "closed" : "")}>
-            {m.delivery || countdown(remaining)}
-          </strong>
-        )}
-      </header>
-      {m.review_reason && (
-        <p className="notice" role="status">
-          {m.review_reason}
-        </p>
-      )}
-      {m.board_result ? (
-        <p className="note">
-          5U board · Round {m.board_result.round_no} · {m.board_result.verdict}
-          {m.board_result.reason ? ` · ${m.board_result.reason.replaceAll("_", " ")}` : ""}
-          {m.board_result.total != null ? ` · ${m.board_result.total} points` : ""}
-          {Object.entries(m.board_result.points ?? {}).map(([kind, points]) => (
-            <span key={kind}> · {kind} {points}</span>
-          ))}
-          {m.board_result.cost_pending ? " · cost points pending" : ""}
-        </p>
-      ) : null}
-      <Conversation messages={messages} selected={m} />
-      {request && (
-        <>
-          {proposal?.pickup_eur != null && (
-            <p className="pickup">
-              Pickup · EUR {proposal.pickup_eur} ·{" "}
-              {proposal.trucker || "Operator rate"}
-            </p>
-          )}
-          <section>
-            <h3>Shipment</h3>
-            <fieldset disabled={busy || closed}>
-              <div className="grid">
-                {input("origin", "Origin airport", "text", 3)}
-                {input("destination", "Destination airport", "text", 3)}
-                {input("weight_kg", "Gross weight · kg", "number")}
-                {input("volume_cbm", "Volume · m³", "number")}
-                <label>
-                  Customer priority
-                  <select
-                    value={fields.preference || ""}
-                    onChange={(e) => set("preference", e.target.value)}
-                  >
-                    <option value="">Choose priority</option>
-                    <option value="cheapest">Cheapest</option>
-                    <option value="fastest">Fastest</option>
-                  </select>
-                </label>
-                {input("pickup_zone", "Pickup zone (if required)", "text", 2)}
-                {fields.pickup_zone && (
-                  <>
-                    {input("pickup_eur", "Truck total · EUR", "number")}
-                    {input("pickup_days", "Truck transit · days", "number")}
-                  </>
-                )}
-              </div>
-              <details>
-                <summary>Carrier bids</summary>
-                <div className="bid-row">
-                  <label>
-                    Carrier serving this shipment
-                    <select
-                      value={recipient}
-                      onChange={(e) => setRecipient(e.target.value)}
-                    >
-                      <option value="">Choose carrier</option>
-                      {suitable.map((c) => (
-                        <option value={c.email} key={c.email}>
-                          {c.name} · {c.kind}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    disabled={!recipient || Boolean(m.bid_requests[recipient])}
-                    onClick={() =>
-                      act(
-                        "bids",
-                        { shipment: shipment(), email: recipient },
-                        null,
-                        "Bid request sent.",
-                      )
-                    }
-                  >
-                    {m.bid_requests[recipient] || "Request bid"}
-                  </button>
-                </div>
-                <div className="grid">
-                  {[
-                    ["airline", "Quoted airline"],
-                    ["air_total_eur", "Air total · EUR"],
-                    ["transit_days", "Air transit · days"],
-                  ].map(([k, label]) => (
-                    <label key={k}>
-                      {label}
-                      <input
-                        value={bid[k]}
-                        onChange={(e) => {
-                          setDirty(true);
-                          setBid({ ...bid, [k]: e.target.value });
-                        }}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </details>
-              {m.review_reason && (
-                <button
-                  onClick={() =>
-                    act(
-                      "resume",
-                      shipment(),
-                      () => setDirty(false),
-                      "Returned to automatic pricing.",
-                    )
-                  }
-                >
-                  Resume with these fields
-                </button>
-              )}
-              <button
-                className="primary"
-                onClick={() =>
-                  act(
-                    "price",
-                    {
-                      shipment: shipment(),
-                      carrier_bid: Object.values(bid).some(Boolean)
-                        ? bid
-                        : null,
-                    },
-                    () => setDirty(false),
-                    "Pricing updated.",
-                  )
-                }
-              >
-                {busy ? "Working…" : "Compare rates"}
-              </button>
-            </fieldset>
-          </section>
-          {proposal && (
-            <section>
-              <h3>Quote</h3>
-              {proposal.notes.map((n) => (
-                <p key={n} className="note">
-                  {n}
-                </p>
-              ))}
-              {proposal.offer && (
-                <>
-                  <div className="amount">
-                    <small>EUR</small> {proposal.offer.total_eur}
-                  </div>
-                  <p className="offer-meta">
-                    {proposal.offer.airline} · {transitLabel(proposal.offer.days)} ·{" "}
-                    {proposal.offer.source}
-                  </p>
-                  <details>
-                    <summary>
-                      Compared offers ({proposal.alternatives.length})
-                    </summary>
-                    <table>
-                      <tbody>
-                        {proposal.alternatives.map((o, i) => (
-                          <tr key={i}>
-                            <td>{o.airline}</td>
-                            <td>{o.source}</td>
-                            <td>{transitLabel(o.days)}</td>
-                            <td>EUR {o.total_eur}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </details>
-                  {!m.delivery && <EmailPreview body={proposal.body} fields={fields} />}
-                  <button
-                    className="primary"
-                    disabled={busy || closed || dirty}
-                    onClick={() =>
-                      act(
-                        "quote",
-                        { revision: proposal.revision },
-                        null,
-                        "Quote sent in the customer thread.",
-                      )
-                    }
-                  >
-                    Send first quote
-                  </button>
-                  {dirty && !closed && (
-                    <p className="hint">Compare rates again to apply your edits.</p>
-                  )}
-                  {m.delivery === "sent" &&
-                    proposal.offer.rate_id &&
-                    !m.booking && (
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          act("book", {}, null, "Booking confirmed.")
-                        }
-                      >
-                        Book accepted portal quote
-                      </button>
-                    )}
-                  {m.booking && <p className="booked">Booked · {m.booking.booking_reference}</p>}
-                </>
-              )}
-            </section>
-          )}
-          {["uncertain", "pending"].includes(m.delivery) && (
-            <p className="note">
-              Delivery unconfirmed. Check the team mailbox before resending
-              manually.
-            </p>
-          )}
-        </>
-      )}
-      {!request && (
-        <section>
-          <h3>Thread reply</h3>
-          <textarea
-            rows={5}
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            aria-label="Reply body"
-          />
-          {reply.trim() && <EmailPreview body={reply} fields={fields} />}
-          <button
-            className="primary"
-            disabled={busy || !reply.trim() || Boolean(m.reply_delivery)}
-            onClick={() =>
-              act("reply", { body: reply }, () => setReply(""), "Reply sent.")
-            }
-          >
-            {m.reply_delivery || "Send reply"}
-          </button>
-        </section>
-      )}
-      {notice && (
-        <p className="notice" role="status">
-          {notice}
-        </p>
-      )}
-    </article>
+    <div ref={ref} className="view" hidden={!active}>
+      {children}
+    </div>
   );
 }
 
 export default function Page() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-  const [selected, select] = useState(null);
-  const [filter, setFilter] = useState("");
-  const [exceptionsOnly, setExceptionsOnly] = useState(true);
-  async function refresh() {
-    const [status, messages, directory] = await Promise.all([
-      api("/status"),
-      api("/messages"),
-      api("/directory"),
-    ]);
-    setData({ status, messages, directory });
-    setError("");
-  }
+  const { data, error, refresh } = useDispatchData();
+  const now = useNow();
+  const [nav, setNav] = useState({ view: "overview", caseId: null, scope: "attention" });
+
   useEffect(() => {
-    let active = true,
-      timer;
-    async function tick() {
-      try {
-        if (active) await refresh();
-      } catch (e) {
-        if (active) setError(e.message);
-      }
-      if (active) timer = setTimeout(tick, 2000);
-    }
-    tick();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
+    setNav(readUrl());
+    const onPop = () => setNav(readUrl());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const exceptions = (data?.messages || []).filter(
-    (m) =>
-      m.kind === "request" &&
-      ([
-        "review",
-        "waiting for pickup",
-        "waiting for air price",
-        "operator review",
-      ].includes(m.stage) ||
-        ["uncertain", "pending"].includes(m.delivery)) &&
-      m.delivery !== "sent",
+
+  const navRef = useRef(nav);
+  navRef.current = nav;
+  // History is updated outside the state updater: Next patches pushState and would
+  // otherwise update its Router while React renders Page.
+  const go = useCallback((patch, { replace = false } = {}) => {
+    const next = { ...navRef.current, ...patch };
+    const p = new URLSearchParams();
+    if (next.view !== "overview") p.set("view", next.view);
+    if (next.caseId) p.set("case", next.caseId);
+    if (next.scope !== "attention") p.set("scope", next.scope);
+    const url = window.location.pathname + (p.size ? "?" + p : "");
+    if (url !== window.location.pathname + window.location.search)
+      window.history[replace ? "replaceState" : "pushState"](null, "", url);
+    navRef.current = next;
+    setNav(next);
+  }, []);
+
+  // Unsaved manual edits in the open case: confirm before switching or closing.
+  const dirtyRef = useRef(false);
+  const onDirtyChange = useCallback((d) => {
+    dirtyRef.current = d;
+  }, []);
+  const [pending, setPending] = useState(null);
+  const guardedGo = useCallback(
+    (patch, opts) => {
+      const leavesCase = "caseId" in patch && patch.caseId !== navRef.current.caseId;
+      if (leavesCase && dirtyRef.current) setPending({ patch, opts });
+      else go(patch, opts);
+    },
+    [go],
   );
-  const list = (exceptionsOnly ? exceptions : data?.messages || []).filter(
-    (m) =>
-      (m.subject + " " + m.sender + " " + m.id + " " + m.body)
-        .toLowerCase()
-        .includes(filter.toLowerCase()),
-  );
-  const current = list.find((m) => m.id === selected) || list[0];
+  const confirmLeave = useCallback(() => {
+    dirtyRef.current = false;
+    const p = pending;
+    setPending(null);
+    if (p) go(p.patch, p.opts);
+  }, [go, pending]);
+  const cancelLeave = useCallback(() => setPending(null), []);
+
+  // Views stay mounted after their first visit: switching back is instant (no globe rebuild).
+  const seen = useRef(new Set());
+  seen.current.add(nav.view);
+
+  const messages = data?.messages || [];
+  const current = messages.find((m) => m.id === nav.caseId);
+  const attention = messages.filter(needsAttention).length;
+  const bad = error || data?.status?.error;
+  const webhookMode = data?.status?.webhook_enabled;
+  const lastDelivery = webhookMode ? data.status.last_webhook : data?.status?.last_poll;
+  const closeCase = useCallback(() => guardedGo({ caseId: null }), [guardedGo]);
+
   return (
-    <>
-      <header className="top">
-        <strong>
-          <i aria-hidden="true" />
-          AEIOU <span>/</span> Dispatch
-        </strong>
-        <span>Air export operations</span>
-      </header>
-      <main>
-        <div className="heading">
-          <div>
-            <div className="eyebrow">Operations · Live</div>
-            <h1>Wave desk</h1>
-          </div>
-          <span
-            className={"signal " + (error || data?.status.error ? "bad" : "")}
-          >
-            {error || data?.status.error
-              ? "Connection issue"
-              : data?.status.last_poll
-                ? "Mailbox connected"
-                : "Connecting…"}
+    <div className="app">
+      <a href="#main" className="skip">Skip to content</a>
+      <nav className="sidebar glass" aria-label="Primary">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          <span>AEIOU<small>Dispatch</small></span>
+        </div>
+        <ul>
+          {NAV.map((n) => (
+            <li key={n.id}>
+              <button className={"nav-item" + (nav.view === n.id ? " active" : "")}
+                      aria-current={nav.view === n.id ? "page" : undefined}
+                      onClick={() => go({ view: n.id })}>
+                {nav.view === n.id && <motion.span layoutId="nav-pill" className="nav-pill" transition={spring} />}
+                <Icon name={n.icon} />
+                <span>{n.label}</span>
+                {n.id === "queue" && attention > 0 && <b className="nav-badge" aria-label={attention + " need attention"}>{attention}</b>}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="sidebar-foot">
+          <span className={"signal" + (bad ? " bad" : data ? " ok" : "")}>
+            <i aria-hidden="true" />
+            {bad ? "Connection issue" : webhookMode ? "Webhook mode" : lastDelivery ? "Mailbox live" : "Connecting…"}
           </span>
+          <dl>
+            <div><dt>Mode</dt><dd>{modeLabel(data?.status)}</dd></div>
+            <div><dt>{webhookMode ? "Last webhook" : "Last poll"}</dt><dd className="mono">{clock(lastDelivery)}</dd></div>
+            <div><dt>Inbox</dt><dd className="mono">{data ? messages.length : "—"}</dd></div>
+            <div><dt>Kit rates</dt><dd className="mono">{data?.status?.tariffs ?? "—"}</dd></div>
+          </dl>
         </div>
-        <div className="metrics">
+      </nav>
+
+      <main id="main" className={"content view-" + nav.view + (current ? " has-case" : "")}>
+        <header className="page-head">
           <div>
-            <small>Inbox</small>
-            <b>{data?.messages.length ?? "—"}</b>
+            <div className="eyebrow">Air export · Live wave</div>
+            <h1>{nav.view === "queue" ? "Queue" : "Overview"}</h1>
           </div>
-          <div>
-            <small>Kit rates</small>
-            <b>{data?.status.tariffs ?? "—"}</b>
-          </div>
-          <div>
-            <small>Last poll</small>
-            <b>{stamp(data?.status.last_poll)}</b>
-          </div>
-          <div>
-            <small>Quote mode</small>
-            <b>
-              {data
-                ? data.status.auto_send
-                  ? data.status.start_at &&
-                    Date.parse(data.status.start_at) > Date.now()
-                    ? "Armed · " +
-                      new Date(data.status.start_at).toLocaleTimeString([], {
-                        timeZone: "Europe/Berlin",
-                        hour12: false,
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }) +
-                      " Berlin"
-                    : "Automatic"
-                  : "Operator review"
-                : "—"}
-            </b>
-          </div>
-        </div>
-        {(error || data?.status.error) && (
-          <p className="notice" role="alert">
-            {error || data.status.error}
-          </p>
-        )}
-        <div className="workspace">
-          <aside>
-            <h2>{exceptionsOnly ? "Needs attention" : "Mailbox"}</h2>
-            <div className="queue-tabs">
-              <button
-                aria-pressed={exceptionsOnly}
-                onClick={() => setExceptionsOnly(true)}
-              >
-                Exceptions ({exceptions.length})
-              </button>
-              <button
-                aria-pressed={!exceptionsOnly}
-                onClick={() => setExceptionsOnly(false)}
-              >
-                All mail
-              </button>
-            </div>
-            <input
-              type="search"
-              placeholder="Search messages"
-              aria-label="Search messages"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-            <nav>
-              {list.map((m) => (
-                <button
-                  key={m.id}
-                  aria-current={current?.id === m.id}
-                  onClick={() => select(m.id)}
-                >
-                  <span className="meta">
-                    {m.kind} · {stamp(m.received)}
-                  </span>
-                  <strong>{m.subject || "(No subject)"}</strong>
-                  <span className="row-foot">
-                    <em className={"chip " + tone(state(m))}>{state(m)}</em>
-                    #{m.id}
-                  </span>
-                </button>
-              ))}
-            </nav>
-            {!list.length && (
-              <p>
-                {filter
-                  ? "No matches."
-                  : exceptionsOnly
-                    ? "No flagged requests."
-                    : "Inbox empty."}
-              </p>
-            )}
-          </aside>
-          {current ? (
-            <Case
-              key={current.id}
-              m={current}
-              messages={data.messages}
-              directory={data.directory}
-              refresh={refresh}
-            />
-          ) : (
-            <article className="empty">
-              <h2>
-                {filter
-                  ? "No matching messages"
-                  : exceptionsOnly
-                    ? "No requests need attention"
-                    : "Waiting for incoming mail"}
-              </h2>
-              <p>
-                {filter
-                  ? "Change the search to find a thread."
-                  : exceptionsOnly
-                    ? "The worker handles bids, pickup and quotes automatically. Open All mail to see its activity."
-                    : "Requests and carrier replies appear here as they arrive."}
-              </p>
-            </article>
+        </header>
+
+        <AnimatePresence>
+          {bad && (
+            <motion.div className="banner banner-bad" role="alert" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              <Icon name="alert" size={16} />
+              <span>{bad}</span>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
+
+        {!data ? (
+          <div className="skeleton-grid" aria-busy="true" aria-label="Loading">
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton glass" />)}
+          </div>
+        ) : (
+          <>
+            {seen.current.has("overview") && (
+              <KeptView active={nav.view === "overview"}>
+                <Overview messages={messages} now={now} active={nav.view === "overview"}
+                          onOpen={(id) => guardedGo({ caseId: id })} />
+              </KeptView>
+            )}
+            {seen.current.has("queue") && (
+              <KeptView active={nav.view === "queue"}>
+                <Queue messages={messages} now={now} selectedId={nav.caseId} scope={nav.scope} active={nav.view === "queue"}
+                       setScope={(scope) => go({ scope })} onSelect={(id, opts) => guardedGo({ caseId: id }, opts)} />
+              </KeptView>
+            )}
+          </>
+        )}
       </main>
-    </>
+
+      <AnimatePresence>
+        {current && nav.view === "overview" && (
+          <motion.div key="scrim" className="scrim" onClick={closeCase}
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {current && (
+          <CaseSheet key="case-sheet" m={current} messages={messages} directory={data.directory}
+                     refresh={refresh} onClose={closeCase} now={now} onDirtyChange={onDirtyChange} />
+        )}
+      </AnimatePresence>
+      <ConfirmDialog
+        open={Boolean(pending)}
+        title="Discard your edits?"
+        message="This case has manual changes that weren't repriced yet. Leaving now discards them."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+        onCancel={cancelLeave}
+        onConfirm={confirmLeave}
+      />
+    </div>
   );
 }

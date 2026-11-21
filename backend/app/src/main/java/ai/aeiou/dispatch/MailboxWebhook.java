@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -24,6 +25,7 @@ class MailboxWebhook {
   private final Clock clock;
   private final ObjectMapper json;
   private final byte[] secret;
+  private volatile Instant lastProcessed;
 
   MailboxWebhook(Ledger ledger, Catalog catalog, Clock clock, ObjectMapper json,
       @Value("${dispatch.webhook-secret}") String secret) {
@@ -34,12 +36,20 @@ class MailboxWebhook {
     this.secret = secret.getBytes(StandardCharsets.UTF_8);
   }
 
+  boolean enabled() {
+    return secret.length > 0;
+  }
+
+  Instant lastProcessed() {
+    return lastProcessed;
+  }
+
   @PostMapping(PATH)
   @ResponseStatus(HttpStatus.NO_CONTENT)
   void receive(@RequestHeader(value = "X-Webhook-Timestamp", defaultValue = "") String timestamp,
       @RequestHeader(value = "X-Webhook-Signature", defaultValue = "") String signature,
       @RequestBody byte[] body) throws GeneralSecurityException {
-    if (secret.length == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+    if (!enabled()) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     if (body.length > 256 * 1024) throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE);
     if (!timestamp.matches("[0-9]{1,12}")
         || Math.abs(clock.instant().getEpochSecond() - Long.parseLong(timestamp)) > 300
@@ -75,6 +85,6 @@ class MailboxWebhook {
 
   @Scheduled(fixedDelayString = "${dispatch.poll-ms}")
   void processPending() {
-    if (secret.length > 0) ledger.ingestPushes(catalog, clock.instant());
+    if (enabled() && ledger.ingestPushes(catalog, clock.instant())) lastProcessed = clock.instant();
   }
 }
