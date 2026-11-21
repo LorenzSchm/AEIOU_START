@@ -57,6 +57,16 @@ public final class WhisperModelCache {
     public synchronized Path ensure() throws IOException, InterruptedException {
         if (isCached()) return file();
         Files.createDirectories(dir);
+        // Worker processes share this cache. Only one may publish the model at a time.
+        try (var channel = java.nio.channels.FileChannel.open(dir.resolve(file().getFileName() + ".lock"),
+                java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE);
+             var lock = channel.lock()) {
+            if (isCached()) return file();
+            return download();
+        }
+    }
+
+    private Path download() throws IOException, InterruptedException {
         Path part = dir.resolve(file().getFileName() + ".part");
         HttpClient http = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.ALWAYS)

@@ -68,6 +68,7 @@ tasks.withType(Test).configureEach {
 // The standalone lab's live-branch purity check stays in 'test'. An integration
 // build deliberately modifies the backend, so run its reader contract separately.
 tasks.register('readerIntegrationTest', Test) {
+    testLogging.exceptionFormat = 'full'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     filter { excludeTestsMatching '*.BackendGuardTest.backendIsUntouchedComparedToLorenzBranch' }
