@@ -2,6 +2,7 @@ package ai.aeiou.dispatch;
 
 import ai.aeiou.freight.*;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.*;
 import java.util.regex.Pattern;
 import org.slf4j.*;
@@ -19,16 +20,19 @@ class TrackingReplies {
   private final Ledger ledger;
   private final WaveWorker worker;
   private final Catalog catalog;
+  private final Clock clock;
   private final boolean automatic;
 
   TrackingReplies(
       Ledger ledger,
       WaveWorker worker,
       Catalog catalog,
-      @Value("${dispatch.auto}") boolean automatic) {
+      Clock clock,
+      @Value("#{${dispatch.auto} and !${dispatch.read-only}}") boolean automatic) {
     this.ledger = ledger;
     this.worker = worker;
     this.catalog = catalog;
+    this.clock = clock;
     this.automatic = automatic;
   }
 
@@ -154,7 +158,7 @@ class TrackingReplies {
     if (Pattern.compile("(?i)\\b(?:weight|kg|gewicht)\\b").matcher(question).find())
       detail +=
           " The gross weight is " + s.weightKg().stripTrailingZeros().toPlainString() + " kg.";
-    return Greeting.hi(q)
+    return Greeting.at(q, clock.instant())
         + "\n\nThe shipment from "
         + s.origin()
         + " to "

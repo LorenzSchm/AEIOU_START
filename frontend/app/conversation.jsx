@@ -12,6 +12,7 @@ const inboxLabels = {
   tracking: "Tracking question",
   ratedesk: "Rate desk",
   "follow-up": "Follow-up",
+  spam: "Unsolicited email",
 };
 
 const outboxLabels = {

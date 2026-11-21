@@ -109,11 +109,10 @@ final class PackingSafety {
           .decode(java.nio.ByteBuffer.wrap(content))
           .toString();
     if (name.endsWith(".pdf")) return pdfText(content);
+    if (name.endsWith(".docx")) return wordText(content);
     if (!name.endsWith(".xlsx")) throw new IOException("Unsupported packing attachment");
 
-    var factory = XMLInputFactory.newFactory();
-    factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
-    factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+    var factory = xmlFactory();
     var sheets = new ArrayList<byte[]>();
     var sharedStrings = new ArrayList<String>();
     int remaining = MAX_BYTES;
@@ -166,6 +165,41 @@ final class PackingSafety {
     }
     if (text.toString().isBlank()) throw new IOException("No readable packing sheet");
     return text.toString();
+  }
+
+  private static XMLInputFactory xmlFactory() {
+    var factory = XMLInputFactory.newFactory();
+    factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+    factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
+    return factory;
+  }
+
+  private static String wordText(byte[] content) throws IOException, XMLStreamException {
+    int remaining = MAX_BYTES;
+    try (var zip = new ZipInputStream(new ByteArrayInputStream(content))) {
+      for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+        byte[] data = zip.readNBytes(remaining + 1);
+        if (data.length > remaining) throw new IOException("Oversized expanded Word document");
+        remaining -= data.length;
+        if (!entry.getName().equals("word/document.xml")) continue;
+        var reader = xmlFactory().createXMLStreamReader(new ByteArrayInputStream(data));
+        try {
+          var text = new StringBuilder();
+          while (reader.hasNext()) {
+            int event = reader.next();
+            if (event == XMLStreamConstants.START_ELEMENT && reader.getLocalName().equals("t"))
+              text.append(reader.getElementText());
+            else if (event == XMLStreamConstants.END_ELEMENT && reader.getLocalName().equals("p"))
+              text.append('\n');
+          }
+          if (!text.toString().isBlank()) return text.toString();
+        } finally {
+          reader.close();
+        }
+        break;
+      }
+    }
+    throw new IOException("No readable Word document");
   }
 
   private static String readCell(XMLStreamReader reader, String closingTag, String valueTag)

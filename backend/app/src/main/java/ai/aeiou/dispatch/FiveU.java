@@ -1,7 +1,10 @@
 package ai.aeiou.dispatch;
 
 import ai.aeiou.freight.*;
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.*;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,19 +20,28 @@ class FiveU {
   private final RestClient client;
   private final RestClient gateway;
   private final MarketMemory marketMemory;
+  private final RestClient transcription;
+  @Value("${dispatch.transcription-key-file:backend/state/openai.key}")
+  private String transcriptionKeyFile;
   private Instant retryAt = Instant.EPOCH;
   private List<?> lanes = List.of();
   private Instant lanesExpire = Instant.EPOCH;
   private Instant directoryRetryAt = Instant.EPOCH;
 
+  FiveU(String base, String key, MarketMemory marketMemory) {
+    this(base, key, marketMemory, false);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
   FiveU(@Value("${dispatch.base-url}") String base, @Value("${dispatch.key}") String key,
-      MarketMemory marketMemory) {
-    client = client(base, key, 4);
-    gateway = client(base, key, 15);
+      MarketMemory marketMemory, @Value("${dispatch.read-only}") boolean readOnly) {
+    client = client(base, key, 4, readOnly);
+    gateway = client(base, key, 15, readOnly);
+    transcription = client("https://api.openai.com", "", 18, readOnly);
     this.marketMemory = marketMemory;
   }
 
-  private static RestClient client(String base, String key, int seconds) {
+  private static RestClient client(String base, String key, int seconds, boolean readOnly) {
     var factory = new SimpleClientHttpRequestFactory();
     factory.setConnectTimeout(Duration.ofSeconds(3));
     factory.setReadTimeout(Duration.ofSeconds(seconds));
@@ -37,6 +49,13 @@ class FiveU {
         .baseUrl(base)
         .requestFactory(factory)
         .defaultHeader("X-API-Key", key)
+        // A read-only desk only displays the database and never reaches the live 5U API.
+        .requestInterceptor((request, body, execution) -> {
+          if (readOnly)
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, "This desk is read-only.");
+          return execution.execute(request, body);
+        })
         .build();
   }
 
@@ -47,6 +66,24 @@ class FiveU {
         .body(payload)
         .retrieve()
         .body(com.fasterxml.jackson.databind.JsonNode.class);
+  }
+
+  String transcribe(byte[] audio) throws IOException {
+    if (transcriptionKeyFile == null || audio == null || audio.length == 0 || audio.length > 2_000_000)
+      throw new IOException("Voice transcription unavailable");
+    String token = Files.readString(Path.of(transcriptionKeyFile)).strip();
+    if (token.isEmpty()) throw new IOException("Voice transcription key unavailable");
+    var form = new org.springframework.http.client.MultipartBodyBuilder();
+    form.part("file", audio, org.springframework.http.MediaType.parseMediaType("audio/mpeg"))
+        .filename("voice-message.mp3");
+    form.part("model", "gpt-4o-mini-transcribe");
+    var result = transcription.post().uri("/v1/audio/transcriptions")
+        .headers(headers -> headers.setBearerAuth(token))
+        .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA)
+        .body(form.build()).retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
+    String text = result == null ? "" : result.path("text").asText("").strip();
+    if (text.isBlank() || text.length() > 12_000) throw new IOException("No usable voice transcript");
+    return text;
   }
 
   @SuppressWarnings("unchecked")

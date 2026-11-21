@@ -3,11 +3,30 @@ package ai.aeiou.dispatch;
 import ai.aeiou.freight.*;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.*;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.regex.Pattern;
 import javax.xml.stream.XMLStreamException;
 import org.springframework.web.client.RestClientException;
 
 final class ShipmentDocuments {
+  private static final Pattern PICKUP_BREAKDOWN = Pattern.compile(
+      "(?iu)\\bIt\\s+has\\s+a\\s+base\\s+charge\\s+of\\s+[0-9]+[.,][0-9]{2}\\s+EUR"
+          + "\\s+and\\s+a\\s+weight\\s+charge\\s+of\\s+[0-9]+[.,][0-9]{2}\\s+EUR\\.");
+  private static final Pattern OFFER_TOTAL = Pattern.compile(
+      "(?im)^\\h*Total\\h+([0-9]+[.,][0-9]{2})\\h*$");
+  private static final Pattern OPEN_OFFER_TERMS = Pattern.compile(
+      "(?iu)\\b(?:not part of this offer|not part of the total|not included|subject to|fees apply|charged separately|provisional)\\b");
+  private static final Pattern SPOKEN_KILOS = Pattern.compile(
+      "(?iu)\\b([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+(?:\\.[0-9]+)?)\\h+kilos?\\b");
+  private static final Pattern SPOKEN_EUROS = Pattern.compile(
+      "(?iu)\\b([0-9]+)\\h+euros?\\h+and\\h+([0-9]{1,2})\\h+cents\\b");
+  private static final Pattern SPOKEN_EXPIRY = Pattern.compile(
+      "(?iu)\\b(?:valid until|(?:I|we) keep (?:this|the) price until)\\h+(?:the\\h+)?"
+          + "([0-9]{1,2})(?:st|nd|rd|th)?\\h+of\\h+([a-z]{3,})(?:\\h+([0-9]{4}))?"
+          + "\\h+(?:at\\h+)?([0-9]{2}:[0-9]{2})\\h+UTC\\b");
   record Decision(
       String action, String reason, String reply, Shipment shipment, DangerousGoodsCheck gatewayReview) {
     Decision(String action, String reason, String reply, Shipment shipment) {
@@ -33,6 +52,8 @@ final class ShipmentDocuments {
   private final Ledger ledger;
   private final FiveU upstream;
   private final Catalog catalog;
+  private final Clock clock;
+  private final Executor voiceExecutor;
   private final Map<Attachment, PackingSafety.Document> extracted =
       new LinkedHashMap<>(64, 0.75f, true) {
         @Override
@@ -41,10 +62,12 @@ final class ShipmentDocuments {
         }
       };
 
-  ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog) {
+  ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog, Clock clock, Executor voiceExecutor) {
     this.ledger = ledger;
     this.upstream = upstream;
     this.catalog = catalog;
+    this.clock = clock;
+    this.voiceExecutor = voiceExecutor;
   }
 
   private List<PackingSafety.Document> read(Map<String, Object> message) {
@@ -70,9 +93,132 @@ final class ShipmentDocuments {
     return documents;
   }
 
+  Map<String, Object> withAttachedRequest(Map<String, Object> original) {
+    if (hasAttachment(original, "voice-message.mp3")) {
+      String transcript = voiceTranscript(original);
+      if (transcript.isBlank()) return original;
+      var message = withRequestText(original, SPOKEN_KILOS.matcher(transcript)
+          .replaceAll(match -> match.group(1).replace(",", "") + " kg"));
+      message.put("voice_transcript", transcript);
+      return message;
+    }
+    if (!hasRequestAttachment(original)) return original;
+    var text = requestText(read(original));
+    if (text == null) return original;
+    return withRequestText(original, text);
+  }
+
+  private String voiceTranscript(Map<String, Object> message) {
+    String transcript = Ledger.str(message, "voice_transcript");
+    return transcript.isBlank() ? transcribe(message) : transcript;
+  }
+
+  private Map<String, Object> withRequestText(Map<String, Object> original, String text) {
+    var message = new HashMap<>(original);
+    message.put("body", MailParser.authoredText(Ledger.str(original, "body")) + "\n\n" + text);
+    return message;
+  }
+
+  private String transcribe(Map<String, Object> message) {
+    long id = Ledger.id(message.get("id"));
+    String action = "voice-rfq:" + id;
+    long now = clock.instant().getEpochSecond();
+    int claimed = ledger.jdbc().update("""
+        INSERT INTO retry(action,after_epoch) VALUES(?,?)
+        ON CONFLICT(action) DO UPDATE SET after_epoch=excluded.after_epoch
+        WHERE retry.after_epoch>0 AND retry.after_epoch<=?
+          AND (SELECT voice_transcript FROM mail WHERE id=?) IS NULL
+        """, action, now + 90, now, id);
+    if (claimed == 0) return recordedVoice(id);
+    try {
+      var file = (Map<?, ?>) ledger.read(message.get("attachments"), List.class).getFirst();
+      long attachment = Ledger.id(file.get("id"));
+      voiceExecutor.execute(() -> {
+        try {
+          var text = upstream.transcribe(upstream.bytes(id, attachment));
+          ledger.jdbc().update("UPDATE mail SET voice_transcript=? WHERE id=?", text, id);
+        } catch (IOException | RestClientException ex) {
+          ledger.jdbc().update("UPDATE retry SET after_epoch=0 WHERE action=?", action);
+        }
+      });
+    } catch (RejectedExecutionException ex) {
+      ledger.jdbc().update("DELETE FROM retry WHERE action=?", action);
+    }
+    return recordedVoice(id);
+  }
+
+  private String recordedVoice(long id) {
+    return Objects.toString(ledger.jdbc().queryForObject(
+        "SELECT voice_transcript FROM mail WHERE id=?", String.class, id), "");
+  }
+
+  boolean awaitingVoice(Map<String, Object> message) {
+    if (!hasAttachment(message, "voice-message.mp3")
+        || !Ledger.str(message, "voice_transcript").isBlank()) return false;
+    long id = Ledger.id(message.get("id"));
+    // A positive claim also covers a transcript committed after this read of the message.
+    var attempts = ledger.jdbc().queryForList(
+        "SELECT after_epoch FROM retry WHERE action=?", Long.class, "voice-rfq:" + id);
+    return attempts.isEmpty() || attempts.getFirst() > 0;
+  }
+
+  private boolean hasRequestAttachment(Map<String, Object> message) {
+    return hasAttachment(message, "quotation-request.pdf", "quotation-request.docx", "quotation-request.txt");
+  }
+
+  private boolean hasAttachment(Map<String, Object> message, String... names) {
+    var attachments = ledger.read(message.get("attachments"), List.class);
+    return attachments != null && attachments.size() == 1
+        && attachments.getFirst() instanceof Map<?, ?> file
+        && Set.of(names).contains(Ledger.str(file, "filename").toLowerCase(Locale.ROOT));
+  }
+
+  private static String requestText(List<PackingSafety.Document> files) {
+    if (files.size() != 1 || files.getFirst() == null) return null;
+    var file = files.getFirst();
+    var text = file.text().strip();
+    return file.type() == PackingSafety.DocumentType.UNKNOWN
+        && text.lines().findFirst().orElse("").strip().matches(
+            "(?i)(?:Request for quotation|Air freight quote(?: request)?(?:[ :].*)?)")
+        ? text : null;
+  }
+
+  String attachedOffer(Map<String, Object> message) {
+    if (hasAttachment(message, "voice-message.mp3")) {
+      var transcript = voiceTranscript(message);
+      var received = Ledger.instant(message.get("received"));
+      if (transcript.isBlank() || received == null || OPEN_OFFER_TERMS.matcher(transcript).find())
+        return null;
+      int year = received.atZone(java.time.ZoneOffset.UTC).getYear();
+      var costs = SPOKEN_EUROS.matcher(transcript).replaceAll(match ->
+          String.format(Locale.ROOT, "%s.%02d EUR", match.group(1), Integer.parseInt(match.group(2))));
+      return SPOKEN_EXPIRY.matcher(costs).replaceAll(match ->
+          "Valid until " + match.group(1) + " " + match.group(2).substring(0, 3) + " "
+              + (match.group(3) == null ? year : match.group(3)) + " " + match.group(4) + " UTC");
+    }
+    var attachments = ledger.read(message.get("attachments"), List.class);
+    if (attachments == null || attachments.size() != 1
+        || !(attachments.getFirst() instanceof Map<?, ?> file)
+        || !Ledger.str(file, "filename").toLowerCase(Locale.ROOT).matches(".*\\.(?:txt|pdf|docx)"))
+      return null;
+    var files = read(message);
+    if (files.size() != 1 || files.getFirst() == null) return null;
+    var text = files.getFirst().text();
+    if (OPEN_OFFER_TERMS.matcher(text).find()) return null;
+    if (text.contains("This price is all-in."))
+      text = PICKUP_BREAKDOWN.matcher(text).replaceAll("");
+    if (text.contains("Amount (EUR)"))
+      text = OFFER_TOTAL.matcher(text).replaceAll("Total EUR $1");
+    return text;
+  }
+
   Decision inspect(Map<String, Object> original, List<Map<String, Object>> followUps,
       String confirmedPickupZone, String customerDeliveryAirport) {
-    var latestPacking = read(original);
+    boolean voiceRequest = hasAttachment(original, "voice-message.mp3")
+        && !Ledger.str(original, "voice_transcript").isBlank();
+    var latestPacking = voiceRequest
+        ? List.of(new PackingSafety.Document(Ledger.str(original, "voice_transcript"))) : read(original);
+    var originalPacking = latestPacking;
     var followUpDocuments = new ArrayList<PackingSafety.Document>();
     latestPacking.stream()
         .filter(Objects::nonNull)
@@ -100,6 +246,12 @@ final class ShipmentDocuments {
           MailParser.confirmedPackingCorrection(body.text()).orElse(emptyCorrection));
     }
     if (dg) return dangerousGoods(dangerous, followUpDocuments, evidence);
+    if (latestPacking == originalPacking && (voiceRequest
+        || (hasRequestAttachment(original) && requestText(latestPacking) != null))) {
+      var parsed = MailParser.request(Ledger.str(original, "subject"), Ledger.str(original, "body"),
+          false, catalog, confirmedPickupZone, customerDeliveryAirport);
+      return new Decision(null, null, null, parsed.issue() == null ? parsed.shipment() : null);
+    }
     if (latestPacking.isEmpty()) return new Decision(null, null, null, null);
     if (latestPacking.stream().anyMatch(Objects::isNull)
         || latestPacking.stream()

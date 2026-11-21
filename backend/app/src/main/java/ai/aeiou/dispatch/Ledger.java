@@ -45,9 +45,19 @@ class Ledger {
     return json.valueToTree(value);
   }
 
-  Ledger(@Value("${dispatch.db}") String file, ObjectMapper json) throws Exception {
+  Ledger(String file, ObjectMapper json) throws Exception {
+    this(file, json, false);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  Ledger(@Value("${dispatch.db}") String file, ObjectMapper json, @Value("${dispatch.read-only}") boolean readOnly)
+      throws Exception {
     this.json = json;
-    var path = Path.of(file).toAbsolutePath();
+    var configured = Path.of(file).toAbsolutePath();
+    // A read-only desk replaces its tables from Postgres, so it never shares the worker's file.
+    var path = readOnly
+        ? configured.resolveSibling(configured.getFileName().toString().replaceFirst("(\\.sqlite3?)?$", ".replica$1"))
+        : configured;
     Files.createDirectories(path.getParent());
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + path + "?busy_timeout=10000");
     db = new JdbcTemplate(ds);
@@ -61,6 +71,9 @@ class Ledger {
         CREATE TABLE IF NOT EXISTS mail(id INTEGER PRIMARY KEY,root INTEGER,sender TEXT,subject TEXT,body TEXT,
         received TEXT,kind TEXT,fields TEXT,attachments TEXT,stage TEXT DEFAULT 'review',proposal TEXT,booking TEXT)
         """);
+    ensureColumn("mail", "reply_to", "INTEGER");
+    ensureColumn("mail", "carrier_offer_text", "TEXT");
+    ensureColumn("mail", "voice_transcript", "TEXT");
     db.execute(
         "CREATE TABLE IF NOT EXISTS deliveries(action TEXT PRIMARY KEY,state TEXT NOT NULL,response"
             + " TEXT)");
@@ -111,6 +124,7 @@ class Ledger {
         "CREATE TABLE IF NOT EXISTS booking_attempt(request_id INTEGER PRIMARY KEY,rate_id TEXT NOT"
             + " NULL,retry_at INTEGER DEFAULT 0,issue TEXT)");
     ensureColumn("booking_attempt", "submitted", "INTEGER NOT NULL DEFAULT 1");
+    ensureColumn("booking_attempt", "quote_id", "INTEGER");
     // Existing operator drafts are preserved across the Python-to-Java handoff.
     db.update(
         "INSERT OR IGNORE INTO wave_case(id,opened,operator,reason) SELECT id,0,1,'Existing"
@@ -204,13 +218,13 @@ class Ledger {
     return routes;
   }
 
-  Instant lastInvitation(long request) {
+  Instant firstInvitation(long request) {
     return db.queryForList("""
         SELECT d.attempted_at FROM tender t JOIN deliveries d
           ON d.action=COALESCE(t.bid_action,'bid:'||t.request_id||':'||t.email)
         WHERE t.request_id=? AND d.state IN ('sent','pending','uncertain')
         """, String.class, request).stream().map(Ledger::instant).filter(Objects::nonNull)
-        .max(Instant::compareTo).orElse(null);
+        .min(Instant::compareTo).orElse(null);
   }
 
   static String bidAction(Map<String, Object> tender) {
@@ -267,13 +281,8 @@ class Ledger {
                     .toLowerCase(Locale.ROOT);
             String body = str(m, "body"), subject = str(m, "subject");
             List<?> refs = m.get("references") instanceof List<?> r ? r : List.of();
-            long root =
-                refs.isEmpty()
-                    ? id(
-                        m.getOrDefault("in_reply_to", mid) == null
-                            ? mid
-                            : m.getOrDefault("in_reply_to", mid))
-                    : id(refs.getFirst());
+            Long replyTo = m.get("in_reply_to") == null ? null : id(m.get("in_reply_to"));
+            long root = refs.isEmpty() ? (replyTo == null ? mid : replyTo) : id(refs.getFirst());
             // An unthreaded response to our existing tender is follow-up mail even when the sender
             // is unknown.
             var reference = CASE_REFERENCE.matcher(subject);
@@ -284,6 +293,8 @@ class Ledger {
                   .isEmpty()) root = referenced;
             }
             var carrier = catalog.contact(sender);
+            List<?> attachments = m.get("attachments") instanceof List<?> a ? a : List.of();
+            var parsed = MailParser.request(subject, body, !attachments.isEmpty(), catalog);
             String kind =
                 carrier.isPresent()
                     ? "carrier"
@@ -291,8 +302,12 @@ class Ledger {
                         ? "ratedesk"
                         : sender.equals("tracking@hackloop.mail")
                             ? "tracking"
-                            : root != mid ? "follow-up" : "request";
-            List<?> attachments = m.get("attachments") instanceof List<?> a ? a : List.of();
+                            : root != mid
+                                ? "follow-up"
+                                : MailParser.unsolicited(
+                                        subject, body, !attachments.isEmpty(), parsed.shipment())
+                                    ? "spam"
+                                    : "request";
             var received =
                 instant(
                     str(
@@ -305,12 +320,11 @@ class Ledger {
                         "sent_at_utc",
                         "created_at_utc",
                         "ts"));
-            var parsed = MailParser.request(subject, body, !attachments.isEmpty(), catalog);
             int inserted =
                 db.update(
                     "INSERT OR IGNORE INTO"
-                        + " mail(id,root,sender,subject,body,received,kind,fields,attachments,stage)"
-                        + " VALUES(?,?,?,?,?,?,?,?,?,?)",
+                        + " mail(id,root,sender,subject,body,received,kind,fields,attachments,stage,reply_to)"
+                        + " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     mid,
                     root,
                     sender,
@@ -320,7 +334,8 @@ class Ledger {
                     kind,
                     write(parsed.shipment()),
                     write(attachments),
-                    kind.equals("request") ? "new" : "received");
+                    kind.equals("request") ? "new" : kind.equals("spam") ? "ignored" : "received",
+                    replyTo);
             if (inserted == 0) continue;
             if (kind.equals("request"))
               db.update(
@@ -416,9 +431,30 @@ class Ledger {
     return new CarrierBid(bid, null);
   }
 
+  void recoverAttachedBid(long request, long reply, String sender, String text, boolean truck,
+      Catalog catalog, Instant now) {
+    Instant validUntil;
+    try {
+      validUntil = MailParser.bidValidUntil(text);
+    } catch (java.time.format.DateTimeParseException ex) {
+      return;
+    }
+    if (validUntil == null || !validUntil.isAfter(now)) return;
+    var bid = parseCarrierBid(request, sender, text, truck, catalog).terms().orElse(null);
+    if (bid == null) return;
+    tx.executeWithoutResult(ignored -> {
+      int updated = db.update("""
+          UPDATE tender SET euros=?,days=?,issue=NULL
+          WHERE request_id=? AND email=? AND reply_id=? AND euros IS NULL
+          """, bid.euros().toPlainString(), bid.days(), request, sender, reply);
+      if (updated > 0)
+        db.update("UPDATE mail SET carrier_offer_text=?,stage='bid received' WHERE id=?", text, reply);
+    });
+  }
+
   void recheckOpenTruckBids(Instant receivedAfter, Catalog catalog) {
     var candidates = db.queryForList("""
-        SELECT t.request_id,t.email,t.reply_id,f.body,p.verified_days
+        SELECT t.request_id,t.email,t.reply_id,COALESCE(f.carrier_offer_text,f.body) AS body,p.verified_days
         FROM tender t JOIN mail r ON r.id=t.request_id JOIN wave_case w ON w.id=r.id
           JOIN mail f ON f.id=t.reply_id AND f.root=r.id AND f.sender=t.email
           LEFT JOIN truck_bid_parse p ON p.reply_id=t.reply_id
@@ -533,7 +569,7 @@ class Ledger {
     for (var row : db.queryForList("SELECT * FROM deliveries ORDER BY rowid")) {
       String action = str(row, "action");
       String[] parts = action.split(":", 3);
-      if (parts.length < 2 || !Set.of("quote", "bid", "counter", "reply", "airport-delivery").contains(parts[0]))
+      if (parts.length < 2 || !Set.of("quote", "requote", "bid", "counter", "reply", "airport-delivery").contains(parts[0]))
         continue;
       long owner = Long.parseLong(parts[1]);
       Map<?, ?> receipt = read(row.get("response"), Map.class);

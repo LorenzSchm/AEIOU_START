@@ -291,11 +291,37 @@ public final class MailParser {
             "(?:\\d+\\s*[x×]\\s*\\d+(?:[.,]\\d+)?\\s*kg)|(?:kg|kgs)\\s*(?:each|per"
                 + " (?:piece|pallet|crate))|(?:each|per piece)\\s*[:=]?\\s*\\d+[.,\\d]*\\s*kg"))
       issue = "Confirm total gross weight. The request gives a per-piece weight.";
-    else if (!has(
-        text,
-        "\\b(?:rfq|quot(?:e|ation)|rat(?:e|es)|pric(?:e|ing)|angebot|anfrage|freight|airfreight|versand)\\b"))
+    else if (!has(text, FREIGHT_TERMS))
       issue = "Confirm that this message requests a freight quote.";
     return new Parsed(shipment, issue);
+  }
+
+  private static final String FREIGHT_TERMS =
+      "\\b(?:rfq|quot(?:e|ation)|rat(?:e|es)|pric(?:e|ing)|angebot|anfrage|freight|airfreight|versand)\\b";
+  private static final String CARGO_TERMS =
+      "\\b(?:kgs?|kilograms?|cbm|m3|m³|pallets?|paletten|pieces|pcs|crates?|kisten|cartons?|colli|awb"
+          + "|air ?waybill|consignment|shipment|sendung|cargo)\\b";
+  // Credential requests, secrecy pressure and sales outreach never belong in a customer RFQ.
+  private static final String SOLICITATION_TERMS =
+      "\\b(?:api[ -]?keys?|gateway keys?|passwor(?:d|t)s?|credentials|log[ -]?in details|gift ?cards?"
+          + "|wire transfer|bank details|keep (?:it|this) between us|don'?t (?:loop|tell|cc) anyone"
+          + "|book (?:a |\\d+ )?(?:min(?:ute)?s?|call|demo)|demo|schedule a (?:call|meeting)"
+          + "|unsubscribe|newsletter|webinar|seo)\\b";
+
+  /**
+   * A new message with no shipment facts at all that is either outreach or not about freight.
+   * Such mail stays in the inbox for an operator but never opens a case or gets an automatic reply.
+   */
+  public static boolean unsolicited(String subject, String body, boolean attachments, Shipment parsed) {
+    if (attachments) return false;
+    if (parsed != null
+        && (parsed.origin() != null || parsed.destination() != null || parsed.weightKg() != null
+            || parsed.volumeCbm() != null || parsed.pickupZone() != null)) return false;
+    subject = currentSubject(subject, body);
+    body = authoredText(body);
+    String text = subject + "\n" + body;
+    if (has(text, CARGO_TERMS) || requestsPickup(subject, body)) return false;
+    return has(text, SOLICITATION_TERMS) || !has(text, FREIGHT_TERMS);
   }
 
   public record Bid(BigDecimal euros, Double days) {}
@@ -341,7 +367,8 @@ public final class MailParser {
   }
 
   private static final Pattern BID_EXPIRY =
-      pattern("\\bvalid until:?\\h+(\\d{1,2} [A-Z]{3} \\d{4} \\d{2}:\\d{2}) UTC\\b");
+      pattern("\\b(?:valid (?:until|through)|we keep this price until):?\\s+"
+          + "(\\d{1,2} [A-Z]{3} \\d{4} \\d{2}:\\d{2}) UTC\\b");
   private static final DateTimeFormatter BID_EXPIRY_FORMAT =
       new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d MMM uuuu HH:mm")
           .toFormatter(Locale.ENGLISH).withResolverStyle(ResolverStyle.STRICT);
@@ -355,6 +382,8 @@ public final class MailParser {
   private static final Pattern EXCLUDES_COLLECTION_WAIT =
       pattern("(?:\\h*[,;]\\h*)?\\bexcluding\\h+(?:(?:the|any)\\h+)?wait(?:ing\\h+time)?"
           + "\\h+(?:before|until)\\h+(?:pickup|collection)\\b");
+  private static final Pattern PICKUP_BOOKING_NOT_REQUIRED =
+      pattern("\\bno\\h+need\\h+to\\h+book\\h+(?:the\\h+)?(?:pickup|collection)\\h+separately\\b");
 
   public static boolean confirmsPickupArea(String body, String area) {
     String text = EXCLUDES_COLLECTION_WAIT.matcher(authoredText(body)).replaceAll("");
@@ -371,7 +400,8 @@ public final class MailParser {
   }
 
   private static final String FROM_PICKUP_TO_DELIVERY =
-      "(?:from (?:actual )?(?:pickup|collection) to (?:airport )?delivery|"
+      "(?:from (?:actual )?(?:pickup|collection) to (?:airport )?delivery"
+          + "(?: at (?:the airport|(?-i:[A-Z]{3})(?: airport)?))?|"
           + "(?:pickup|collection)[ -]to[ -](?:airport[ -])?delivery(?: time)?)";
   private static final String TRUCK_TRANSIT_LABEL =
       "\\b(?:(?:(?:road|truck(?:ing)?) )?transit(?: time)?(?: "
@@ -462,10 +492,12 @@ public final class MailParser {
    */
   public static Optional<Bid> bid(String body, boolean truck) {
     String text = authoredText(body);
-    String priceTerms = truck
-        ? EXCLUDES_COLLECTION_WAIT.matcher(UNCONFIRMED_TRUCK_TIMING.matcher(text).replaceAll(""))
-            .replaceAll("")
-        : text;
+    String priceTerms = text;
+    if (truck) {
+      priceTerms = UNCONFIRMED_TRUCK_TIMING.matcher(priceTerms).replaceAll("");
+      priceTerms = EXCLUDES_COLLECTION_WAIT.matcher(priceTerms).replaceAll("");
+      priceTerms = PICKUP_BOOKING_NOT_REQUIRED.matcher(priceTerms).replaceAll("");
+    }
     if (has(
         priceTerms,
         "\\b(?:USD|GBP|CHF|plus|excluding|excluded|estimated (?:price|cost|rate|total)|"

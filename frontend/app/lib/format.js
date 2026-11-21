@@ -41,7 +41,8 @@ export function statusOf(m, now = Date.now()) {
     return { label: "Pricing", tone: "accent" };
   }
   if (m.kind === "tracking") return { label: "Tracking", tone: "muted" };
+  if (m.kind === "spam") return { label: "Ignored", tone: "muted" };
   return { label: m.stage || m.kind, tone: "muted" };
 }
 
-export const kindLabel = { request: "Request", tracking: "Tracking", ratedesk: "Rate desk", "follow-up": "Follow-up", carrier: "Carrier" };
+export const kindLabel = { request: "Request", tracking: "Tracking", ratedesk: "Rate desk", "follow-up": "Follow-up", carrier: "Carrier", spam: "Spam" };

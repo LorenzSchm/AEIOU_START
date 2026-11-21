@@ -16,10 +16,11 @@ class PortalBookings {
   private static final Logger log = LoggerFactory.getLogger(PortalBookings.class);
   private static final Pattern APPROVAL =
       Pattern.compile(
-          "(?iu)(?:(?:hi|hello|dear team)[ ,!.]*\\s+)?(?:(?:thank you for (?:your|the)"
-              + " (?:offer|quote)|thanks|thank you|yes|that works for us|we accept (?:the|your)"
+          "(?iu)(?:(?:hi|hello|dear team|good (?:morning|afternoon|evening)(?: team(?: aeiou)?)?)"
+              + "[ ,!.]*\\s+)?(?:(?:thank you for (?:your|the)"
+              + " (?:offer|quote)|thanks|thank you|yes|that works for us|we would like to proceed|we accept (?:the|your)"
               + " (?:offer|quote))[,.! ]+)*(?:(?:please )?(?:go ahead and |proceed to )?book"
-              + " (?:it|this|this shipment|the shipment|this option|the quoted option)|please"
+              + " (?:it|this|this shipment|the shipment|this option|the quoted option)(?: now)?|please"
               + " proceed with (?:the |this )?booking|bitte (?:so |wie angeboten )?buchen)[.! ]*");
   private static final Pattern SIGNOFF =
       Pattern.compile(
@@ -37,7 +38,7 @@ class PortalBookings {
   private final boolean automatic;
 
   PortalBookings(
-      Ledger ledger, FiveU upstream, Clock clock, @Value("${dispatch.auto}") boolean automatic) {
+      Ledger ledger, FiveU upstream, Clock clock, @Value("#{${dispatch.auto} and !${dispatch.read-only}}") boolean automatic) {
     this.ledger = ledger;
     this.upstream = upstream;
     this.clock = clock;
@@ -67,14 +68,23 @@ class PortalBookings {
                 """
                 SELECT r.id, f.body FROM mail r
                 JOIN deliveries d ON d.action='quote:'||r.id AND d.state='sent'
+                LEFT JOIN deliveries reminder ON reminder.action='reply:'||r.id AND reminder.state='sent'
+                LEFT JOIN deliveries revised ON revised.action='requote:'||r.id
                 JOIN mail f ON f.id=(SELECT max(x.id) FROM mail x WHERE x.kind='follow-up'
-                  AND x.sender=r.sender AND x.root IN (r.id,json_extract(d.response,'$.id'))
-                  AND x.id>json_extract(d.response,'$.id'))
+                  AND x.sender=r.sender AND (
+                    (revised.action IS NULL AND x.root IN (
+                      r.id,json_extract(d.response,'$.id'),json_extract(reminder.response,'$.id'))
+                      AND x.id>json_extract(d.response,'$.id'))
+                    OR (revised.state='sent' AND (x.reply_to=json_extract(revised.response,'$.id')
+                      OR x.root IN (r.id,json_extract(revised.response,'$.id')))
+                      AND x.id>json_extract(revised.response,'$.id'))))
                 LEFT JOIN booking_attempt a ON a.request_id=r.id
                 WHERE r.kind='request' AND r.booking IS NULL
+                  AND (revised.action IS NULL OR f.reply_to=json_extract(revised.response,'$.id'))
                   AND json_extract(r.proposal,'$.offer.source')='portal'
                   AND json_extract(r.proposal,'$.offer.rate_id') IS NOT NULL
-                  AND COALESCE(a.retry_at,0)<=?
+                  AND (COALESCE(a.retry_at,0)<=? OR (revised.state='sent' AND a.submitted=0
+                    AND a.quote_id IS NOT json_extract(revised.response,'$.id')))
                 """,
                 clock.instant().getEpochSecond());
     for (var row : candidates) {
@@ -111,16 +121,48 @@ class PortalBookings {
     if (!"sent".equals(ledger.delivery("quote:" + id)))
       throw new WaveWorker.Conflict("Quote must be sent before booking.");
     var draft = ledger.read(m.get("proposal"), WaveWorker.Draft.class);
+    Long revisedQuote = null;
+    var revisions = ledger.jdbc().queryForList("""
+        SELECT state,json_extract(response,'$.id') message_id,
+          json_extract(payload,'$.updated_quote') AS proposal
+        FROM deliveries WHERE action=?
+        """, "requote:" + id);
+    if (!revisions.isEmpty()) {
+      var revision = revisions.getFirst();
+      if (!"sent".equals(revision.get("state")) || revision.get("message_id") == null)
+        throw new WaveWorker.Conflict("Delivery of the updated quote must be confirmed before booking.");
+      revisedQuote = Ledger.id(revision.get("message_id"));
+      var replies = ledger.jdbc().queryForList("""
+          SELECT body,reply_to FROM mail WHERE sender=? AND kind='follow-up' AND id>?
+            AND (reply_to=? OR root IN (?,?))
+          ORDER BY id DESC LIMIT 1
+          """, m.get("sender"), revisedQuote, revisedQuote, id, revisedQuote);
+      if (replies.isEmpty() || replies.getFirst().get("reply_to") == null
+          || revisedQuote != Ledger.id(replies.getFirst().get("reply_to"))
+          || !accepted(Ledger.str(replies.getFirst(), "body")))
+        throw new WaveWorker.Conflict("Waiting for approval of the updated quote.");
+      draft = ledger.read(revision.get("proposal"), WaveWorker.Draft.class);
+    }
     if (draft == null || draft.offer() == null || !"portal".equals(draft.offer().source())
         || draft.offer().rateId() == null || draft.offer().rateId().isBlank())
       throw new WaveWorker.Conflict("Coordinate this booking with the carrier.");
     ledger
         .jdbc()
         .update(
-            "INSERT OR IGNORE INTO booking_attempt(request_id,rate_id,submitted) VALUES(?,?,0)",
+            "INSERT OR IGNORE INTO booking_attempt(request_id,rate_id,submitted,quote_id) VALUES(?,?,0,?)",
             id,
-            draft.offer().rateId());
+            draft.offer().rateId(),
+            revisedQuote);
+    if (revisedQuote != null) {
+      ledger.jdbc().update("""
+          UPDATE booking_attempt SET rate_id=?,quote_id=?,retry_at=0,issue=NULL
+          WHERE request_id=? AND submitted=0 AND quote_id IS NOT ?
+          """, draft.offer().rateId(), revisedQuote, id, revisedQuote);
+    }
     var attempt = ledger.jdbc().queryForMap("SELECT * FROM booking_attempt WHERE request_id=?", id);
+    if (revisedQuote != null && (attempt.get("quote_id") == null
+        || revisedQuote != Ledger.id(attempt.get("quote_id"))))
+      throw new WaveWorker.Conflict("An earlier booking attempt must be resolved first.");
     var shipment = ledger.read(m.get("fields"), Shipment.class);
     String rate = Ledger.str(attempt, "rate_id");
     if (Ledger.id(attempt.get("submitted")) == 0) rate = verifiedBookingRate(id, shipment, draft);

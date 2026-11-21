@@ -5,6 +5,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.Executor;
+import java.util.function.IntSupplier;
 import org.slf4j.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,16 +40,25 @@ class WaveWorker {
   private Instant pollAfter = Instant.EPOCH;
 
   WaveWorker(
+      Ledger ledger, Catalog catalog, FiveU upstream, Clock clock, RfqGateway gateway,
+      MailboxWebhook webhook, boolean automatic, Instant start, long waitSeconds, boolean counteroffers) {
+    this(ledger, catalog, upstream, clock, gateway, webhook, automatic, start, waitSeconds,
+        counteroffers, Runnable::run);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  WaveWorker(
       Ledger ledger,
       Catalog catalog,
       FiveU upstream,
       Clock clock,
       RfqGateway gateway,
       MailboxWebhook webhook,
-      @Value("${dispatch.auto}") boolean automatic,
+      @Value("#{${dispatch.auto} and !${dispatch.read-only}}") boolean automatic,
       @Value("${dispatch.start-at}") Instant start,
       @Value("${dispatch.bid-wait-seconds}") long waitSeconds,
-      @Value("${dispatch.counteroffers}") boolean counteroffers) {
+      @Value("${dispatch.counteroffers}") boolean counteroffers,
+      @org.springframework.beans.factory.annotation.Qualifier("voiceExecutor") Executor voiceExecutor) {
     this.ledger = ledger;
     this.catalog = catalog;
     this.upstream = upstream;
@@ -58,7 +69,7 @@ class WaveWorker {
     this.start = start;
     this.waitSeconds = waitSeconds;
     this.counteroffers = counteroffers;
-    this.documents = new ShipmentDocuments(ledger, upstream, catalog);
+    this.documents = new ShipmentDocuments(ledger, upstream, catalog, clock, voiceExecutor);
     this.clarifications = new CustomerClarifications(ledger, catalog);
     this.carrierRestrictions = new CarrierRestrictions(ledger, upstream, clock);
   }
@@ -230,10 +241,16 @@ class WaveWorker {
   }
 
   private Shipment checkPacking(long id, Map<String, Object> mail) {
-    return checkPacking(id, mail, clarifications.details(id, mail));
+    return checkPacking(id, mail, details(id, mail));
+  }
+
+  private CustomerClarifications.Details details(long id, Map<String, Object> mail) {
+    return clarifications.details(id, documents.withAttachedRequest(mail));
   }
 
   private Shipment checkPacking(long id, Map<String, Object> mail, CustomerClarifications.Details details) {
+    if (documents.awaitingVoice(details.message()))
+      throw new RetryLater("Transcribing the attached voice request.");
     var replies =
         ledger
             .jdbc()
@@ -273,7 +290,8 @@ class WaveWorker {
               "subject",
               "Re: " + mail.get("subject"),
               "body",
-              Greeting.hi(mail) + "\n\n" + decision.reply() + "\n\nBest regards,\nTeam AEIOU"));
+              Greeting.at(mail, clock.instant()) + "\n\n" + decision.reply()
+                  + "\n\nBest regards,\nTeam AEIOU"));
     }
     long checked = replies.isEmpty() ? id : Ledger.id(replies.getLast().get("id"));
     ledger
@@ -306,7 +324,7 @@ class WaveWorker {
     String action = details.latestReply() == null ? prefix : prefix + ":" + details.latestReply();
     boolean alreadyClaimed = ledger.delivery(action) != null;
     if (alreadyClaimed && CustomerClarifications.WAITING.equals(mail.get("stage"))) return;
-    String body = Greeting.hi(mail) + "\n\n" + question + "\n\nBest regards,\nTeam AEIOU";
+    String body = Greeting.at(mail, clock.instant()) + "\n\n" + question + "\n\nBest regards,\nTeam AEIOU";
     if (details.latestReply() != null && ledger.jdbc().queryForObject("""
         SELECT count(*) FROM deliveries WHERE (action=? OR action LIKE ?)
           AND json_extract(payload,'$.body')=?
@@ -368,7 +386,7 @@ class WaveWorker {
       return;
     }
     if (gateway.quoteCoolingDown(id)) return;
-    var details = clarifications.details(id, m);
+    var details = details(id, m);
     var local = MailParser.request(Ledger.str(details.message(), "subject"), Ledger.str(details.message(), "body"),
         false, catalog, details.pickupReply() == null ? null : details.zone(), details.deliveryAirport());
     var verified = checkPacking(id, m, details);
@@ -423,12 +441,17 @@ class WaveWorker {
       return;
     }
     sendInvitations(id, s, details, deadline);
+    boolean transcribingBids = recoverAttachedBids(id);
+    var tenders = ledger.tenders(id);
+    boolean fastestPickup = s.pickupZone() != null && "fastest".equals(s.preference());
+    if (fastestPickup)
+      askTruckTransit(id, s, details, tenders, deadline, false);
     long queried = Ledger.id(w.get("queried"));
+    var offers = new ArrayList<Offer>(Arrays.asList(cached(w)));
     if (queried == 0
         || (queried > 0
             && clock.instant().getEpochSecond() - queried >= 35
             && clock.instant().isBefore(deadline.minusSeconds(35)))) {
-      var offers = new ArrayList<Offer>(Arrays.asList(cached(w)));
       var now = clock.instant();
       var result = offers.isEmpty() ? upstream.rates(s, now)
           : upstream.rates(s, now, offers, (String) w.get("portal_version"));
@@ -450,20 +473,32 @@ class WaveWorker {
               result.version(),
               id);
     }
-    var tenders = ledger.tenders(id);
-    boolean allAnswered = tenders.stream().allMatch(t -> t.get("reply_id") != null);
-    Instant lastInvitation = ledger.lastInvitation(id);
-    Instant waitUntil = (lastInvitation == null ? received : lastInvitation).plusSeconds(waitSeconds);
+    var coveredAirlines = new HashSet<String>();
+    if (queried == -1) {
+      var validAt = clock.instant().plusSeconds(4);
+      for (var offer : offers) {
+        if (offer.rateId() != null && !offer.rateId().isBlank() && offer.validUntil() != null
+            && offer.validUntil().isAfter(validAt))
+          coveredAirlines.add(offer.airline().toLowerCase(Locale.ROOT));
+      }
+    }
+    boolean allAnswered = tenders.stream().allMatch(t -> t.get("reply_id") != null
+        || catalog.contact(Ledger.str(t, "email"))
+            .filter(c -> !c.truck() && coveredAirlines.contains(c.name().toLowerCase(Locale.ROOT)))
+            .isPresent());
+    Instant firstInvitation = ledger.firstInvitation(id);
+    Instant waitUntil = (firstInvitation == null ? received : firstInvitation).plusSeconds(waitSeconds);
     if (waitUntil.isAfter(deadline.minusSeconds(20))) waitUntil = deadline.minusSeconds(20);
-    if (!allAnswered && clock.instant().isBefore(waitUntil)) {
+    if ((!allAnswered && clock.instant().isBefore(waitUntil))
+        || (transcribingBids && clock.instant().isBefore(deadline.minusSeconds(20)))) {
       ledger.stage(id, "collecting", null);
       return;
     }
     var draft = calculate(id, s, null, true);
     if (draft.offer() == null) {
       String reason = String.join(" ", draft.notes());
-      if (s.pickupZone() != null && "fastest".equals(s.preference()) && draft.pickupEur() == null)
-        askTruckTransit(id, s, details, tenders, deadline);
+      if (fastestPickup && draft.pickupEur() == null)
+        askTruckTransit(id, s, details, tenders, deadline, true);
       if (s.pickupZone() != null && draft.pickupEur() == null && details.area() != null) {
         askAirportDelivery(id, m, details, s.origin());
         if ("sent".equals(ledger.delivery("airport-delivery:" + id)))
@@ -500,7 +535,8 @@ class WaveWorker {
       send(action, Map.of(
           "to", mail.get("sender"), "in_reply_to", details.latestReply(),
           "subject", "Re: " + mail.get("subject"),
-          "body", Greeting.hi(mail) + "\n\nThanks for confirming " + details.area() + ". We’re checking citywide"
+          "body", Greeting.at(mail, clock.instant()) + "\n\nThanks for confirming " + details.area()
+              + ". We’re checking citywide"
               + " collection rates. If the warehouse postcode becomes available, please send all five"
               + " digits. If you can bring the shipment to " + airport + " yourselves instead,"
               + " please reply with: We will deliver to " + airport + " ourselves.\n\n"
@@ -512,7 +548,7 @@ class WaveWorker {
   }
 
   private void askTruckTransit(long id, Shipment shipment, CustomerClarifications.Details details,
-      List<Map<String, Object>> tenders, Instant deadline) {
+      List<Map<String, Object>> tenders, Instant deadline, boolean inviteAlternatives) {
     var excluded = carrierRestrictions.forRequest(id, details.message());
     var active = new HashSet<String>();
     boolean awaitingReply = false;
@@ -526,20 +562,28 @@ class WaveWorker {
         awaitingReply |= stillAwaitingCarrier(Ledger.bidAction(tender));
         continue;
       }
-      if (tender.get("euros") == null || tender.get("days") != null) continue;
+      if (tender.get("days") != null) continue;
+      long parent = Ledger.id(tender.get("reply_id"));
+      var reply = ledger.mail(parent);
+      if (documents.awaitingVoice(reply)) continue;
+      var files = ledger.read(reply.get("attachments"), List.class);
+      if (tender.get("euros") == null && (files == null || files.isEmpty())) continue;
+      String text = reply.get("carrier_offer_text") == null
+          ? Ledger.str(reply, "body") : Ledger.str(reply, "carrier_offer_text");
+      if (!inviteAlternatives && !MailParser.roadTransitEvidence(text).isEmpty()) continue;
       String action = Ledger.bidAction(tender) + ":transit";
       if (ledger.delivery(action) != null) {
         awaitingReply |= stillAwaitingCarrier(action);
         continue;
       }
-      long parent = Ledger.id(tender.get("reply_id"));
       try {
         send(action, Map.of(
             "to", tender.get("email"), "in_reply_to", parent,
-            "subject", ledger.mail(parent).get("subject"),
+            "subject", reply.get("subject"),
             "body", "Hi,\n\nThanks for the pickup quote. Could you confirm the estimated transit time"
                 + " in hours from actual pickup to delivery at " + shipment.origin() + " airport,"
-                + " excluding the wait before collection? Please also confirm your all-in EUR rate."
+                + " excluding the wait before collection? Please include the road transit, all-in EUR"
+                + " total and validity directly in the reply text."
                 + (details.area() != null ? " Please confirm both terms apply throughout " + details.area() + "." : "")
                 + "\n\nThanks,\nTeam AEIOU"));
         awaitingReply = true;
@@ -547,7 +591,7 @@ class WaveWorker {
         log.info("RFQ {} truck transit clarification: {}", id, ex.getMessage());
       }
     }
-    if (awaitingReply) return;
+    if (awaitingReply || !inviteAlternatives) return;
     long initialSlots = invitations(id, shipment, false).stream().filter(Catalog.Carrier::truck).count();
     for (var carrier : catalog.carriers) {
       if (active.size() >= initialSlots + 2 || !clock.instant().isBefore(deadline.minusSeconds(38))) return;
@@ -734,6 +778,23 @@ class WaveWorker {
     }
   }
 
+  private boolean recoverAttachedBids(long id) {
+    boolean awaitingVoice = false;
+    for (var reply : ledger.jdbc().queryForList("""
+        SELECT r.*, t.leg FROM tender t JOIN mail r
+          ON r.id=t.reply_id AND r.sender=t.email AND r.root=t.request_id
+        WHERE t.request_id=? AND t.euros IS NULL AND r.kind='carrier'
+          AND json_array_length(r.attachments)=1
+        """, id)) {
+      var text = documents.attachedOffer(reply);
+      if (text != null)
+        ledger.recoverAttachedBid(id, Ledger.id(reply.get("id")), Ledger.str(reply, "sender"),
+            text, "trucker".equals(reply.get("leg")), catalog, clock.instant());
+      else awaitingVoice |= documents.awaitingVoice(reply);
+    }
+    return awaitingVoice;
+  }
+
   private Draft calculate(long id, Shipment s, ManualBid manual, boolean cachedPortal) {
     String problem = catalog.problem(s);
     if (problem != null) throw new IllegalArgumentException(problem);
@@ -753,14 +814,14 @@ class WaveWorker {
             || (o.validUntil() != null && o.validUntil().isAfter(clock.instant().plusSeconds(4))))
         .forEach(offers::add);
     offers.removeIf(offer -> carrierRestrictions.excludes(excluded, offer.airline()));
-    var details = clarifications.details(id, m);
+    var details = details(id, m);
     var airBids = new ArrayList<Offer>();
     var trucks = new ArrayList<Offer>();
     var truckReviews = new ArrayList<TruckBidReview>();
     boolean fastest = "fastest".equals(s.preference());
     var missingTruckTransit = new HashSet<String>();
     for (var t : ledger.jdbc().queryForList("""
-        SELECT t.*,r.body AS reply_body,p.state AS parse_state FROM tender t
+        SELECT t.*,COALESCE(r.carrier_offer_text,r.body) AS reply_body,p.state AS parse_state FROM tender t
         JOIN mail r ON r.id=t.reply_id LEFT JOIN truck_bid_parse p ON p.reply_id=t.reply_id
         WHERE t.request_id=? AND t.euros IS NOT NULL ORDER BY t.email
         """, id)) {
@@ -859,7 +920,7 @@ class WaveWorker {
     }
   }
 
-  private static String quoteBody(
+  private String quoteBody(
       CustomerClarifications.Details details, Shipment s, Offer offer, Double pickupDays) {
     String weight = s.weightKg().stripTrailingZeros().toPlainString() + " kg shipment";
     String priority = "fastest".equals(s.preference()) ? "quickest option" : "lowest rate";
@@ -879,7 +940,7 @@ class WaveWorker {
                       + ". We still need to confirm pickup timing."
                   : "Allow about " + transit + " from collection to arrival.");
     }
-    return Greeting.hi(details.message())
+    return Greeting.at(details.message(), clock.instant())
         + "\n\nThe "
         + priority
         + " we found for your "
@@ -972,6 +1033,7 @@ class WaveWorker {
     var message = target(id);
     checkPacking(id, message, shipment);
     gateway.ensure(id, message, false);
+    recoverAttachedBids(id);
     var draft = calculate(id, shipment, bid, false);
     save(id, shipment, draft, true);
     return draft;
@@ -985,16 +1047,14 @@ class WaveWorker {
   }
 
   private Map<String, Object> send(String key, Map<String, Object> mail) {
+    return send(key, mail, () -> ledger.jdbc().update(
+        "INSERT OR IGNORE INTO deliveries(action,state,payload,attempted_at)"
+            + " VALUES(?,'pending',?,?)", key, ledger.write(mail), clock.instant().toString()));
+  }
+
+  Map<String, Object> send(String key, Map<String, Object> mail, IntSupplier claim) {
     checkSendRetry(key);
-    if (ledger
-            .jdbc()
-            .update(
-                "INSERT OR IGNORE INTO deliveries(action,state,payload,attempted_at)"
-                    + " VALUES(?,'pending',?,?)",
-                key,
-                ledger.write(mail),
-                clock.instant().toString())
-        == 0) throw new Conflict("This send was already claimed. Check the delivery record.");
+    if (claim.getAsInt() == 0) throw new Conflict("This send was already claimed. Check the delivery record.");
     try {
       var receipt = upstream.post("/v1/mailbox/messages", mail);
       ledger
@@ -1052,14 +1112,18 @@ class WaveWorker {
     if (d == null || d.offer() == null || !d.revision().equals(revision))
       throw new Conflict("Calculate a current quote first.");
     checkCarrierRestrictions(id, m, d);
-    var details = clarifications.details(id, m);
+    var details = details(id, m);
     gateway.checkQuote(id, details.message(), shipment);
-    if ("portal".equals(d.offer().source())) {
+    boolean portal = "portal".equals(d.offer().source());
+    if (portal) {
       d = rerankPortal
           ? rankCurrentPortalOffers(ageLimit(m), shipment, details, d)
           : verifyOperatorDraft(ageLimit(m), shipment, d);
-      save(id, shipment, d, !rerankPortal);
     }
+    String body = Greeting.refresh(d.body(), details.message(), clock.instant());
+    boolean greetingChanged = !body.equals(d.body());
+    if (greetingChanged) d = d.withOffer(d.offer(), d.alternatives(), body);
+    if (portal || greetingChanged) save(id, shipment, d, !rerankPortal);
     checkCarrierRestrictions(id, target(id), d);
     if (d.offer().validUntil() != null && !d.offer().validUntil().isAfter(clock.instant()))
       throw new Conflict("Quote rate expired.");
@@ -1149,7 +1213,7 @@ class WaveWorker {
   synchronized Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c) {
     var m = target(id);
     checkPacking(id, m, s);
-    return invite(id, s, c, clarifications.details(id, m));
+    return invite(id, s, c, details(id, m));
   }
 
   private Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c,
@@ -1217,6 +1281,7 @@ class WaveWorker {
                 + (c.truck()
                     ? "\n\nPlease send your all-in rate in EUR and the estimated transit time from"
                         + " actual pickup to airport delivery, excluding the wait before collection."
+                        + " Please give the rate validity and these figures directly in the reply text."
                     : "\n\nPlease send your all-in rate in EUR and your estimated transit time.")
                 + (citywide ? " The customer confirmed the town and has yet to confirm a street"
                     + " address. Can you make this a firm rate with the same transit time for"
