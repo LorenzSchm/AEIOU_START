@@ -59,6 +59,14 @@ tasks.withType(Test).configureEach { useJUnitPlatform() }
 // ticket 04: sources and test fixtures contain umlauts; Windows would compile them as cp1252.
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 
+// --- Gateway (ticket 03) -----------------------------------------------------
+// Tests never call the real gateway (it costs points). Opt in with
+//   ./gradlew test -PrealGateway      (runs the @Tag("real-gateway") tests too)
+tasks.withType(Test).configureEach {
+    systemProperty 'edgelab.gateway.enabled', project.hasProperty('realGateway') ? 'true' : 'false'
+}
+// --- end gateway ---------------------------------------------------------------
+
 application {
     mainClass = 'ai.aeiou.edgelab.ReadFile'
 }
@@ -71,3 +79,46 @@ tasks.register('read', JavaExec) {
     mainClass = 'ai.aeiou.edgelab.ReadFile'
     workingDir = projectDir
 }
+
+// ---- Change alarm (ticket 08) ------------------------------------------------
+// Read-only Postgres access and JSON for the alarm's snapshot/memory.
+dependencies {
+    implementation 'org.postgresql:postgresql:42.7.7'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.2'
+}
+
+// ./gradlew alarm   (Ctrl+C stops it). Reads DATABASE_URL from ../.env, read-only.
+tasks.register('alarm', JavaExec) {
+    group = 'edgelab'
+    description = 'Runs the change alarm: polls the shared DB every 60 s, pops up on new things.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ai.aeiou.edgelab.alarm.AlarmMain'
+    workingDir = projectDir
+    standardInput = System.in
+}
+
+// ---- Photo reader (ticket 05) -------------------------------------------------
+// Pure-Java image decoders for ImageIO: WebP, TIFF variants, CMYK/odd JPEGs.
+// EXIF (metadata-extractor) and PDF rendering (PDFBox) already come with Tika.
+// HEIC is decoded with the bundled ffmpeg (JavaCV, voice reader block above).
+dependencies {
+    implementation 'com.twelvemonkeys.imageio:imageio-webp:3.12.0'
+    implementation 'com.twelvemonkeys.imageio:imageio-tiff:3.12.0'
+    implementation 'com.twelvemonkeys.imageio:imageio-jpeg:3.12.0'
+    implementation 'com.drewnoakes:metadata-extractor:2.19.0'
+}
+// ---- end photo reader -----------------------------------------------------------
+
+// ---- Video reader (ticket 06) ---------------------------------------------------
+// Frames and sound through the bundled ffmpeg (JavaCV, voice block above); nothing new.
+// ./gradlew videoFixtures   writes the test videos to build/video-fixtures/ for the demo.
+tasks.register('videoFixtures', JavaExec) {
+    group = 'edgelab'
+    description = 'Writes the generated test videos (RFQ photo + spoken RFQ, and a silent one).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ai.aeiou.edgelab.video.VideoFixtures'
+    args = ['build/video-fixtures']
+    workingDir = projectDir
+}
+// ---- end video reader -------------------------------------------------------------

@@ -37,8 +37,12 @@ crashes come back as `UNREADABLE` with a note.
 
 `Router` sends each detected type to one named slot: photo (`image/*`), voice (`audio/*`),
 video (`video/*`), container (zip, eml, msg, ...), plain text (`text/plain`), office
-(everything else, the Tika catch-all). Plain text and office are wired; the others answer
-"no ... reader yet". Each later reader replaces its own line in `Router.standard()`.
+(everything else, the Tika catch-all). A slot without a reader answers "no ... reader yet".
+Each reader has its own line in `Router.standard()`.
+
+Every top-level `read` has a **20 s budget** (`EdgeReader.DEFAULT_BUDGET`; tests pass their own
+with `new EdgeReader(router, maxBytes, budget)`), shared by all parts inside the file. At the
+limit the call returns what it has, status `PARTIAL`, note `timed out after 20 s`.
 
 ## Office reader (`ai.aeiou.edgelab.office`)
 
@@ -48,8 +52,34 @@ body of eml/msg mails. Table rows come out one per line, cells joined with ` | `
 English decimals (2.85). Attachments and embedded files are not opened here; a note lists
 them. A PDF page with almost no text gets the note `page N looks scanned`, and the Reading is
 `partial`; `OfficeReader.extract(...)` returns the pages so the photo reader can render them.
-eml/msg are routed to the container slot; until the container walker exists they only read
-when the office reader is called directly.
+eml/msg are routed to the container slot, which reads the body with the office reader.
+
+## Container walker (`ai.aeiou.edgelab.container`, ticket 07)
+
+Files inside files: zip, tar, gz, 7z, rar, eml and msg (attachments and forwarded mails), and
+pictures or objects embedded in Word, PowerPoint, Excel or OpenOffice files. Tika lists the
+files inside; each one goes back through `EdgeReader.read`, so a photo in a pptx reaches the
+photo reader and a zip in a mail is opened again.
+
+- Each part's text starts with a header naming its path inside the top file:
+  `=== part: docs.zip > packing-list.xlsx ===`. A mail's own body (or a slide's own text)
+  comes first, without header.
+- `parts` lists every part at every depth with its own status and confidence. Notes of a part
+  are prefixed with its path (`bad.zip: archive is empty or broken`).
+- Limits per top-level read: 3 levels deep, 20 files in total, the 20 s budget. What is left
+  out is listed in notes and makes the Reading `PARTIAL`.
+- Pictures under 2 KB and emf/wmf vector images are not sent to the gateway (icons, logos);
+  a note counts them.
+- An encrypted or broken archive is `UNREADABLE` with a note. Office files without embedded
+  files are read exactly as before.
+
+```bash
+./gradlew -q read --args="src/test/resources/container/shipment-docs.zip"
+./gradlew -q read --args="src/test/resources/container/fwd-rfq.eml"
+./gradlew -q read --args="src/test/resources/container/rfq-photo.pptx"   # photo part needs TEAM_API_KEY
+```
+
+Demo fixtures in `src/test/resources/container/` come from `ContainerFixtures.main` (test sources).
 
 ## Packing tools
 
@@ -88,3 +118,122 @@ Voice fixtures (`src/test/resources/voice/`) were made with Windows' built-in vo
 (PowerShell `System.Speech.Synthesis.SpeechSynthesizer`, Zira en-US and Hedda de-DE,
 16 kHz mono wav); the mp3s come from those wavs via `MakeVoiceFixtures` (test sources).
 Voice tests skip with a message if the model cannot be downloaded.
+
+## Change alarm (Thure's laptop only)
+
+Watches the shared Postgres every 60 s and pops up a Windows tray message when something
+new shows up. It needs `DATABASE_URL=postgresql://user:password@host:port/db` in the
+repo-root `.env` (or in the environment). It never needs the team key and never calls the 5U API.
+
+```bash
+export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.13.10002-hotspot"
+./gradlew -q --console=plain alarm             # runs until Ctrl+C
+./gradlew -q alarm --args="--once"             # one poll, then exit
+./gradlew -q alarm --args="--replay"           # what today's history would raise (no pop-ups, memory untouched)
+```
+
+- **Strictly read-only.** The session starts with `default_transaction_read_only=on`, the
+  connection is marked read-only, and only SELECTs run. The alarm refuses to start if the
+  server does not confirm read-only. Proof against the real DB (skipped by default):
+  `EDGELAB_DB_TEST=1 ./gradlew test --tests '*ReadOnlyDatabaseTest'` (a write is rejected
+  with SQLState 25006).
+- **First run** (no `alarm-memory.json` yet) learns everything in history as normal and
+  sends no alerts. After that each new thing alerts exactly once, also across restarts.
+- **What alerts:** a new rejection reason or verdict, a new hold reason in `wave_case`, a
+  new attachment type (ending + content type), a mail in an "unreadable" stage with a new
+  type or a new sender, a request with no quote (or a mail in `review`) after 4 minutes, a
+  new mail kind or sender, a board result with an `adjustment` deduction, a `no answer`
+  round or an `expired` request.
+- **Output:** a one-line pop-up (at most 3 per poll, then "and N more"), and a full entry in
+  `alerts.log`: time, topic, round, example mail id and subject, and which edgelab reader
+  fits. `alerts.log` and `alarm-memory.json` are git-ignored. Delete the memory file to
+  learn a fresh baseline.
+- **Stopping:** Ctrl+C. Memory is written atomically after each poll, so stopping at any
+  moment loses nothing.
+- The pure part is `ChangeDetector.decide(snapshot, memory)`; it is tested on an anonymised
+  snapshot of the real DB from 2026-11-21 (no mail bodies) in `src/test/resources/alarm/`.
+
+## Gateway client
+
+`ai.aeiou.edgelab.gateway.Gateway` is the only part of edgelab that calls out (besides the
+one-time Whisper model download). It talks OpenAI-style to the 5U gateway with
+`Authorization: Bearer $TEAM_API_KEY` and never logs the key. Two operations, both never throw:
+
+```java
+Gateway gw = HttpGateway.fromSettings();                 // or Gateway.unavailable("...") / a fake in tests
+Gateway.Answer a = gw.transcribe(wavBytes, "wav");       // voice fallback
+Gateway.Answer b = gw.copyText(jpegBytes, "image/jpeg"); // photos: copy all visible text, low detail
+// a.ok(), a.text(), a.selfRating() (0..1 or null), a.model(), a.problem()
+```
+
+The key comes from the environment, else from the nearest `.env` (working folder or up to
+3 above, or `EDGELAB_ENV_FILE`). Without a key every call answers `TEAM_API_KEY not set`.
+
+| Setting (system property / env var) | Default |
+| --- | --- |
+| `edgelab.gateway.url` / `EDGELAB_GATEWAY_URL` | `https://api.start-hack.5u.ai/v1/gateway` |
+| `edgelab.audio.model` / `EDGELAB_AUDIO_MODEL` | `gpt-4o-mini-audio-preview` |
+| `edgelab.audio.method` / `EDGELAB_AUDIO_METHOD` | `chat` (input_audio part) or `transcriptions` (`/audio/transcriptions`, e.g. with `gpt-4o-mini-transcribe`) |
+| `edgelab.vision.model` / `EDGELAB_VISION_MODEL` | `gpt-4o-mini` |
+| `edgelab.gateway.timeout` / `EDGELAB_GATEWAY_TIMEOUT` | `15` seconds |
+| `edgelab.gateway.enabled` / `EDGELAB_GATEWAY_ENABLED` | `true`; the test task sets `false` |
+
+**Voice fallback:** when local Whisper fails, hears nothing, or hears almost nothing (fewer
+than 3 words for 3+ s of audio), the voice reader sends the decoded audio (16 kHz wav, max
+5 min) to the gateway audio model and notes `gateway fallback used (<model>)`. If that fails
+too, the Reading is `UNREADABLE` (or `PARTIAL` with Whisper's few words) with a note such as
+`gateway fallback failed: TEAM_API_KEY not set`.
+
+Tests never call the real gateway. The one real test (`RealGatewayTest`, tag `real-gateway`)
+runs only with `./gradlew test -PrealGateway --tests '*RealGatewayTest'` and costs points.
+`NoOutboundCallsTest` fails if main code mentions mailbox, portal or booking endpoints, or
+opens HTTP outside the gateway client and the model download.
+
+## Photo reader (`ai.aeiou.edgelab.photo`, ticket 05)
+
+`image/*` (jpg, png, gif, bmp, tiff, webp, heic/heif) becomes one small JPEG and goes to the
+gateway vision model (`gpt-4o-mini`, low detail) with the fixed prompt
+`Gateway.COPY_TEXT_PROMPT`: copy all visible text, one table row per line, do not interpret.
+
+- Decoding: ImageIO plus TwelveMonkeys (WebP, TIFF, CMYK JPEG), pure Java. HEIC/HEIF goes
+  through the bundled ffmpeg (JavaCV); iPhone tile grids are stitched. First HEIC in a JVM
+  takes a few seconds (ffmpeg natives load), then under a second.
+- Before sending: EXIF orientation applied, longest edge cut to 1024 px (low detail looks at
+  512 px anyway, ~85 tokens per photo), transparency flattened onto white, JPEG q=0.85.
+- Confidence: the model's own `CONFIDENCE:` rating (0.6 if it gives none), lowered when fewer
+  than ~40 letters/digits come back. Empty answer, broken image or no key: `UNREADABLE` with a
+  note, e.g. `photo not read: TEAM_API_KEY not set`.
+- Scanned PDFs: `ScanAwareOfficeReader` wraps the office reader. Pages it flags as
+  "looks scanned" are rendered at 150 dpi (PDFBox) and read by the photo reader, at most 10
+  per file; blank pages are not sent. Their text is merged into the PDF's Reading in page order.
+- Fixtures in `src/test/resources/photo/`: the two Danube Wings tariff scans (start kit),
+  `example.heic` (libheif's example image), `rfq.webp` (made with `PhotoFixtures.main`). The
+  phone photo, EXIF-rotated photo, png/gif/bmp/tiff and the PDFs are drawn in the tests.
+
+```bash
+./gradlew -q read --args="../start-kit/danube-wings-cargo-tariff-2026-11-p1.jpg"   # needs TEAM_API_KEY
+./gradlew test -PrealGateway --tests '*PhotoRealGatewayTest'                       # real call, costs points
+```
+
+## Video reader (`ai.aeiou.edgelab.video`, ticket 06)
+
+`video/*` (mp4, mov, webm, avi, mkv) is split with the bundled ffmpeg (JavaCV), nothing to install:
+
+- **Sound:** the audio track is decoded to 16 kHz mono and handed to the voice reader as a wav
+  (local Whisper, gateway fallback as usual). No sound track: note `video has no sound track`.
+- **Frames:** at most 5 evenly spread stills. Near-duplicates (a slide held still) and blank
+  frames are skipped before the gateway, so a still video costs one photo call. Phone rotation
+  flags are applied. Same text on several frames is written once.
+
+The text has two labelled sections, `What is shown:` (frame text) and `What is said:` (speech),
+and the Reading has two parts, `video frames` and `sound track`. If one half failed (gateway
+error, broken sound) the other half is kept and the status is `partial`. A broken video is
+`unreadable` with a note.
+
+```bash
+./gradlew -q videoFixtures                                   # writes build/video-fixtures/*.mp4
+./gradlew -q read --args="build/video-fixtures/rfq-video.mp4"   # one frame call on the gateway
+```
+
+Test videos are generated in memory (`VideoFixtures`: the skewed RFQ photo plus the
+Windows-voice RFQ, mpeg4 + aac in mp4, and a silent copy); tests use a fake gateway.

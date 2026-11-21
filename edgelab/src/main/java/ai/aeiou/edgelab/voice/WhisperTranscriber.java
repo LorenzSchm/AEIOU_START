@@ -14,7 +14,7 @@ import io.github.givimad.whisperjni.WhisperSamplingStrategy;
  * engine for Windows x64, macOS arm64/x64 and Linux). The model is loaded once per JVM.
  * Language is detected automatically, so German and English both work.
  */
-public final class WhisperTranscriber {
+public final class WhisperTranscriber implements LocalTranscriber {
 
     /** One recognised stretch of speech, times in milliseconds. */
     public record Segment(long startMs, long endMs, String text) {}
@@ -40,6 +40,7 @@ public final class WhisperTranscriber {
     }
 
     /** whisper.cpp keeps per-run state in the context, so runs are serialised. */
+    @Override
     public synchronized List<Segment> transcribe(float[] samples) throws IOException, InterruptedException {
         load();
         WhisperFullParams p = new WhisperFullParams(WhisperSamplingStrategy.BEAN_SEARCH);
