@@ -153,8 +153,13 @@ fieldset:disabled { opacity: 0.6; }
 .empty-state strong { color: var(--ink); font-size: 15px; }
 
 /* ---------- Overview ---------- */
-.overview { display: grid; gap: var(--s-4); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s-3); }
+.overview { display: grid; gap: var(--s-4); container-type: inline-size; container-name: overview; }
+/* KPI tiles: 6 regular + 1 wide (spans 2) = 8 units, so 8 / 4 / 2 columns always give full rows.
+   Sized by the content area (container query), not the window, so sidebar/case panel can't break it. */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+.tile-wide { grid-column: span 2; }
+@container overview (min-width: 1300px) { .tiles { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+@container overview (max-width: 560px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .tile { display: grid; gap: 4px; padding: var(--s-4); align-content: start; }
 .tile-label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .tile-value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
@@ -414,3 +419,10 @@ fieldset:disabled { opacity: 0.6; }
 .board-fill.neg { background: var(--bad); }
 .board-val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .row-chips { display: inline-flex; gap: 6px; flex: none; }
+
+/* Featured KPI (5U score) */
+.tile-wide { background: linear-gradient(135deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.5)); }
+.tile-wide .tile-value { font-size: 34px; }
+.tile-label, .tile-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile { min-width: 0; }
+.tile-label svg { flex: none; }

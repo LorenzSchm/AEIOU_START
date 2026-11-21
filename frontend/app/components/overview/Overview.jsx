@@ -10,9 +10,9 @@ import { eur, needsAttention, statusOf } from "../../lib/format";
 import { boardTotal, verdictTone } from "../case/BoardScore";
 import { stagger } from "../../lib/motion";
 
-function Tile({ i, icon, label, value, sub, tone, children }) {
+function Tile({ i, icon, label, value, sub, tone, wide, children }) {
   return (
-    <motion.div className={"tile glass" + (tone ? " tile-" + tone : "")}
+    <motion.div className={"tile glass" + (tone ? " tile-" + tone : "") + (wide ? " tile-wide" : "")}
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={stagger(i, 0.05)}>
       <span className="tile-label"><Icon name={icon} size={14} />{label}</span>
       <span className="tile-value">{value}</span>
@@ -63,19 +63,19 @@ export default function Overview({ messages, now, onOpen, active = true }) {
   return (
     <div className="overview">
       <div className="tiles">
-        <Tile i={0} icon="mail" label="Requests" value={s.requests ?? 0} sub={(s.inProgress ?? 0) + " in progress"} />
-        <Tile i={1} icon="send" label="Quoted" value={s.quoted ?? 0}
+        <Tile i={0} wide icon="bars" label="5U board points" value={boards.length ? boardPoints : "—"}
+              tone={boards.length ? "ok" : undefined}
+              sub={boards.length ? boardWins + " of " + boards.length + " accepted" : "no verdicts yet"} />
+        <Tile i={1} icon="mail" label="Requests" value={s.requests ?? 0} sub={(s.inProgress ?? 0) + " in progress"} />
+        <Tile i={2} icon="send" label="Quoted" value={s.quoted ?? 0}
               sub={s.onTimeRate != null ? Math.round(s.onTimeRate * 100) + "% inside 6 min" : "—"}>
           <Meter value={s.onTimeRate} />
         </Tile>
-        <Tile i={2} icon="book" label="Booked" value={s.booked ?? 0} tone="ok" />
-        <Tile i={3} icon="clock" label="Median to quote"
+        <Tile i={3} icon="book" label="Booked" value={s.booked ?? 0} tone="ok" />
+        <Tile i={4} icon="clock" label="Median to quote"
               value={s.medianQuoteSeconds != null ? Math.round(s.medianQuoteSeconds) + " s" : "—"} sub="from arrival" />
-        <Tile i={4} icon="alert" label="Needs attention" value={s.attention ?? 0} tone={s.attention ? "warn" : undefined}
+        <Tile i={5} icon="alert" label="Needs attention" value={s.attention ?? 0} tone={s.attention ? "warn" : undefined}
               sub={(s.expired ?? 0) + " expired"} />
-        <Tile i={5} icon="bars" label="5U board points" value={boards.length ? boardPoints : "—"}
-              tone={boards.length ? "ok" : undefined}
-              sub={boards.length ? boardWins + " of " + boards.length + " accepted" : "no verdicts yet"} />
         <Tile i={6} icon="euro" label="Saved vs next best" value={eur(s.savedVsNext)} sub="sum across quotes" />
       </div>
 

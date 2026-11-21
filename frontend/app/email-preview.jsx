@@ -44,8 +44,13 @@ export default function EmailPreview({ body, fields }) {
     const root = el.shadowRoot || el.attachShadow({ mode: "open" });
     const doc = new DOMParser().parseFromString(html, "text/html");
     const bodyStyle = (doc.body.getAttribute("style") || "").replace(/"/g, "&quot;");
-    const headStyles = [...doc.head.querySelectorAll("style")].map((s) => s.outerHTML).join("");
-    root.innerHTML = `<style>:host{display:block}*{box-sizing:border-box}</style>${headStyles}<div style="${bodyStyle}">${doc.body.innerHTML}</div>`;
+    // The template's responsive rules are written for an email client's viewport. Inside the page
+    // they'd test the browser window, so the compact layout would never apply in the narrow case
+    // panel. Rewrite width media queries as container queries against the preview's own width.
+    const headStyles = [...doc.head.querySelectorAll("style")]
+      .map((s) => s.outerHTML.replace(/@media\s*\(\s*(max|min)-width/g, "@container mail ($1-width"))
+      .join("");
+    root.innerHTML = `<style>:host{display:block}*{box-sizing:border-box}.mail-root{container:mail / inline-size}</style>${headStyles}<div class="mail-root" style="${bodyStyle}">${doc.body.innerHTML}</div>`;
   }, [html]);
 
   return (
