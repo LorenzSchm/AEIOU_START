@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: forwarder
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/forwarder}
+    username: ${POSTGRES_USER:forwarder}
+    password: ${POSTGRES_PASSWORD:forwarder}
+    hikari:
+      maximum-pool-size: 20
+  flyway:
+    enabled: true
+  mvc:
+    async:
+      request-timeout: -1
+
+server:
+  port: 8080
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+app:
+  fiveu:
+    base-url: ${FIVEU_BASE_URL:https://api.start-hack.5u.ai}
+    api-key: ${TEAM_API_KEY:}
+    mailbox-address: ${MAILBOX_ADDRESS:aeiou@hackloop.mail}
+  # SAFETY: only ONE running instance may poll + send, otherwise customers get duplicate mails.
+  # Both default to false; docker-compose enables them explicitly.
+  poller:
+    enabled: ${POLLER_ENABLED:false}
+    interval-ms: ${POLLER_INTERVAL_MS:1000}
+  mail:
+    send-enabled: ${SEND_ENABLED:false}
+  llm:
+    model-router: ${LLM_MODEL_ROUTER:gpt-4o-mini}
+    model-writer: ${LLM_MODEL_WRITER:gpt-4o-mini}
+    model-extract: ${LLM_MODEL_EXTRACT:gpt-4o-mini}
+  start-kit-dir: ${START_KIT_DIR:../../start-kit}

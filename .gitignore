@@ -221,3 +221,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# forwarder: the python template above ignores lib/ and build/ — re-include JS source folders
+!forwarder/frontend/src/lib/
+node_modules/
+.next/
+.gradle/
