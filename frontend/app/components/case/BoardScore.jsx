@@ -17,6 +17,10 @@ export function verdictTone(verdict = "") {
 
 const words = (s) => String(s || "").replaceAll("_", " ");
 
+const pointsFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+/** Board points with at most two decimals, e.g. 38.8 or 13.93. */
+export const formatPoints = (n) => pointsFormat.format(n);
+
 export function boardTotal(result) {
   if (!result) return null;
   if (result.total != null) return Number(result.total);
@@ -30,7 +34,7 @@ export function BoardChip({ result }) {
   const total = boardTotal(result);
   return (
     <Chip tone={verdictTone(result.verdict)} icon={false}>
-      {total != null ? `${total > 0 ? "+" : ""}${total} pts` : words(result.verdict)}
+      {total != null ? `${total > 0 ? "+" : ""}${formatPoints(total)} pts` : words(result.verdict)}
     </Chip>
   );
 }
@@ -52,7 +56,7 @@ export default function BoardScore({ result }) {
           </div>
         </div>
         <div className="board-total" title="Total points">
-          <b>{total != null ? total : "—"}</b>
+          <b>{total != null ? formatPoints(total) : "—"}</b>
           <small>{result.cost_pending ? "pts · cost pending" : "points"}</small>
         </div>
       </div>
@@ -69,7 +73,7 @@ export default function BoardScore({ result }) {
                   transition={stagger(i)}
                 />
               </span>
-              <span className="board-val">{value > 0 ? "+" : ""}{value}</span>
+              <span className="board-val">{value > 0 ? "+" : ""}{formatPoints(value)}</span>
             </li>
           ))}
         </ul>

@@ -7,7 +7,7 @@ import { Chip, RouteBadge } from "../ui/primitives";
 import CargoGlobe from "../globe/CargoGlobe";
 import { globeState, waveSummary } from "../../lib/process";
 import { eur, needsAttention, statusOf } from "../../lib/format";
-import { boardTotal, verdictTone } from "../case/BoardScore";
+import { boardTotal, formatPoints, verdictTone } from "../case/BoardScore";
 import { stagger } from "../../lib/motion";
 
 function Tile({ i, icon, label, value, sub, tone, wide, children }) {
@@ -63,7 +63,7 @@ function Overview({ messages, onOpen, active = true }) {
   return (
     <div className="overview">
       <div className="tiles">
-        <Tile i={0} wide icon="bars" label="5U board points" value={boards.length ? boardPoints : "—"}
+        <Tile i={0} wide icon="bars" label="5U board points" value={boards.length ? formatPoints(boardPoints) : "—"}
               tone={boards.length ? "ok" : undefined}
               sub={boards.length ? boardWins + " of " + boards.length + " accepted" : "no verdicts yet"} />
         <Tile i={1} icon="mail" label="Requests" value={s.requests ?? 0} sub={(s.inProgress ?? 0) + " in progress"} />
