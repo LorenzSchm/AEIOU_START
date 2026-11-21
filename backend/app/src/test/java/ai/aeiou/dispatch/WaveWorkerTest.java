@@ -471,8 +471,9 @@ class WaveWorkerTest {
         "buyer@hackloop.mail",
         "Re: RFQ",
         "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
-            + "Sara\n"
-            + "Lindqvist Medtech",
+            + "Thanks a lot and have a lovely day!\n"
+            + "Petra Hofmann\n"
+            + "Export Desk, Hofmann Textilwerk KG",
         7L);
     bookings.bookAccepted();
     restart();
@@ -803,7 +804,7 @@ class WaveWorkerTest {
     var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
     if (resumeFirst) assertThrows(WaveWorker.Conflict.class, () -> worker.resume(7, shipment));
     else worker.work();
-    assertEquals("review", ledger.mail(7).get("stage"));
+    assertEquals("waiting for documents", ledger.mail(7).get("stage"));
     assertEquals("sent", ledger.delivery("dg-docs:7"));
     assertEquals(1, outbound.size());
     var reply = outbound.getFirst();
@@ -820,6 +821,128 @@ class WaveWorkerTest {
     assertNull(ledger.delivery("quote:7"));
     verify(upstream, never()).rates(any(), any());
     verify(upstream, never()).parseRfq(anyMap());
+  }
+
+  void receiveDocument(long id, Long parent, String filename, String body, String text) {
+    var email =
+        new HashMap<String, Object>(
+            Map.of(
+                "id",
+                id,
+                "from",
+                "buyer@example.invalid",
+                "subject",
+                "RFQ FRA to LAX",
+                "body",
+                body,
+                "sent_at",
+                clock.instant().toString(),
+                "attachments",
+                List.of(Map.of("id", 1, "filename", filename))));
+    if (parent != null) email.put("in_reply_to", parent);
+    when(upstream.bytes(id, 1)).thenReturn(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    ledger.ingest(
+        Map.of("messages", List.of(email), "next_since_id", id), catalog, clock.instant());
+  }
+
+  @Test
+  void cleanPackingListSuppliesMissingTotalsAndQuotesAutomatically() {
+    receiveDocument(
+        7,
+        null,
+        "packing.txt",
+        "Cheapest air freight from FRA to LAX. Please use the packing list.",
+        "Packing List\n"
+            + "Destination airport: LAX\n"
+            + "Total gross weight (kg): 100\n"
+            + "Total volume (cbm): 0.2\n"
+            + "Dangerous goods: None");
+    when(upstream.rates(any(), any()))
+        .thenReturn(
+            new FiveU.Rates(
+                List.of(
+                    new Offer(
+                        "Fjordline Air Cargo",
+                        3,
+                        new java.math.BigDecimal("50"),
+                        new java.math.BigDecimal("100"),
+                        "portal",
+                        "R-DOC",
+                        START.plusSeconds(900))),
+                true));
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals(1, outbound.size());
+    assertTrue(outbound.getFirst().get("body").toString().contains("EUR 50.00"));
+    verify(upstream, never()).parseRfq(anyMap());
+  }
+
+  @Test
+  void automaticallyRequestsAndAppliesCorrectedPackingList() throws Exception {
+    receiveDocument(
+        7,
+        null,
+        "packing.txt",
+        "Cheapest air freight FRA to LAX for 100 kg and 0.2 cbm.",
+        "Packing List\n"
+            + "Destination airport: LAX\n"
+            + "Total gross weight (kg): 200\n"
+            + "Total volume (cbm): 0.2\n"
+            + "Dangerous goods: No");
+    worker.work();
+    assertEquals("sent", ledger.delivery("packing-correction:7"));
+    assertEquals("waiting for documents", ledger.mail(7).get("stage"));
+    verify(upstream, never()).rates(any(), any());
+    restart();
+    receiveDocument(
+        1010,
+        Ledger.id(outbound.getFirst().get("id")),
+        "revised.txt",
+        "Corrected packing list attached.",
+        "Packing List\n"
+            + "Destination airport: LAX\n"
+            + "Total gross weight (kg): 100\n"
+            + "Total volume (cbm): 0.2\n"
+            + "Dangerous goods: None");
+    worker.work();
+    assertEquals("collecting", ledger.mail(7).get("stage"));
+    verify(upstream, times(1)).rates(any(), any());
+    verify(upstream, never()).parseRfq(anyMap());
+  }
+
+  @Test
+  void followsDangerousGoodsDocumentsAcrossRepliesAndDeclinesOnce() throws Exception {
+    receiveDocument(
+        7,
+        null,
+        "packing.txt",
+        "Cheapest air freight FRA to LAX for 100 kg and 0.2 cbm.",
+        "Packing List\nDangerous goods: UN1950, Class 2.1");
+    worker.work();
+    assertEquals("waiting for documents", ledger.mail(7).get("stage"));
+    assertEquals("sent", ledger.delivery("dg-docs:7"));
+    receiveDocument(
+        1010,
+        Ledger.id(outbound.getFirst().get("id")),
+        "sds.txt",
+        "Here’s the safety data sheet.",
+        "Safety Data Sheet\nSection 14 Transport Information\nUN1950");
+    worker.work();
+    assertEquals("sent", ledger.delivery("dg-incomplete:7"));
+    restart();
+    receiveDocument(
+        1011,
+        Ledger.id(outbound.getLast().get("id")),
+        "declaration.txt",
+        "Here’s the declaration.",
+        "Shipper's Declaration for Dangerous Goods\nUN1950");
+    worker.work();
+    worker.work();
+    assertEquals("sent", ledger.delivery("dg-unavailable:7"));
+    assertEquals("declined", ledger.mail(7).get("stage"));
+    assertEquals(3, outbound.size());
+    assertNull(ledger.delivery("quote:7"));
+    verify(upstream, never()).rates(any(), any());
   }
 
   @Test

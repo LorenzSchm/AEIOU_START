@@ -1,8 +1,9 @@
 package ai.aeiou.dispatch;
 
 import java.io.*;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
+import java.util.*;
 import java.util.regex.Pattern;
 import java.util.zip.ZipInputStream;
 import javax.xml.stream.*;
@@ -17,6 +18,85 @@ final class PackingSafety {
 
   static boolean declaresDangerousGoods(String text) {
     return DG.matcher(text).find();
+  }
+
+  enum DocumentType {
+    GENERAL,
+    DANGEROUS,
+    UNKNOWN
+  }
+
+  private static final Pattern GENERAL =
+      Pattern.compile(
+          "(?im)^\\h*(?:dangerous goods|hazmat|gefahrgut)\\h*[:=]?\\h*(?:no|none|nein|n/a|not"
+              + " regulated|non-dangerous)\\h*[.]?\\h*$|\\b(?:general cargo\\s*,?\\s*non[-"
+              + " ]dangerous|non[- ]dangerous\\s+goods)\\b");
+  private static final Pattern PACKING =
+      Pattern.compile(
+          "(?iu)\\b(?:packing (?:list|specification)|shipper.s letter of"
+              + " instruction|packliste)\\b");
+  private static final Pattern DESTINATION =
+      Pattern.compile("(?im)^\\h*destination airport\\h*[:=]?\\h*([A-Z]{3})\\b");
+  private static final Pattern GROSS =
+      Pattern.compile(
+          "(?im)^\\h*total gross weight\\h*\\(kg\\)\\h*[:=]?\\h*([0-9]+(?:[.,][0-9]+)?)\\h*$");
+  private static final Pattern VOLUME =
+      Pattern.compile(
+          "(?im)^\\h*total volume\\h*\\((?:cbm|m3|m³)\\)\\h*[:=]?\\h*([0-9]+(?:[.,][0-9]+)?)\\h*$");
+  private static final Pattern UN_NUMBER = Pattern.compile("(?iu)\\bUN[\\s-]*([0-9]{4})\\b");
+
+  record Document(String text) {
+    DocumentType type() {
+      if (declaresDangerousGoods(text)) return DocumentType.DANGEROUS;
+      if (PACKING.matcher(text).find() && GENERAL.matcher(text).find()) return DocumentType.GENERAL;
+      return DocumentType.UNKNOWN;
+    }
+
+    Set<String> destinations() {
+      return values(DESTINATION, text);
+    }
+
+    Set<BigDecimal> grossWeights() {
+      return decimals(values(GROSS, text));
+    }
+
+    Set<BigDecimal> volumes() {
+      return decimals(values(VOLUME, text));
+    }
+
+    Set<String> unNumbers() {
+      return values(UN_NUMBER, text);
+    }
+
+    boolean safetyDataSheet() {
+      return Pattern.compile("(?iu)\\bsafety data sheet\\b").matcher(text).find()
+          && Pattern.compile("(?iu)\\bsection\\h+14\\b").matcher(text).find();
+    }
+
+    boolean declaration() {
+      return Pattern.compile(
+              "(?iu)\\b(?:declaration for dangerous goods|dangerous goods declaration)\\b")
+          .matcher(text)
+          .find();
+    }
+  }
+
+  private static Set<String> values(Pattern pattern, String text) {
+    var results = new HashSet<String>();
+    pattern
+        .matcher(text)
+        .results()
+        .map(m -> m.group(1).toUpperCase(Locale.ROOT))
+        .forEach(results::add);
+    return results;
+  }
+
+  private static Set<BigDecimal> decimals(Set<String> values) {
+    var results = new HashSet<BigDecimal>();
+    values.stream()
+        .map(value -> new BigDecimal(value.replace(',', '.')).stripTrailingZeros())
+        .forEach(results::add);
+    return results;
   }
 
   static String extract(String filename, byte[] content) throws IOException, XMLStreamException {
@@ -34,8 +114,8 @@ final class PackingSafety {
     var factory = XMLInputFactory.newFactory();
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
     factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
-    var text = new StringBuilder();
-    boolean hasSheet = false;
+    var sheets = new ArrayList<byte[]>();
+    var sharedStrings = new ArrayList<String>();
     int remaining = MAX_BYTES;
     try (var zip = new ZipInputStream(new ByteArrayInputStream(content))) {
       for (var entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
@@ -43,25 +123,62 @@ final class PackingSafety {
         if (data.length > remaining) throw new IOException("Oversized expanded workbook");
         remaining -= data.length;
         String path = entry.getName();
-        boolean sheet = path.matches("xl/worksheets/sheet[0-9]+\\.xml");
-        if (!sheet && !path.equals("xl/sharedStrings.xml")) continue;
-        hasSheet |= sheet;
-        var reader = factory.createXMLStreamReader(new ByteArrayInputStream(data));
-        try {
-          while (reader.hasNext()) {
-            if (reader.next() == XMLStreamConstants.START_ELEMENT) {
-              String tag = reader.getLocalName();
-              if (tag.equals("t") || tag.equals("v"))
-                text.append(reader.getElementText()).append('\n');
+        if (path.matches("xl/worksheets/sheet[0-9]+\\.xml")) sheets.add(data);
+        else if (path.equals("xl/sharedStrings.xml")) {
+          var reader = factory.createXMLStreamReader(new ByteArrayInputStream(data));
+          try {
+            while (reader.hasNext()) {
+              if (reader.next() == XMLStreamConstants.START_ELEMENT
+                  && reader.getLocalName().equals("si"))
+                sharedStrings.add(readCell(reader, "si", "t"));
             }
+          } finally {
+            reader.close();
           }
-        } finally {
-          reader.close();
         }
       }
     }
-    if (!hasSheet || text.toString().isBlank()) throw new IOException("No readable packing sheet");
+
+    var text = new StringBuilder();
+    for (byte[] sheet : sheets) {
+      var reader = factory.createXMLStreamReader(new ByteArrayInputStream(sheet));
+      try {
+        while (reader.hasNext()) {
+          int event = reader.next();
+          if (event == XMLStreamConstants.END_ELEMENT && reader.getLocalName().equals("row"))
+            text.append('\n');
+          if (event != XMLStreamConstants.START_ELEMENT || !reader.getLocalName().equals("c"))
+            continue;
+          String type = reader.getAttributeValue(null, "t");
+          String cell = readCell(reader, "c", "inlineStr".equals(type) ? "t" : "v");
+          if ("s".equals(type)) {
+            try {
+              cell = sharedStrings.get(Integer.parseInt(cell));
+            } catch (IllegalArgumentException | IndexOutOfBoundsException ex) {
+              throw new IOException("Invalid packing workbook string reference", ex);
+            }
+          }
+          text.append(cell).append(' ');
+        }
+      } finally {
+        reader.close();
+      }
+    }
+    if (text.toString().isBlank()) throw new IOException("No readable packing sheet");
     return text.toString();
+  }
+
+  private static String readCell(XMLStreamReader reader, String closingTag, String valueTag)
+      throws XMLStreamException {
+    var value = new StringBuilder();
+    while (reader.hasNext()) {
+      int event = reader.next();
+      if (event == XMLStreamConstants.END_ELEMENT && reader.getLocalName().equals(closingTag))
+        break;
+      if (event == XMLStreamConstants.START_ELEMENT && reader.getLocalName().equals(valueTag))
+        value.append(reader.getElementText());
+    }
+    return value.toString();
   }
 
   private static String pdfText(byte[] content) throws IOException {

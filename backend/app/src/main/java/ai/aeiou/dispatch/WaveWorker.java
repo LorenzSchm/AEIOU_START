@@ -23,7 +23,7 @@ class WaveWorker {
   private final Instant start;
   private final long waitSeconds;
   private final boolean counteroffers;
-  private final Map<Long, String> packingChecks = new HashMap<>();
+  private final ShipmentDocuments documents;
   private volatile Instant lastPoll;
   private volatile String error;
   private Instant pollAfter = Instant.EPOCH;
@@ -47,6 +47,7 @@ class WaveWorker {
     this.start = start;
     this.waitSeconds = waitSeconds;
     this.counteroffers = counteroffers;
+    this.documents = new ShipmentDocuments(ledger, upstream, catalog);
   }
 
   record Status(
@@ -102,14 +103,34 @@ class WaveWorker {
             .jdbc()
             .queryForList(
                 """
-                SELECT m.id FROM mail m JOIN wave_case w ON m.id=w.id WHERE w.operator=0 AND
-                m.stage IN ('new','collecting','waiting for pickup','waiting for air price') ORDER BY m.id
+                SELECT m.id FROM mail m JOIN wave_case w ON m.id=w.id
+                LEFT JOIN document_check p ON p.request_id=m.id
+                WHERE w.operator=0 AND (
+                  m.stage IN ('new','collecting','waiting for pickup','waiting for air price')
+                  OR (m.stage IN ('review','waiting for documents') AND julianday(m.received)>julianday(?) AND (
+                    (p.request_id IS NULL AND w.reason IN (
+                      'Review the attached shipment specifications.',
+                      'Packing attachment could not be checked for dangerous goods.',
+                      'Dangerous goods indicated. Hold pending documents and carrier review.'))
+                    OR (p.request_id IS NOT NULL AND EXISTS (
+                      SELECT 1 FROM mail f WHERE f.kind='follow-up' AND f.sender=m.sender
+                      AND f.id>p.checked_through AND f.root IN (m.id,
+                        (SELECT json_extract(response,'$.id') FROM deliveries WHERE action='dg-docs:'||m.id),
+                        (SELECT json_extract(response,'$.id') FROM deliveries WHERE action='packing-copy:'||m.id),
+                        (SELECT json_extract(response,'$.id') FROM deliveries WHERE action='packing-correction:'||m.id),
+                        (SELECT json_extract(response,'$.id') FROM deliveries WHERE action='dg-incomplete:'||m.id))
+                    ))
+                  ))
+                ) ORDER BY m.id
                 """,
-                Long.class)) {
+                Long.class,
+                clock.instant().minusSeconds(360).toString())) {
       try {
         advance(id);
       } catch (RetryLater ex) {
         /* Confirmed rate limit. Try again on a later tick. */
+      } catch (DocumentHold ex) {
+        // The document workflow already persisted its stage and reply.
       } catch (Conflict ex) {
         ledger.stage(id, "review", ex.getMessage());
       } catch (RuntimeException ex) {
@@ -123,6 +144,12 @@ class WaveWorker {
   static class Conflict extends RuntimeException {
     Conflict(String msg) {
       super(msg);
+    }
+  }
+
+  private static class DocumentHold extends Conflict {
+    DocumentHold(String reason) {
+      super(reason);
     }
   }
 
@@ -148,64 +175,66 @@ class WaveWorker {
     return m;
   }
 
-  private static final String DG_DOCS =
-      "Dangerous goods indicated. Hold pending documents and carrier review.";
-  private static final String UNVERIFIED_PACKING =
-      "Packing attachment could not be checked for dangerous goods.";
-
-  private void checkPacking(long id, Map<String, Object> mail) {
-    if (ledger.delivery("dg-docs:" + id) != null) throw new Conflict(DG_DOCS);
-    String issue = packingChecks.get(id);
-    if (issue == null) {
-      boolean dg = PackingSafety.declaresDangerousGoods(Ledger.str(mail, "body"));
-      boolean unreadable = false;
-      List<?> attachments = ledger.read(mail.get("attachments"), List.class);
-      if (attachments != null) {
-        for (var raw : attachments) {
-          if (dg) break;
-          var attachment = (Map<?, ?>) raw;
-          try {
-            long attachmentId = Ledger.id(attachment.get("id"));
-            var name = Objects.toString(attachment.get("filename"), "");
-            dg =
-                PackingSafety.declaresDangerousGoods(
-                    PackingSafety.extract(name, upstream.bytes(id, attachmentId)));
-          } catch (java.io.IOException
-              | javax.xml.stream.XMLStreamException
-              | RestClientException ex) {
-            unreadable = true;
-          }
-        }
-      }
-      issue = dg ? DG_DOCS : unreadable ? UNVERIFIED_PACKING : "";
-      if (!unreadable || dg) packingChecks.put(id, issue);
-    }
-    if (DG_DOCS.equals(issue)
-        && automatic
+  private Shipment checkPacking(long id, Map<String, Object> mail) {
+    var replies =
+        ledger
+            .jdbc()
+            .queryForList(
+                """
+                SELECT f.* FROM mail f WHERE f.kind='follow-up' AND f.sender=? AND f.id>? AND
+                (f.root=? OR f.root IN (SELECT json_extract(response,'$.id') FROM deliveries
+                  WHERE action IN (?,?,?,?))) ORDER BY f.id
+                """,
+                mail.get("sender"),
+                id,
+                id,
+                "dg-docs:" + id,
+                "dg-incomplete:" + id,
+                "packing-copy:" + id,
+                "packing-correction:" + id);
+    var decision = documents.inspect(mail, replies);
+    if (!decision.holdsQuote()) return decision.shipment();
+    if (automatic
+        && !Ledger.str(mail, "sender").isBlank()
+        && !Ledger.instant(mail.get("received")).isBefore(start)
         && ledger.delivery("quote:" + id) == null
-        && !Ledger.instant(mail.get("received")).isBefore(start)) {
+        && ledger.delivery(decision.action() + ":" + id) == null) {
+      long parent = replies.isEmpty() ? id : Ledger.id(replies.getLast().get("id"));
       send(
-          "dg-docs:" + id,
+          decision.action() + ":" + id,
           Map.of(
               "to",
               mail.get("sender"),
               "in_reply_to",
-              id,
+              parent,
               "subject",
               "Re: " + mail.get("subject"),
               "body",
-              "Hi,\n\n"
-                  + "The shipment details indicate dangerous goods. Could you send the current"
-                  + " safety data sheet, including Section 14, and the dangerous goods declaration"
-                  + " if applicable? Please also confirm the classification for air transport."
-                  + " We’ll review these before we quote.\n\n"
-                  + "Best regards,\n"
-                  + "Team AEIOU"));
+              "Hi,\n\n" + decision.reply() + "\n\nBest regards,\nTeam AEIOU"));
     }
-    if (!issue.isEmpty()) {
-      ledger.stage(id, "review", issue);
-      throw new Conflict(issue);
-    }
+    long checked = replies.isEmpty() ? id : Ledger.id(replies.getLast().get("id"));
+    ledger
+        .transactions()
+        .executeWithoutResult(
+            tx -> {
+              ledger.stage(id, decision.stage(), decision.reason());
+              ledger
+                  .jdbc()
+                  .update("INSERT OR REPLACE INTO document_check VALUES(?,?)", id, checked);
+            });
+    throw new DocumentHold(decision.reason());
+  }
+
+  private void checkPacking(long id, Map<String, Object> mail, Shipment requested) {
+    var verified = checkPacking(id, mail);
+    if (verified == null) return;
+    if (!verified.origin().equals(requested.origin())
+        || !verified.destination().equals(requested.destination())
+        || !sameNumber(verified.weightKg(), requested.weightKg())
+        || !sameNumber(verified.volumeCbm(), requested.volumeCbm())
+        || !Objects.equals(verified.pickupZone(), requested.pickupZone())
+        || !verified.preference().equals(requested.preference()))
+      throw new Conflict("Shipment differs from the verified packing documents.");
   }
 
   private void advance(long id) {
@@ -227,8 +256,28 @@ class WaveWorker {
           id, delivery.equals("sent") ? "sent" : "review", "Check the recorded quote delivery.");
       return;
     }
-    checkPacking(id, m);
-    gateway.ensure(id, m, true);
+    var verified = checkPacking(id, m);
+    if (verified == null) gateway.ensure(id, m, true);
+    else if (List.of("new", "review", "waiting for documents").contains(m.get("stage"))) {
+      ledger
+          .transactions()
+          .executeWithoutResult(
+              tx -> {
+                ledger
+                    .jdbc()
+                    .update(
+                        "UPDATE mail SET fields=?,stage='new' WHERE id=?",
+                        ledger.write(verified),
+                        id);
+                ledger.jdbc().update("UPDATE wave_case SET reason=NULL WHERE id=?", id);
+                ledger
+                    .jdbc()
+                    .update(
+                        "INSERT OR IGNORE INTO rfq_parse(request_id,state,model)"
+                            + " VALUES(?,'done','java')",
+                        id);
+              });
+    }
     m = target(id);
     var w = ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id);
     var s = ledger.read(m.get("fields"), Shipment.class);
@@ -544,7 +593,7 @@ class WaveWorker {
     }
     if (Ledger.instant(message.get("received")).isBefore(start))
       throw new Conflict("Request predates this wave.");
-    checkPacking(id, message);
+    checkPacking(id, message, s);
     gateway.ensure(id, message, false);
     ledger
         .transactions()
@@ -596,7 +645,7 @@ class WaveWorker {
 
   synchronized Draft price(long id, Shipment shipment, ManualBid bid) {
     var message = target(id);
-    checkPacking(id, message);
+    checkPacking(id, message, shipment);
     gateway.ensure(id, message, false);
     var draft = calculate(id, shipment, bid, false);
     save(id, shipment, draft, true);
@@ -660,7 +709,7 @@ class WaveWorker {
 
   synchronized Map<String, Object> sendQuote(long id, String revision) {
     var m = target(id);
-    checkPacking(id, m);
+    checkPacking(id, m, ledger.read(m.get("fields"), Shipment.class));
     var d = ledger.read(m.get("proposal"), Draft.class);
     if (d == null || d.offer() == null || !d.revision().equals(revision))
       throw new Conflict("Calculate a current quote first.");
@@ -686,7 +735,7 @@ class WaveWorker {
 
   synchronized Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c) {
     var m = target(id);
-    checkPacking(id, m);
+    checkPacking(id, m, s);
     if (catalog.problem(s) != null || !c.serves(c.truck() ? s.pickupZone() : s.destination()))
       throw new IllegalArgumentException("Check shipment and carrier coverage.");
     String leg =

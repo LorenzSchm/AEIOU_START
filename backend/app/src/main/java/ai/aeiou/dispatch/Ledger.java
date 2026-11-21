@@ -83,6 +83,9 @@ class Ledger {
         model TEXT NOT NULL, result TEXT)
         """);
     db.execute(
+        "CREATE TABLE IF NOT EXISTS document_check(request_id INTEGER PRIMARY KEY, checked_through"
+            + " INTEGER NOT NULL)");
+    db.execute(
         "CREATE TABLE IF NOT EXISTS booking_attempt(request_id INTEGER PRIMARY KEY,rate_id TEXT NOT"
             + " NULL,retry_at INTEGER DEFAULT 0,issue TEXT)");
     // Existing operator drafts are preserved across the Python-to-Java handoff.

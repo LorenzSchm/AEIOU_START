@@ -26,7 +26,8 @@ class PortalBookings {
       Pattern.compile(
           "(?im)^\\s*(?:best (?:greetings|regards|wishes)|kind regards|regards|cheers|bestens|mit"
               + " freundlichen gr(?:ü|ue|u)(?:ss|ß)en|viele gr(?:ü|ue|u)(?:ss|ß)e|--)(?:[,!"
-              + " .]|$).*");
+              + " .]|$).*|^\\h*thanks(?: a lot| again)? and have a (?:lovely|great|nice|good|wonderful)"
+              + " (?:day|evening|weekend)[.!]*\\h*$");
   private static final Pattern NAME_SIGNATURE =
       Pattern.compile(
           "[\\p{Lu}][\\p{L}’'&.-]*(?: [\\p{Lu}][\\p{L}’'&.-]*){0,5}(?:\\R[\\p{Lu}][\\p{L}’'&.-]*(?:"
