@@ -1,8 +1,6 @@
 package ai.aeiou.edgelab.alarm;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,26 +16,76 @@ public record DatabaseConfig(String jdbcUrl, String user, String password) {
     /** Every session starts read-only: the server rejects any write in it. */
     static final String READ_ONLY_OPTION = "options=-c%20default_transaction_read_only%3Don";
 
+    /**
+     * Parsed by hand, not with {@link java.net.URI}: real URLs have hosts with underscores and
+     * passwords with unencoded '@', '#', '/' or '?', where URI gives a null host. The last '@'
+     * ends the user info. Errors name what is wrong but never quote the URL (it holds the password).
+     */
     public static DatabaseConfig fromUrl(String databaseUrl) {
         if (databaseUrl == null || databaseUrl.isBlank()) throw new IllegalArgumentException("DATABASE_URL is empty");
         String raw = databaseUrl.trim();
         if (raw.startsWith("jdbc:")) raw = raw.substring(5);
-        URI uri = URI.create(raw.replaceFirst("^postgres(ql)?://", "postgresql://"));
-        if (!"postgresql".equals(uri.getScheme())) {
-            throw new IllegalArgumentException("DATABASE_URL is not a postgresql:// URL");
-        }
+        String rest;
+        if (raw.startsWith("postgresql://")) rest = raw.substring("postgresql://".length());
+        else if (raw.startsWith("postgres://")) rest = raw.substring("postgres://".length());
+        else throw new IllegalArgumentException("DATABASE_URL is not a postgresql:// URL");
+
         String user = null;
         String password = null;
-        if (uri.getRawUserInfo() != null) {
-            String[] up = uri.getRawUserInfo().split(":", 2);
-            user = decode(up[0]);
-            password = up.length > 1 ? decode(up[1]) : null;
+        int at = rest.lastIndexOf('@');
+        if (at >= 0) {
+            String userInfo = rest.substring(0, at);
+            rest = rest.substring(at + 1);
+            int colon = userInfo.indexOf(':');
+            user = decode(colon < 0 ? userInfo : userInfo.substring(0, colon));
+            password = colon < 0 ? null : decode(userInfo.substring(colon + 1));
+            if (user.isEmpty()) user = null;
         }
-        String query = uri.getRawQuery();
-        String path = uri.getRawPath() == null || uri.getRawPath().isEmpty() ? "/" : uri.getRawPath();
-        String jdbc = "jdbc:postgresql://" + uri.getHost() + (uri.getPort() > 0 ? ":" + uri.getPort() : "")
+
+        int hash = rest.indexOf('#');
+        if (hash >= 0) rest = rest.substring(0, hash);
+        int end = indexOfAny(rest, '/', '?');
+        String hostPort = end < 0 ? rest : rest.substring(0, end);
+        String tail = end < 0 ? "" : rest.substring(end);
+        String query = null;
+        int q = tail.indexOf('?');
+        if (q >= 0) {
+            query = tail.substring(q + 1);
+            tail = tail.substring(0, q);
+        }
+        String path = tail.isEmpty() ? "/" : tail;
+
+        String host;
+        String port = null;
+        if (hostPort.startsWith("[")) {
+            int close = hostPort.indexOf(']');
+            if (close < 0) throw new IllegalArgumentException("DATABASE_URL has an unclosed [IPv6] host");
+            host = hostPort.substring(0, close + 1);
+            String after = hostPort.substring(close + 1);
+            if (after.startsWith(":")) port = after.substring(1);
+            else if (!after.isEmpty()) throw new IllegalArgumentException("DATABASE_URL has text after the [IPv6] host");
+        } else {
+            int colon = hostPort.lastIndexOf(':');
+            host = colon < 0 ? hostPort : hostPort.substring(0, colon);
+            if (colon >= 0) port = hostPort.substring(colon + 1);
+        }
+        if (host.isEmpty() || host.equals("[]")) throw new IllegalArgumentException("DATABASE_URL has no host");
+        if (port != null && !port.isEmpty() && !port.chars().allMatch(Character::isDigit)) {
+            throw new IllegalArgumentException("DATABASE_URL has a port that is not a number");
+        }
+        if (port != null && port.isEmpty()) port = null;
+
+        String jdbc = "jdbc:postgresql://" + host + (port != null ? ":" + port : "")
                 + path + "?" + (query == null || query.isBlank() ? "" : query + "&") + READ_ONLY_OPTION;
         return new DatabaseConfig(jdbc, user, password);
+    }
+
+    private static int indexOfAny(String s, char a, char b) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == a || c == b) return i;
+        }
+        return -1;
     }
 
     /** DATABASE_URL from the environment, else from the first .env found walking up from {@code start}. */
@@ -68,8 +116,25 @@ public record DatabaseConfig(String jdbcUrl, String user, String password) {
         return Optional.empty();
     }
 
-    private static String decode(String s) {
-        return URLDecoder.decode(s, StandardCharsets.UTF_8);
+    /** Percent-decoding as in URLs ('+' stays '+'); a stray '%' is kept as it is. */
+    static String decode(String s) {
+        if (s.indexOf('%') < 0) return s;
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(s.length());
+        for (int i = 0; i < s.length(); ) {
+            if (s.charAt(i) == '%' && i + 2 < s.length() && hex(s.charAt(i + 1)) >= 0 && hex(s.charAt(i + 2)) >= 0) {
+                out.write(hex(s.charAt(i + 1)) * 16 + hex(s.charAt(i + 2)));
+                i += 3;
+            } else {
+                int cp = s.codePointAt(i);
+                out.writeBytes(new String(Character.toChars(cp)).getBytes(StandardCharsets.UTF_8));
+                i += Character.charCount(cp);
+            }
+        }
+        return out.toString(StandardCharsets.UTF_8);
+    }
+
+    private static int hex(char c) {
+        return Character.digit(c, 16);
     }
 
     /** Never print the password. */

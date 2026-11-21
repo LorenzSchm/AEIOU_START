@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import ai.aeiou.edgelab.FormatReader;
+import ai.aeiou.edgelab.ReadSession;
 import ai.aeiou.edgelab.Reading;
 import ai.aeiou.edgelab.gateway.Gateway;
 import ai.aeiou.edgelab.gateway.HttpGateway;
@@ -63,6 +64,8 @@ public final class VoiceReader implements FormatReader {
         if (!audio.ok()) return Reading.unreadable(detectedType, audio.problem());
         if (audio.seconds() < 0.3) return Reading.unreadable(detectedType, "audio too short to contain speech");
 
+        if (ReadSession.stopRequested()) return Reading.unreadable(detectedType, ReadSession.STOPPED_NOTE);
+
         String text = null;
         String localProblem;
         try {
@@ -97,7 +100,10 @@ public final class VoiceReader implements FormatReader {
             samples = java.util.Arrays.copyOf(samples, maxSamples);
             cut = true;
         }
-        Gateway.Answer answer = gateway.transcribe(WavEncoder.encode(samples, AudioDecoder.SAMPLE_RATE), "wav");
+        // The budget may have run out during the local run: don't pay for a gateway call nobody waits for.
+        Gateway.Answer answer = ReadSession.stopRequested()
+                ? Gateway.Answer.failed(null, ReadSession.STOPPED_NOTE)
+                : gateway.transcribe(WavEncoder.encode(samples, AudioDecoder.SAMPLE_RATE), "wav");
         String gatewayText = answer.ok() ? clean(List.of(new WhisperTranscriber.Segment(0, 0, answer.text()))) : "";
 
         List<String> notes = new ArrayList<>();

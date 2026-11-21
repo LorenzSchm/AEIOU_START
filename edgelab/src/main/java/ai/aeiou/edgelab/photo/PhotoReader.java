@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import ai.aeiou.edgelab.FormatReader;
+import ai.aeiou.edgelab.ReadSession;
 import ai.aeiou.edgelab.Reading;
 import ai.aeiou.edgelab.gateway.Gateway;
 import ai.aeiou.edgelab.gateway.HttpGateway;
@@ -63,6 +64,10 @@ public final class PhotoReader implements FormatReader {
 
     private Reading send(ImagePrep.Prepared prepared, String detectedType) {
         List<String> notes = new ArrayList<>(prepared.notes());
+        if (ReadSession.stopRequested()) {
+            notes.add("photo not read: " + ReadSession.STOPPED_NOTE);
+            return new Reading("", 0.0, detectedType, Reading.Status.UNREADABLE, List.of(), notes);
+        }
         Gateway.Answer answer = gateway.copyText(prepared.jpeg(), "image/jpeg");
         if (!answer.ok()) {
             notes.add("photo not read: " + answer.problem());

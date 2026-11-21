@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Set;
 
 import ai.aeiou.edgelab.FormatReader;
+import ai.aeiou.edgelab.ReadSession;
 import ai.aeiou.edgelab.Reading;
 import ai.aeiou.edgelab.photo.PhotoReader;
 import ai.aeiou.edgelab.voice.AudioDecoder;
@@ -122,6 +123,11 @@ public final class VideoReader implements FormatReader {
         int withText = 0;
         int failed = 0;
         for (FrameSampler.Frame f : sampled.frames()) {
+            if (ReadSession.stopRequested()) {
+                failed++;
+                readerNotes.add("frames from " + clock(f.seconds()) + " on not read: " + ReadSession.STOPPED_NOTE);
+                break;
+            }
             Reading r = frames.read(f.image(), "image/jpeg");
             if (r.status() != Reading.Status.UNREADABLE && !r.text().isBlank()) {
                 texts.add(r.text().strip());
@@ -147,6 +153,9 @@ public final class VideoReader implements FormatReader {
     }
 
     private Half readSound(String filename, byte[] bytes) throws Exception {
+        if (ReadSession.stopRequested()) {
+            return new Half("", 0, Reading.Status.UNREADABLE, true, List.of("sound not read: " + ReadSession.STOPPED_NOTE));
+        }
         SoundTrack.Result sound = SoundTrack.extract(bytes, VoiceReader.MAX_SECONDS);
         if (!sound.ok()) {
             return new Half("", 0, Reading.Status.UNREADABLE, true, List.of("sound not read: " + sound.problem()));
