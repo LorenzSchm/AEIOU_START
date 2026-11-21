@@ -1,436 +1,45 @@
 {
-  "openapi": "3.1.0",
-  "info": {
-    "title": "forwarder control panel API",
-    "version": "0.1.0",
-    "description": "Hand-written from API_CONTRACT.md. Replace with the backend's /v3/api-docs via `npm run gen:api:live`."
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "AEIOU forwarder control panel API",
+    "description" : "See forwarder/API_CONTRACT.md. Live updates: GET /api/stream (SSE).",
+    "version" : "1"
   },
-  "servers": [
-    {
-      "url": "/"
-    }
-  ],
-  "tags": [
-    {
-      "name": "sessions"
-    },
-    {
-      "name": "events"
-    },
-    {
-      "name": "mails"
-    },
-    {
-      "name": "llm"
-    },
-    {
-      "name": "bookings"
-    },
-    {
-      "name": "stats"
-    },
-    {
-      "name": "board"
-    },
-    {
-      "name": "tariffs"
-    },
-    {
-      "name": "carriers"
-    },
-    {
-      "name": "settings"
-    },
-    {
-      "name": "admin"
-    },
-    {
-      "name": "stream"
-    }
-  ],
-  "paths": {
-    "/api/sessions": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "listSessions",
-        "summary": "List sessions, newest activity first",
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SessionStatus"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/SessionType"
-            }
-          },
-          {
-            "name": "needsHuman",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Full-text search over ref, customer, subject"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from the previous page"
+  "servers" : [ {
+    "url" : "http://localhost",
+    "description" : "Generated server url"
+  } ],
+  "paths" : {
+    "/api/settings/{key}" : {
+      "put" : {
+        "tags" : [ "settings" ],
+        "summary" : "Change a runtime setting; takes effect immediately",
+        "operationId" : "updateSetting",
+        "parameters" : [ {
+          "name" : "key",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
           }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSummaryPage"
-                }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SettingUpdate"
               }
             }
           },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sessions/{id}": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "getSession",
-        "summary": "Session with RFQ, candidates, bids and booking",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionDetail"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sessions/{id}/events": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "listSessionEvents",
-        "summary": "Session timeline, ascending by id",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from the previous page"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventItemPage"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sessions/{id}/mails": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "listSessionMails",
-        "summary": "All mails of a session, oldest first",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/MailDetail"
-                  }
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sessions/{id}/draft": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "getSessionDraft",
-        "summary": "Pending draft awaiting approval (404 if none)",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Draft"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/sessions/{id}/actions": {
-      "post": {
-        "tags": [
-          "sessions"
-        ],
-        "operationId": "sessionAction",
-        "summary": "Apply a human action to a session",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SessionAction"
-              }
-            }
-          }
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionSummary"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Setting"
                 }
               }
             }
@@ -438,998 +47,28 @@
         }
       }
     },
-    "/api/events": {
-      "get": {
-        "tags": [
-          "events"
-        ],
-        "operationId": "listEvents",
-        "summary": "Global event feed, newest first",
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Kind or kind prefix, e.g. mail. or llm.call"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from the previous page"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventItemPage"
-                }
+    "/api/admin/live" : {
+      "put" : {
+        "tags" : [ "admin" ],
+        "summary" : "Toggle mail polling and autopilot at runtime",
+        "operationId" : "setLive",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LiveUpdate"
               }
             }
           },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/events/{id}/payload": {
-      "get": {
-        "tags": [
-          "events"
-        ],
-        "operationId": "getEventPayload",
-        "summary": "Raw JSON payload of one event",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventPayload"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/mails": {
-      "get": {
-        "tags": [
-          "mails"
-        ],
-        "operationId": "listMails",
-        "summary": "All mails in and out, newest first",
-        "parameters": [
-          {
-            "name": "direction",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "in",
-                "out"
-              ]
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Full-text search"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from the previous page"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MailSummaryPage"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/mails/{id}": {
-      "get": {
-        "tags": [
-          "mails"
-        ],
-        "operationId": "getMail",
-        "summary": "One mail with body and attachments",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MailDetail"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/attachments/{id}": {
-      "get": {
-        "tags": [
-          "mails"
-        ],
-        "operationId": "downloadAttachment",
-        "summary": "Raw attachment bytes",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Raw bytes",
-            "content": {
-              "application/octet-stream": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/llm-calls": {
-      "get": {
-        "tags": [
-          "llm"
-        ],
-        "operationId": "listLlmCalls",
-        "summary": "LLM calls, newest first",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from the previous page"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LlmCallPage"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/llm-calls/{id}": {
-      "get": {
-        "tags": [
-          "llm"
-        ],
-        "operationId": "getLlmCall",
-        "summary": "LLM call with prompt and response",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LlmCall"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/bookings": {
-      "get": {
-        "tags": [
-          "bookings"
-        ],
-        "operationId": "listBookings",
-        "summary": "Bookings, newest first",
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/BookingStatus"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50
-            }
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Opaque cursor from the previous page"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BookingPage"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/shipments/active": {
-      "get": {
-        "tags": [
-          "bookings"
-        ],
-        "operationId": "listActiveShipments",
-        "summary": "Booked and confirmed shipments with airport coordinates",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ActiveShipment"
-                  }
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/stats": {
-      "get": {
-        "tags": [
-          "stats"
-        ],
-        "operationId": "getStats",
-        "summary": "KPIs and hourly series",
-        "parameters": [
-          {
-            "name": "hours",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 24,
-              "minimum": 1,
-              "maximum": 168
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Stats"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/board": {
-      "get": {
-        "tags": [
-          "board"
-        ],
-        "operationId": "listBoardResults",
-        "summary": "Cached verdicts from /v1/board/me",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/BoardResult"
-                  }
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tariffs": {
-      "get": {
-        "tags": [
-          "tariffs"
-        ],
-        "operationId": "listTariffs",
-        "summary": "All tariff versions",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TariffSummary"
-                  }
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tariffs/{id}": {
-      "get": {
-        "tags": [
-          "tariffs"
-        ],
-        "operationId": "getTariff",
-        "summary": "Tariff with lanes and breaks",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TariffDetail"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tariffs/{id}/activate": {
-      "post": {
-        "tags": [
-          "tariffs"
-        ],
-        "operationId": "activateTariff",
-        "summary": "Activate a pending tariff version",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TariffSummary"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tariffs/{id}/reject": {
-      "post": {
-        "tags": [
-          "tariffs"
-        ],
-        "operationId": "rejectTariff",
-        "summary": "Reject a pending tariff version",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TariffSummary"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/carriers": {
-      "get": {
-        "tags": [
-          "carriers"
-        ],
-        "operationId": "listCarriers",
-        "summary": "Airlines and truckers from the carrier list",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Carrier"
-                  }
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings": {
-      "get": {
-        "tags": [
-          "settings"
-        ],
-        "operationId": "listSettings",
-        "summary": "Runtime settings",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Setting"
-                  }
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/settings/{key}": {
-      "put": {
-        "tags": [
-          "settings"
-        ],
-        "operationId": "updateSetting",
-        "summary": "Change one runtime setting",
-        "parameters": [
-          {
-            "name": "key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SettingUpdate"
-              }
-            }
-          }
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Setting"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdminStatus"
                 }
               }
             }
@@ -1437,40 +76,27 @@
         }
       }
     },
-    "/api/admin/status": {
-      "get": {
-        "tags": [
-          "admin"
-        ],
-        "operationId": "getAdminStatus",
-        "summary": "Gateway key state and live switches",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminStatus"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+    "/api/tariffs/{id}/reject" : {
+      "post" : {
+        "tags" : [ "tariffs" ],
+        "summary" : "Reject a pending tariff version",
+        "operationId" : "rejectTariff",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TariffSummary"
                 }
               }
             }
@@ -1478,50 +104,65 @@
         }
       }
     },
-    "/api/admin/openai-key": {
-      "post": {
-        "tags": [
-          "admin"
-        ],
-        "operationId": "registerOpenAiKey",
-        "summary": "Register the OpenAI key with the 5U LLM gateway",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OpenAiKeyRequest"
+    "/api/tariffs/{id}/activate" : {
+      "post" : {
+        "tags" : [ "tariffs" ],
+        "summary" : "Activate a pending tariff version",
+        "operationId" : "activateTariff",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TariffSummary"
+                }
               }
             }
           }
+        }
+      }
+    },
+    "/api/sessions/{id}/actions" : {
+      "post" : {
+        "tags" : [ "sessions" ],
+        "summary" : "Human action; returns the updated session",
+        "operationId" : "sessionAction",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SessionAction"
+              }
+            }
+          },
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenAiKeyResult"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SessionSummary"
                 }
               }
             }
@@ -1529,50 +170,28 @@
         }
       }
     },
-    "/api/admin/live": {
-      "put": {
-        "tags": [
-          "admin"
-        ],
-        "operationId": "setLive",
-        "summary": "Turn mailbox polling and automatic answering on or off",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LiveSwitches"
+    "/api/admin/openai-key" : {
+      "post" : {
+        "tags" : [ "admin" ],
+        "summary" : "Store our OpenAI key on the 5U gateway",
+        "operationId" : "registerOpenAiKey",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/OpenAiKeyRequest"
               }
             }
-          }
+          },
+          "required" : true
         },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminStatus"
-                }
-              }
-            }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OpenAiKeyResult"
                 }
               }
             }
@@ -1580,40 +199,683 @@
         }
       }
     },
-    "/api/stream": {
-      "get": {
-        "tags": [
-          "stream"
-        ],
-        "operationId": "stream",
-        "summary": "Server-Sent Events: `event` (EventItem), `session` (SessionSummary), `ping` ({})",
-        "responses": {
-          "200": {
-            "description": "text/event-stream",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
+    "/api/tariffs" : {
+      "get" : {
+        "tags" : [ "tariffs" ],
+        "summary" : "All tariff versions, review queue first",
+        "operationId" : "listTariffs",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/TariffSummary"
+                  }
                 }
               }
             }
-          },
-          "4XX": {
-            "description": "Client error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+          }
+        }
+      }
+    },
+    "/api/tariffs/{id}" : {
+      "get" : {
+        "tags" : [ "tariffs" ],
+        "operationId" : "getTariff",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TariffDetail"
                 }
               }
             }
-          },
-          "5XX": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+          }
+        }
+      }
+    },
+    "/api/stream" : {
+      "get" : {
+        "tags" : [ "stream" ],
+        "summary" : "Live updates as Server-Sent Events",
+        "description" : "`event: event` (EventItem), `event: session` (SessionSummary), `event: ping` every 15 s.",
+        "operationId" : "stream",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats" : {
+      "get" : {
+        "tags" : [ "stats" ],
+        "summary" : "Dashboard KPIs; hourly series over the last `hours` hours",
+        "operationId" : "getStats",
+        "parameters" : [ {
+          "name" : "hours",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 24
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Stats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shipments/active" : {
+      "get" : {
+        "tags" : [ "bookings" ],
+        "summary" : "Booked/confirmed shipments with coordinates",
+        "operationId" : "listActiveShipments",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ActiveShipment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/settings" : {
+      "get" : {
+        "tags" : [ "settings" ],
+        "operationId" : "listSettings",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Setting"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions" : {
+      "get" : {
+        "tags" : [ "sessions" ],
+        "summary" : "Live board, most recently active first",
+        "operationId" : "listSessions",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "$ref" : "#/components/schemas/SessionStatus"
+          }
+        }, {
+          "name" : "type",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "$ref" : "#/components/schemas/SessionType"
+          }
+        }, {
+          "name" : "needsHuman",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "name" : "q",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageSessionSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{id}" : {
+      "get" : {
+        "tags" : [ "sessions" ],
+        "summary" : "Summary, RFQ, price candidates, bids and booking",
+        "operationId" : "getSession",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{id}/mails" : {
+      "get" : {
+        "tags" : [ "sessions" ],
+        "summary" : "All mails of the session, oldest first",
+        "operationId" : "listSessionMails",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/MailDetail"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{id}/events" : {
+      "get" : {
+        "tags" : [ "sessions" ],
+        "summary" : "Timeline, oldest first",
+        "operationId" : "listSessionEvents",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageEventItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sessions/{id}/draft" : {
+      "get" : {
+        "tags" : [ "sessions" ],
+        "summary" : "Pending outbound mail waiting for a human, or 404",
+        "operationId" : "getSessionDraft",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Draft"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mails" : {
+      "get" : {
+        "tags" : [ "mails" ],
+        "summary" : "Mailbox, newest first; q is a full-text search",
+        "operationId" : "listMails",
+        "parameters" : [ {
+          "name" : "direction",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "$ref" : "#/components/schemas/MailDirection"
+          }
+        }, {
+          "name" : "q",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageMailSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mails/{id}" : {
+      "get" : {
+        "tags" : [ "mails" ],
+        "operationId" : "getMail",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/MailDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/llm-calls" : {
+      "get" : {
+        "tags" : [ "llm" ],
+        "summary" : "LLM calls, newest first, without prompt/response",
+        "operationId" : "listLlmCalls",
+        "parameters" : [ {
+          "name" : "sessionId",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageLlmCall"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/llm-calls/{id}" : {
+      "get" : {
+        "tags" : [ "llm" ],
+        "summary" : "One LLM call with request and response",
+        "operationId" : "getLlmCall",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/LlmCall"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events" : {
+      "get" : {
+        "tags" : [ "events" ],
+        "summary" : "Global audit feed, newest first",
+        "operationId" : "listEvents",
+        "parameters" : [ {
+          "name" : "kind",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageEventItem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{id}/payload" : {
+      "get" : {
+        "tags" : [ "events" ],
+        "summary" : "Raw JSON payload of one event",
+        "operationId" : "getEventPayload",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/EventPayload"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/carriers" : {
+      "get" : {
+        "tags" : [ "carriers" ],
+        "operationId" : "listCarriers",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Carrier"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bookings" : {
+      "get" : {
+        "tags" : [ "bookings" ],
+        "summary" : "Bookings, newest first",
+        "operationId" : "listBookings",
+        "parameters" : [ {
+          "name" : "status",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "$ref" : "#/components/schemas/BookingStatus"
+          }
+        }, {
+          "name" : "limit",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }, {
+          "name" : "cursor",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageBooking"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/board" : {
+      "get" : {
+        "tags" : [ "board" ],
+        "summary" : "Cached results from the 5U board (/v1/board/me)",
+        "operationId" : "listBoardResults",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/BoardResult"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/attachments/{id}" : {
+      "get" : {
+        "tags" : [ "mails" ],
+        "summary" : "Raw attachment bytes",
+        "operationId" : "downloadAttachment",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "type" : "string",
+                  "format" : "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/status" : {
+      "get" : {
+        "tags" : [ "admin" ],
+        "summary" : "Gateway key status, live switches and env safety flags",
+        "operationId" : "getAdminStatus",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AdminStatus"
                 }
               }
             }
@@ -1622,1836 +884,1231 @@
       }
     }
   },
-  "components": {
-    "schemas": {
-      "SessionStatus": {
-        "type": "string",
-        "enum": [
-          "NEW",
-          "PRICING",
-          "WAITING_FOR_BIDS",
-          "QUOTED",
-          "ACCEPTED",
-          "BOOKED",
-          "CONFIRMED",
-          "ANSWERED",
-          "CLOSED",
-          "NEEDS_HUMAN",
-          "FAILED",
-          "EXPIRED"
-        ]
-      },
-      "SessionType": {
-        "type": "string",
-        "enum": [
-          "RFQ",
-          "TRACKING",
-          "TARIFF",
-          "OTHER"
-        ]
-      },
-      "SessionSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "publicRef": {
-            "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/SessionType"
-          },
-          "status": {
-            "$ref": "#/components/schemas/SessionStatus"
-          },
-          "customerAddr": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "subject": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "mode": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "cheapest",
-              "fastest",
-              null
-            ]
-          },
-          "needsHuman": {
-            "type": "boolean"
-          },
-          "needsHumanReason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "autopilot": {
-            "type": "boolean"
-          },
-          "deadlineAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "quotedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "quotedTotal": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Decimal with 2 places"
-          },
-          "quotedCurrency": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "booked": {
-            "type": "boolean"
-          },
-          "llmCostUsd": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "eventCount": {
-            "type": "integer"
-          },
-          "mailCount": {
-            "type": "integer"
-          },
-          "lastEventAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "lastEventSummary": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "lane": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "e.g. \"FRA → SIN\", from rfq"
-          },
-          "boardVerdict": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "accepted | rejected | pending | open | no answer | voided"
+  "components" : {
+    "schemas" : {
+      "SettingUpdate" : {
+        "type" : "object",
+        "properties" : {
+          "value" : {
+            "description" : "Any JSON value"
           }
         },
-        "required": [
-          "id",
-          "publicRef",
-          "type",
-          "status",
-          "customerAddr",
-          "subject",
-          "mode",
-          "needsHuman",
-          "needsHumanReason",
-          "autopilot",
-          "deadlineAt",
-          "quotedAt",
-          "quotedTotal",
-          "quotedCurrency",
-          "booked",
-          "llmCostUsd",
-          "eventCount",
-          "mailCount",
-          "lastEventAt",
-          "lastEventSummary",
-          "createdAt",
-          "lane",
-          "boardVerdict"
-        ]
+        "required" : [ "value" ]
       },
-      "Rfq": {
-        "type": "object",
-        "properties": {
-          "originZip": {
-            "type": [
-              "string",
-              "null"
-            ]
+      "Setting" : {
+        "type" : "object",
+        "properties" : {
+          "key" : {
+            "type" : "string"
           },
-          "originAirport": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "value" : {
+            "description" : "Any JSON value"
           },
-          "destination": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "updatedAt" : {
+            "type" : "string",
+            "format" : "date-time"
           },
-          "weightKg": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "volumeCbm": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "chargeableKg": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "pieces": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "mode": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "doorPickup": {
-            "type": "boolean"
-          },
-          "readyDate": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "commodity": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "language": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "customerName": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "updatedBy" : {
+            "type" : [ "string", "null" ]
           }
         },
-        "required": [
-          "originZip",
-          "originAirport",
-          "destination",
-          "weightKg",
-          "volumeCbm",
-          "chargeableKg",
-          "pieces",
-          "mode",
-          "doorPickup",
-          "readyDate",
-          "commodity",
-          "language",
-          "customerName"
-        ]
+        "required" : [ "key", "updatedAt", "updatedBy", "value" ]
       },
-      "PriceCandidate": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
+      "LiveUpdate" : {
+        "type" : "object",
+        "description" : "Only the fields that are present are changed.",
+        "properties" : {
+          "pollingEnabled" : {
+            "type" : [ "boolean", "null" ]
           },
-          "source": {
-            "type": "string",
-            "enum": [
-              "sheet",
-              "portal",
-              "bid",
-              "ratedesk",
-              "truck",
-              "combined"
-            ]
-          },
-          "airlineCode": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "airlineName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "total": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "currency": {
-            "type": "string"
-          },
-          "totalEur": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "transitDays": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "rateId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "validUntil": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "breakdown": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": true
-          },
-          "chosen": {
-            "type": "boolean"
-          },
-          "rejectReason": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "autopilot" : {
+            "type" : [ "boolean", "null" ]
           }
-        },
-        "required": [
-          "id",
-          "source",
-          "airlineCode",
-          "airlineName",
-          "total",
-          "currency",
-          "totalEur",
-          "transitDays",
-          "rateId",
-          "validUntil",
-          "breakdown",
-          "chosen",
-          "rejectReason",
-          "createdAt"
-        ]
-      },
-      "BidRequest": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "carrierName": {
-            "type": "string"
-          },
-          "carrierEmail": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "airline",
-              "trucker",
-              "ratedesk"
-            ]
-          },
-          "sentAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "answeredAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "price": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Decimal with 2 places"
-          },
-          "currency": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "transitDays": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "declined": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "carrierName",
-          "carrierEmail",
-          "kind",
-          "sentAt",
-          "answeredAt",
-          "price",
-          "currency",
-          "transitDays",
-          "declined"
-        ]
-      },
-      "BookingStatus": {
-        "type": "string",
-        "enum": [
-          "requested",
-          "booked",
-          "confirmed",
-          "failed"
-        ]
-      },
-      "Booking": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sessionId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "publicRef": {
-            "type": "string"
-          },
-          "rateId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "teamReference": {
-            "type": "string"
-          },
-          "bookingReference": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "airlineCode": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "airlineName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "origin": {
-            "type": "string"
-          },
-          "destination": {
-            "type": "string"
-          },
-          "price": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Decimal with 2 places"
-          },
-          "currency": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "transitDays": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "status": {
-            "$ref": "#/components/schemas/BookingStatus"
-          },
-          "bookedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "confirmedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "departureAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "etaAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "sessionId",
-          "publicRef",
-          "rateId",
-          "teamReference",
-          "bookingReference",
-          "airlineCode",
-          "airlineName",
-          "origin",
-          "destination",
-          "price",
-          "currency",
-          "transitDays",
-          "status",
-          "bookedAt",
-          "confirmedAt",
-          "departureAt",
-          "etaAt"
-        ]
-      },
-      "SessionDetail": {
-        "type": "object",
-        "properties": {
-          "session": {
-            "$ref": "#/components/schemas/SessionSummary"
-          },
-          "rfq": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Rfq"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "candidates": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PriceCandidate"
-            }
-          },
-          "bids": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BidRequest"
-            }
-          },
-          "booking": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Booking"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "session",
-          "rfq",
-          "candidates",
-          "bids",
-          "booking"
-        ]
-      },
-      "EventItem": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sessionId": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "mailId": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "kind": {
-            "type": "string",
-            "description": "\"mail.in\", \"route.decision\", \"llm.call\", ... (ARCHITECTURE.md §6)"
-          },
-          "actor": {
-            "type": "string",
-            "enum": [
-              "system",
-              "llm",
-              "human"
-            ]
-          },
-          "summary": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "hasPayload": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "sessionId",
-          "mailId",
-          "kind",
-          "actor",
-          "summary",
-          "createdAt",
-          "hasPayload"
-        ]
-      },
-      "EventPayload": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "payload": {}
-        },
-        "required": [
-          "id",
-          "payload"
-        ]
-      },
-      "MailSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "externalId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "direction": {
-            "type": "string",
-            "enum": [
-              "in",
-              "out"
-            ]
-          },
-          "fromAddr": {
-            "type": "string"
-          },
-          "toAddr": {
-            "type": "string"
-          },
-          "subject": {
-            "type": "string"
-          },
-          "snippet": {
-            "type": "string",
-            "description": "First ~160 chars of the body"
-          },
-          "sessionId": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "sessionRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "routeType": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "routeConfidence": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "sentAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "attachmentCount": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "externalId",
-          "direction",
-          "fromAddr",
-          "toAddr",
-          "subject",
-          "snippet",
-          "sessionId",
-          "sessionRef",
-          "routeType",
-          "routeConfidence",
-          "sentAt",
-          "attachmentCount"
-        ]
-      },
-      "Attachment": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "filename": {
-            "type": "string"
-          },
-          "contentType": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "size": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          }
-        },
-        "required": [
-          "id",
-          "filename",
-          "contentType",
-          "size"
-        ]
-      },
-      "MailDetail": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/MailSummary"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "body": {
-                "type": "string"
-              },
-              "inReplyToExt": {
-                "type": [
-                  "integer",
-                  "null"
-                ],
-                "format": "int64"
-              },
-              "referencesExt": {
-                "type": "array",
-                "items": {
-                  "type": "integer",
-                  "format": "int64"
-                }
-              },
-              "attachments": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Attachment"
-                }
-              }
-            },
-            "required": [
-              "body",
-              "inReplyToExt",
-              "referencesExt",
-              "attachments"
-            ]
-          }
-        ]
-      },
-      "LlmCall": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sessionId": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "purpose": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "promptTokens": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "completionTokens": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "costUsd": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Decimal with 2 places"
-          },
-          "latencyMs": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "request": {
-            "description": "Only on the detail endpoint"
-          },
-          "response": {
-            "description": "Only on the detail endpoint"
-          }
-        },
-        "required": [
-          "id",
-          "sessionId",
-          "purpose",
-          "model",
-          "promptTokens",
-          "completionTokens",
-          "costUsd",
-          "latencyMs",
-          "success",
-          "createdAt"
-        ]
-      },
-      "ShipmentPoint": {
-        "type": "object",
-        "properties": {
-          "iata": {
-            "type": "string"
-          },
-          "city": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "lat": {
-            "type": "number"
-          },
-          "lon": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "iata",
-          "city",
-          "lat",
-          "lon"
-        ]
-      },
-      "ActiveShipment": {
-        "type": "object",
-        "properties": {
-          "bookingId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "sessionId": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "publicRef": {
-            "type": "string"
-          },
-          "bookingReference": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "airlineName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "$ref": "#/components/schemas/BookingStatus"
-          },
-          "origin": {
-            "$ref": "#/components/schemas/ShipmentPoint"
-          },
-          "destination": {
-            "$ref": "#/components/schemas/ShipmentPoint"
-          },
-          "departureAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "etaAt": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          },
-          "transitDays": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "price": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Decimal with 2 places"
-          },
-          "currency": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "bookingId",
-          "sessionId",
-          "publicRef",
-          "bookingReference",
-          "airlineName",
-          "status",
-          "origin",
-          "destination",
-          "departureAt",
-          "etaAt",
-          "transitDays",
-          "price",
-          "currency"
-        ]
-      },
-      "HourlyStat": {
-        "type": "object",
-        "properties": {
-          "hour": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "rfqs": {
-            "type": "integer"
-          },
-          "quotes": {
-            "type": "integer"
-          },
-          "accepted": {
-            "type": "integer"
-          },
-          "rejected": {
-            "type": "integer"
-          },
-          "llmCostUsd": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "medianResponseSeconds": {
-            "type": [
-              "number",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "hour",
-          "rfqs",
-          "quotes",
-          "accepted",
-          "rejected",
-          "llmCostUsd",
-          "medianResponseSeconds"
-        ]
-      },
-      "Stats": {
-        "type": "object",
-        "properties": {
-          "sessionsTotal": {
-            "type": "integer"
-          },
-          "rfqsTotal": {
-            "type": "integer"
-          },
-          "quotesSent": {
-            "type": "integer"
-          },
-          "booked": {
-            "type": "integer"
-          },
-          "needsHuman": {
-            "type": "integer"
-          },
-          "accepted": {
-            "type": "integer",
-            "description": "From board results"
-          },
-          "rejected": {
-            "type": "integer",
-            "description": "From board results"
-          },
-          "llmCostUsdTotal": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "llmCostUsdPerQuote": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "medianResponseSeconds": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "p90ResponseSeconds": {
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "hourly": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/HourlyStat"
-            }
-          },
-          "statusCounts": {
-            "type": "object",
-            "properties": {
-              "NEW": {
-                "type": "integer"
-              },
-              "PRICING": {
-                "type": "integer"
-              },
-              "WAITING_FOR_BIDS": {
-                "type": "integer"
-              },
-              "QUOTED": {
-                "type": "integer"
-              },
-              "ACCEPTED": {
-                "type": "integer"
-              },
-              "BOOKED": {
-                "type": "integer"
-              },
-              "CONFIRMED": {
-                "type": "integer"
-              },
-              "ANSWERED": {
-                "type": "integer"
-              },
-              "CLOSED": {
-                "type": "integer"
-              },
-              "NEEDS_HUMAN": {
-                "type": "integer"
-              },
-              "FAILED": {
-                "type": "integer"
-              },
-              "EXPIRED": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "NEW",
-              "PRICING",
-              "WAITING_FOR_BIDS",
-              "QUOTED",
-              "ACCEPTED",
-              "BOOKED",
-              "CONFIRMED",
-              "ANSWERED",
-              "CLOSED",
-              "NEEDS_HUMAN",
-              "FAILED",
-              "EXPIRED"
-            ]
-          }
-        },
-        "required": [
-          "sessionsTotal",
-          "rfqsTotal",
-          "quotesSent",
-          "booked",
-          "needsHuman",
-          "accepted",
-          "rejected",
-          "llmCostUsdTotal",
-          "llmCostUsdPerQuote",
-          "medianResponseSeconds",
-          "p90ResponseSeconds",
-          "hourly",
-          "statusCounts"
-        ]
-      },
-      "BoardResult": {
-        "type": "object",
-        "properties": {
-          "requestKey": {
-            "type": "string"
-          },
-          "sessionId": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "publicRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "round": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "verdict": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "reasonCode": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "points": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {
-              "type": "number"
-            }
-          },
-          "fetchedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "requestKey",
-          "sessionId",
-          "publicRef",
-          "round",
-          "verdict",
-          "reasonCode",
-          "points",
-          "fetchedAt"
-        ]
-      },
-      "TariffStatus": {
-        "type": "string",
-        "enum": [
-          "active",
-          "pending_review",
-          "superseded",
-          "rejected"
-        ]
-      },
-      "TariffSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "airlineName": {
-            "type": "string"
-          },
-          "airlineCode": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "version": {
-            "type": "string"
-          },
-          "source": {
-            "type": "string",
-            "enum": [
-              "kit",
-              "mail"
-            ]
-          },
-          "validFrom": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "validTo": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "currency": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/TariffStatus"
-          },
-          "laneCount": {
-            "type": "integer"
-          },
-          "notes": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "airlineName",
-          "airlineCode",
-          "version",
-          "source",
-          "validFrom",
-          "validTo",
-          "currency",
-          "status",
-          "laneCount",
-          "notes",
-          "createdAt"
-        ]
-      },
-      "TariffBreak": {
-        "type": "object",
-        "properties": {
-          "fromKg": {
-            "type": "number"
-          },
-          "rate": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          }
-        },
-        "required": [
-          "fromKg",
-          "rate"
-        ]
-      },
-      "TariffLane": {
-        "type": "object",
-        "properties": {
-          "origin": {
-            "type": "string"
-          },
-          "destination": {
-            "type": "string"
-          },
-          "transitDays": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "minimum": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "breaks": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TariffBreak"
-            }
-          },
-          "fuelPerKg": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          },
-          "securityPerKg": {
-            "type": "string",
-            "description": "Decimal with 2 places",
-            "examples": [
-              "1387.35"
-            ]
-          }
-        },
-        "required": [
-          "origin",
-          "destination",
-          "transitDays",
-          "minimum",
-          "breaks",
-          "fuelPerKg",
-          "securityPerKg"
-        ]
-      },
-      "TariffDetail": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/TariffSummary"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "lanes": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/TariffLane"
-                }
-              }
-            },
-            "required": [
-              "lanes"
-            ]
-          }
-        ]
-      },
-      "Setting": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "value": {},
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedBy": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "key",
-          "value",
-          "updatedAt",
-          "updatedBy"
-        ]
-      },
-      "SettingUpdate": {
-        "type": "object",
-        "properties": {
-          "value": {}
-        },
-        "required": [
-          "value"
-        ]
-      },
-      "Carrier": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "name": {
-            "type": "string"
-          },
-          "code": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "airline",
-              "trucker"
-            ]
-          },
-          "email": {
-            "type": "string"
-          },
-          "serves": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "code",
-          "kind",
-          "email",
-          "serves"
-        ]
-      },
-      "SessionAction": {
-        "oneOf": [
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "approve"
-              }
-            },
-            "required": [
-              "action"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "edit_and_send"
-              },
-              "body": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "body"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "reroute"
-              },
-              "type": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action",
-              "type"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "take_over"
-              }
-            },
-            "required": [
-              "action"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "release"
-              }
-            },
-            "required": [
-              "action"
-            ]
-          },
-          {
-            "type": "object",
-            "properties": {
-              "action": {
-                "type": "string",
-                "const": "resolve"
-              },
-              "note": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "action"
-            ]
-          }
-        ],
-        "discriminator": {
-          "propertyName": "action"
         }
       },
-      "Draft": {
-        "type": "object",
-        "properties": {
-          "sessionId": {
-            "type": "integer",
-            "format": "int64"
+      "AdminStatus" : {
+        "type" : "object",
+        "properties" : {
+          "openAiKeyRegistered" : {
+            "type" : [ "boolean", "null" ],
+            "description" : "Whether the 5U gateway holds our OpenAI key; null if unknown"
           },
-          "to": {
-            "type": "string"
+          "openAiKeyMessage" : {
+            "type" : [ "string", "null" ]
           },
-          "subject": {
-            "type": "string"
+          "openAiKeyLast4" : {
+            "type" : [ "string", "null" ],
+            "description" : "Last four characters of the stored key, as reported by 5U"
           },
-          "body": {
-            "type": "string"
+          "openAiKeyCheckedAt" : {
+            "type" : [ "string", "null" ],
+            "description" : "When 5U last checked the stored key (ISO-8601)"
           },
-          "inReplyToExt": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
+          "pollingEnabled" : {
+            "type" : "boolean",
+            "description" : "Runtime setting pollingEnabled"
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
+          "autopilot" : {
+            "type" : "boolean",
+            "description" : "Runtime setting autopilot: answer live mails automatically"
+          },
+          "envPollerEnabled" : {
+            "type" : "boolean",
+            "description" : "app.poller.enabled (env POLLER_ENABLED)"
+          },
+          "envSendEnabled" : {
+            "type" : "boolean",
+            "description" : "app.mail.send-enabled (env SEND_ENABLED)"
           }
         },
-        "required": [
-          "sessionId",
-          "to",
-          "subject",
-          "body",
-          "inReplyToExt",
-          "createdAt"
-        ]
+        "required" : [ "autopilot", "envPollerEnabled", "envSendEnabled", "openAiKeyCheckedAt", "openAiKeyLast4", "openAiKeyMessage", "openAiKeyRegistered", "pollingEnabled" ]
       },
-      "ApiError": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "string"
+      "TariffSource" : {
+        "type" : "string",
+        "enum" : [ "kit", "mail" ]
+      },
+      "TariffStatus" : {
+        "type" : "string",
+        "enum" : [ "active", "pending_review", "superseded", "rejected" ]
+      },
+      "TariffSummary" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "message": {
-            "type": "string"
+          "airlineName" : {
+            "type" : "string"
+          },
+          "airlineCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "source" : {
+            "$ref" : "#/components/schemas/TariffSource"
+          },
+          "validFrom" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "validTo" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/TariffStatus"
+          },
+          "laneCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "notes" : {
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
           }
         },
-        "required": [
-          "error",
-          "message"
-        ]
+        "required" : [ "airlineCode", "airlineName", "createdAt", "currency", "id", "laneCount", "notes", "source", "status", "validFrom", "validTo", "version" ]
       },
-      "AdminStatus": {
-        "type": "object",
-        "properties": {
-          "openAiKeyRegistered": {
-            "type": [
-              "boolean",
-              "null"
-            ],
-            "description": "null when the gateway could not be asked"
+      "SessionAction" : {
+        "type" : "object",
+        "description" : "A human action on a session. `body` is required for edit_and_send, `type` (a MailType) for reroute,\n`note` is optional for resolve.",
+        "properties" : {
+          "action" : {
+            "$ref" : "#/components/schemas/SessionActionType"
           },
-          "openAiKeyMessage": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "body" : {
+            "type" : [ "string", "null" ],
+            "description" : "edit_and_send: the body to send"
           },
-          "pollingEnabled": {
-            "type": "boolean"
+          "type" : {
+            "type" : [ "string", "null" ],
+            "description" : "reroute: MailType for the session's latest inbound mail",
+            "example" : "FOLLOW_UP"
           },
-          "autopilot": {
-            "type": "boolean"
-          },
-          "envPollerEnabled": {
-            "type": "boolean",
-            "description": "POLLER_ENABLED on this instance; false means the switches have no effect"
-          },
-          "envSendEnabled": {
-            "type": "boolean",
-            "description": "SEND_ENABLED on this instance"
+          "note" : {
+            "type" : [ "string", "null" ],
+            "description" : "resolve: optional note"
           }
         },
-        "required": [
-          "openAiKeyRegistered",
-          "openAiKeyMessage",
-          "pollingEnabled",
-          "autopilot",
-          "envPollerEnabled",
-          "envSendEnabled"
-        ]
+        "required" : [ "action" ]
       },
-      "OpenAiKeyRequest": {
-        "type": "object",
-        "properties": {
-          "apiKey": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "apiKey"
-        ]
+      "SessionActionType" : {
+        "type" : "string",
+        "enum" : [ "approve", "edit_and_send", "reroute", "take_over", "release", "resolve" ]
       },
-      "OpenAiKeyResult": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean"
+      "QuoteMode" : {
+        "type" : "string",
+        "enum" : [ "cheapest", "fastest" ]
+      },
+      "SessionStatus" : {
+        "type" : "string",
+        "enum" : [ "NEW", "PRICING", "WAITING_FOR_BIDS", "QUOTED", "ACCEPTED", "BOOKED", "CONFIRMED", "ANSWERED", "CLOSED", "NEEDS_HUMAN", "FAILED", "EXPIRED" ]
+      },
+      "SessionSummary" : {
+        "type" : "object",
+        "description" : "One row of the live board. Read from the denormalized session table only.",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
           },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "message"
-        ]
-      },
-      "LiveSwitches": {
-        "type": "object",
-        "properties": {
-          "pollingEnabled": {
-            "type": "boolean"
+          "publicRef" : {
+            "type" : "string"
           },
-          "autopilot": {
-            "type": "boolean"
+          "type" : {
+            "$ref" : "#/components/schemas/SessionType"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/SessionStatus"
+          },
+          "customerAddr" : {
+            "type" : [ "string", "null" ]
+          },
+          "subject" : {
+            "type" : [ "string", "null" ]
+          },
+          "mode" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/QuoteMode"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "needsHuman" : {
+            "type" : "boolean"
+          },
+          "needsHumanReason" : {
+            "type" : [ "string", "null" ]
+          },
+          "autopilot" : {
+            "type" : "boolean"
+          },
+          "deadlineAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "quotedAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "quotedTotal" : {
+            "type" : [ "string", "null" ]
+          },
+          "quotedCurrency" : {
+            "type" : [ "string", "null" ]
+          },
+          "booked" : {
+            "type" : "boolean"
+          },
+          "llmCostUsd" : {
+            "type" : "string"
+          },
+          "eventCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "mailCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "lastEventAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lastEventSummary" : {
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lane" : {
+            "type" : [ "string", "null" ],
+            "example" : "FRA → SIN"
+          },
+          "boardVerdict" : {
+            "type" : [ "string", "null" ],
+            "description" : "accepted | rejected | pending | open | no answer | voided"
           }
         },
-        "required": []
+        "required" : [ "autopilot", "boardVerdict", "booked", "createdAt", "customerAddr", "deadlineAt", "eventCount", "id", "lane", "lastEventAt", "lastEventSummary", "llmCostUsd", "mailCount", "mode", "needsHuman", "needsHumanReason", "publicRef", "quotedAt", "quotedCurrency", "quotedTotal", "status", "subject", "type" ]
       },
-      "SessionSummaryPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionSummary"
+      "SessionType" : {
+        "type" : "string",
+        "enum" : [ "RFQ", "TRACKING", "TARIFF", "OTHER" ]
+      },
+      "OpenAiKeyRequest" : {
+        "type" : "object",
+        "properties" : {
+          "apiKey" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "apiKey" ]
+      },
+      "OpenAiKeyResult" : {
+        "type" : "object",
+        "properties" : {
+          "ok" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "message", "ok" ]
+      },
+      "TariffBreak" : {
+        "type" : "object",
+        "properties" : {
+          "fromKg" : {
+            "type" : "number"
+          },
+          "rate" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "fromKg", "rate" ]
+      },
+      "TariffDetail" : {
+        "type" : "object",
+        "description" : "TariffSummary plus all lanes.",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "airlineName" : {
+            "type" : "string"
+          },
+          "airlineCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "version" : {
+            "type" : "string"
+          },
+          "source" : {
+            "$ref" : "#/components/schemas/TariffSource"
+          },
+          "validFrom" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "validTo" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/TariffStatus"
+          },
+          "laneCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "notes" : {
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lanes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TariffLane"
+            }
+          }
+        },
+        "required" : [ "airlineCode", "airlineName", "createdAt", "currency", "id", "laneCount", "lanes", "notes", "source", "status", "validFrom", "validTo", "version" ]
+      },
+      "TariffLane" : {
+        "type" : "object",
+        "properties" : {
+          "origin" : {
+            "type" : "string"
+          },
+          "destination" : {
+            "type" : "string"
+          },
+          "transitDays" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "minimum" : {
+            "type" : "string"
+          },
+          "breaks" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/TariffBreak"
             }
           },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "fuelPerKg" : {
+            "type" : "string"
+          },
+          "securityPerKg" : {
+            "type" : "string"
           }
         },
-        "required": [
-          "items",
-          "nextCursor"
-        ]
+        "required" : [ "breaks", "destination", "fuelPerKg", "minimum", "origin", "securityPerKg", "transitDays" ]
       },
-      "EventItemPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EventItem"
+      "Stats" : {
+        "type" : "object",
+        "description" : "Dashboard KPIs. Totals are all-time, hourly covers the requested window.",
+        "properties" : {
+          "sessionsTotal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rfqsTotal" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "quotesSent" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "booked" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "needsHuman" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "accepted" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "From board results"
+          },
+          "rejected" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "From board results"
+          },
+          "llmCostUsdTotal" : {
+            "type" : "string"
+          },
+          "llmCostUsdPerQuote" : {
+            "type" : "string"
+          },
+          "medianResponseSeconds" : {
+            "type" : [ "number", "null" ],
+            "format" : "double",
+            "description" : "First quote mail out minus the RFQ mail in"
+          },
+          "p90ResponseSeconds" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "hourly" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/StatsHour"
             }
           },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "statusCounts" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int64"
+            },
+            "description" : "Every SessionStatus is present, zero when unused"
           }
         },
-        "required": [
-          "items",
-          "nextCursor"
-        ]
+        "required" : [ "accepted", "booked", "hourly", "llmCostUsdPerQuote", "llmCostUsdTotal", "medianResponseSeconds", "needsHuman", "p90ResponseSeconds", "quotesSent", "rejected", "rfqsTotal", "sessionsTotal", "statusCounts" ]
       },
-      "MailSummaryPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MailSummary"
+      "StatsHour" : {
+        "type" : "object",
+        "properties" : {
+          "hour" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "rfqs" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "quotes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "accepted" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "rejected" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "llmCostUsd" : {
+            "type" : "string"
+          },
+          "medianResponseSeconds" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          }
+        },
+        "required" : [ "accepted", "hour", "llmCostUsd", "medianResponseSeconds", "quotes", "rejected", "rfqs" ]
+      },
+      "ActiveShipment" : {
+        "type" : "object",
+        "description" : "A booked or confirmed shipment with airport coordinates, for the globe.",
+        "properties" : {
+          "bookingId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "sessionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "publicRef" : {
+            "type" : "string"
+          },
+          "bookingReference" : {
+            "type" : [ "string", "null" ]
+          },
+          "airlineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/BookingStatus"
+          },
+          "origin" : {
+            "$ref" : "#/components/schemas/ShipmentPoint"
+          },
+          "destination" : {
+            "$ref" : "#/components/schemas/ShipmentPoint"
+          },
+          "departureAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "etaAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "transitDays" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "price" : {
+            "type" : [ "string", "null" ]
+          },
+          "currency" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "airlineName", "bookingId", "bookingReference", "currency", "departureAt", "destination", "etaAt", "origin", "price", "publicRef", "sessionId", "status", "transitDays" ]
+      },
+      "BookingStatus" : {
+        "type" : "string",
+        "enum" : [ "requested", "booked", "confirmed", "failed" ]
+      },
+      "ShipmentPoint" : {
+        "type" : "object",
+        "properties" : {
+          "iata" : {
+            "type" : "string"
+          },
+          "city" : {
+            "type" : [ "string", "null" ]
+          },
+          "lat" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "lon" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        },
+        "required" : [ "city", "iata", "lat", "lon" ]
+      },
+      "PageSessionSummary" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/SessionSummary"
             }
           },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
           }
         },
-        "required": [
-          "items",
-          "nextCursor"
-        ]
+        "required" : [ "items", "nextCursor" ]
       },
-      "LlmCallPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/LlmCall"
+      "BidKind" : {
+        "type" : "string",
+        "enum" : [ "airline", "trucker", "ratedesk" ]
+      },
+      "BidRequest" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "carrierName" : {
+            "type" : "string"
+          },
+          "carrierEmail" : {
+            "type" : "string"
+          },
+          "kind" : {
+            "$ref" : "#/components/schemas/BidKind"
+          },
+          "sentAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "answeredAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "price" : {
+            "type" : [ "string", "null" ]
+          },
+          "currency" : {
+            "type" : [ "string", "null" ]
+          },
+          "transitDays" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "declined" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "answeredAt", "carrierEmail", "carrierName", "currency", "declined", "id", "kind", "price", "sentAt", "transitDays" ]
+      },
+      "Booking" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "sessionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "publicRef" : {
+            "type" : "string"
+          },
+          "rateId" : {
+            "type" : [ "string", "null" ]
+          },
+          "teamReference" : {
+            "type" : "string"
+          },
+          "bookingReference" : {
+            "type" : [ "string", "null" ]
+          },
+          "airlineCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "airlineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "origin" : {
+            "type" : "string"
+          },
+          "destination" : {
+            "type" : "string"
+          },
+          "price" : {
+            "type" : [ "string", "null" ]
+          },
+          "currency" : {
+            "type" : [ "string", "null" ]
+          },
+          "transitDays" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "status" : {
+            "$ref" : "#/components/schemas/BookingStatus"
+          },
+          "bookedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "confirmedAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "departureAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "etaAt" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          }
+        },
+        "required" : [ "airlineCode", "airlineName", "bookedAt", "bookingReference", "confirmedAt", "currency", "departureAt", "destination", "etaAt", "id", "origin", "price", "publicRef", "rateId", "sessionId", "status", "teamReference", "transitDays" ]
+      },
+      "PriceCandidate" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "source" : {
+            "$ref" : "#/components/schemas/PriceSource"
+          },
+          "airlineCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "airlineName" : {
+            "type" : [ "string", "null" ]
+          },
+          "total" : {
+            "type" : "string"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "totalEur" : {
+            "type" : "string"
+          },
+          "transitDays" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "rateId" : {
+            "type" : [ "string", "null" ]
+          },
+          "validUntil" : {
+            "type" : [ "string", "null" ],
+            "format" : "date-time"
+          },
+          "breakdown" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : { }
+          },
+          "chosen" : {
+            "type" : "boolean"
+          },
+          "rejectReason" : {
+            "type" : [ "string", "null" ]
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        },
+        "required" : [ "airlineCode", "airlineName", "breakdown", "chosen", "createdAt", "currency", "id", "rateId", "rejectReason", "source", "total", "totalEur", "transitDays", "validUntil" ]
+      },
+      "PriceSource" : {
+        "type" : "string",
+        "enum" : [ "sheet", "portal", "bid", "ratedesk", "truck", "combined" ]
+      },
+      "Rfq" : {
+        "type" : "object",
+        "description" : "Shipment request extracted from the customer's mail.",
+        "properties" : {
+          "originZip" : {
+            "type" : [ "string", "null" ]
+          },
+          "originAirport" : {
+            "type" : [ "string", "null" ]
+          },
+          "destination" : {
+            "type" : [ "string", "null" ]
+          },
+          "weightKg" : {
+            "type" : [ "string", "null" ]
+          },
+          "volumeCbm" : {
+            "type" : [ "string", "null" ]
+          },
+          "chargeableKg" : {
+            "type" : [ "string", "null" ]
+          },
+          "pieces" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "mode" : {
+            "type" : [ "string", "null" ]
+          },
+          "doorPickup" : {
+            "type" : "boolean"
+          },
+          "readyDate" : {
+            "type" : [ "string", "null" ],
+            "format" : "date"
+          },
+          "commodity" : {
+            "type" : [ "string", "null" ]
+          },
+          "language" : {
+            "type" : [ "string", "null" ]
+          },
+          "customerName" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "chargeableKg", "commodity", "customerName", "destination", "doorPickup", "language", "mode", "originAirport", "originZip", "pieces", "readyDate", "volumeCbm", "weightKg" ]
+      },
+      "SessionDetail" : {
+        "type" : "object",
+        "properties" : {
+          "session" : {
+            "$ref" : "#/components/schemas/SessionSummary"
+          },
+          "rfq" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Rfq"
+            }, {
+              "type" : "null"
+            } ]
+          },
+          "candidates" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PriceCandidate"
             }
           },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "items",
-          "nextCursor"
-        ]
-      },
-      "BookingPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Booking"
+          "bids" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/BidRequest"
             }
           },
-          "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+          "booking" : {
+            "anyOf" : [ {
+              "$ref" : "#/components/schemas/Booking"
+            }, {
+              "type" : "null"
+            } ]
           }
         },
-        "required": [
-          "items",
-          "nextCursor"
-        ]
+        "required" : [ "bids", "booking", "candidates", "rfq", "session" ]
+      },
+      "Attachment" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "filename" : {
+            "type" : "string"
+          },
+          "contentType" : {
+            "type" : [ "string", "null" ]
+          },
+          "size" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          }
+        },
+        "required" : [ "contentType", "filename", "id", "size" ]
+      },
+      "MailDetail" : {
+        "type" : "object",
+        "description" : "MailSummary plus body, threading headers and attachment metadata.",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "externalId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "direction" : {
+            "$ref" : "#/components/schemas/MailDirection"
+          },
+          "fromAddr" : {
+            "type" : "string"
+          },
+          "toAddr" : {
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "string"
+          },
+          "snippet" : {
+            "type" : "string"
+          },
+          "sessionId" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "sessionRef" : {
+            "type" : [ "string", "null" ]
+          },
+          "routeType" : {
+            "type" : [ "string", "null" ]
+          },
+          "routeConfidence" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "sentAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "attachmentCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "inReplyToExt" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "referencesExt" : {
+            "type" : "array",
+            "items" : {
+              "type" : "integer",
+              "format" : "int64"
+            }
+          },
+          "attachments" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Attachment"
+            }
+          }
+        },
+        "required" : [ "attachmentCount", "attachments", "body", "direction", "externalId", "fromAddr", "id", "inReplyToExt", "referencesExt", "routeConfidence", "routeType", "sentAt", "sessionId", "sessionRef", "snippet", "subject", "toAddr" ]
+      },
+      "MailDirection" : {
+        "type" : "string",
+        "enum" : [ "in", "out" ]
+      },
+      "Actor" : {
+        "type" : "string",
+        "enum" : [ "system", "llm", "human" ]
+      },
+      "EventItem" : {
+        "type" : "object",
+        "description" : "Audit trail entry without its payload; load the payload lazily via getEventPayload.",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "sessionId" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "mailId" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "kind" : {
+            "type" : "string",
+            "example" : "route.decision"
+          },
+          "actor" : {
+            "$ref" : "#/components/schemas/Actor"
+          },
+          "summary" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "hasPayload" : {
+            "type" : "boolean"
+          }
+        },
+        "required" : [ "actor", "createdAt", "hasPayload", "id", "kind", "mailId", "sessionId", "summary" ]
+      },
+      "PageEventItem" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/EventItem"
+            }
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "items", "nextCursor" ]
+      },
+      "Draft" : {
+        "type" : "object",
+        "description" : "Outbound mail waiting for a human (needs_human or autopilot off).",
+        "properties" : {
+          "sessionId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "to" : {
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "string"
+          },
+          "body" : {
+            "type" : "string"
+          },
+          "inReplyToExt" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        },
+        "required" : [ "body", "createdAt", "inReplyToExt", "sessionId", "subject", "to" ]
+      },
+      "MailSummary" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "externalId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "direction" : {
+            "$ref" : "#/components/schemas/MailDirection"
+          },
+          "fromAddr" : {
+            "type" : "string"
+          },
+          "toAddr" : {
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "string"
+          },
+          "snippet" : {
+            "type" : "string",
+            "description" : "First 160 characters of the body"
+          },
+          "sessionId" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "sessionRef" : {
+            "type" : [ "string", "null" ]
+          },
+          "routeType" : {
+            "type" : [ "string", "null" ]
+          },
+          "routeConfidence" : {
+            "type" : [ "number", "null" ],
+            "format" : "double"
+          },
+          "sentAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "attachmentCount" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "attachmentCount", "direction", "externalId", "fromAddr", "id", "routeConfidence", "routeType", "sentAt", "sessionId", "sessionRef", "snippet", "subject", "toAddr" ]
+      },
+      "PageMailSummary" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/MailSummary"
+            }
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "items", "nextCursor" ]
+      },
+      "LlmCall" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "sessionId" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "purpose" : {
+            "type" : "string"
+          },
+          "model" : {
+            "type" : "string"
+          },
+          "promptTokens" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "completionTokens" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "costUsd" : {
+            "type" : [ "string", "null" ]
+          },
+          "latencyMs" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int32"
+          },
+          "success" : {
+            "type" : "boolean"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "request" : {
+            "description" : "Detail endpoint only"
+          },
+          "response" : {
+            "description" : "Detail endpoint only"
+          }
+        },
+        "required" : [ "completionTokens", "costUsd", "createdAt", "id", "latencyMs", "model", "promptTokens", "purpose", "request", "response", "sessionId", "success" ]
+      },
+      "PageLlmCall" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LlmCall"
+            }
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "items", "nextCursor" ]
+      },
+      "EventPayload" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "payload" : { }
+        },
+        "required" : [ "id", "payload" ]
+      },
+      "Carrier" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "code" : {
+            "type" : [ "string", "null" ]
+          },
+          "kind" : {
+            "$ref" : "#/components/schemas/CarrierKind"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "serves" : {
+            "type" : "array",
+            "description" : "IATA destinations (airline) or 2-digit zip zones (trucker)",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        },
+        "required" : [ "code", "email", "id", "kind", "name", "serves" ]
+      },
+      "CarrierKind" : {
+        "type" : "string",
+        "enum" : [ "airline", "trucker" ]
+      },
+      "PageBooking" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Booking"
+            }
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ]
+          }
+        },
+        "required" : [ "items", "nextCursor" ]
+      },
+      "BoardResult" : {
+        "type" : "object",
+        "description" : "Our result for one request on the 5U board (cached from /v1/board/me).",
+        "properties" : {
+          "requestKey" : {
+            "type" : "string"
+          },
+          "sessionId" : {
+            "type" : [ "integer", "null" ],
+            "format" : "int64"
+          },
+          "publicRef" : {
+            "type" : [ "string", "null" ]
+          },
+          "round" : {
+            "type" : [ "string", "null" ]
+          },
+          "verdict" : {
+            "type" : [ "string", "null" ],
+            "description" : "accepted | rejected | pending | open | no answer | voided"
+          },
+          "reasonCode" : {
+            "type" : [ "string", "null" ]
+          },
+          "points" : {
+            "type" : [ "object", "null" ],
+            "additionalProperties" : {
+              "type" : "number",
+              "format" : "double"
+            }
+          },
+          "fetchedAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        },
+        "required" : [ "fetchedAt", "points", "publicRef", "reasonCode", "requestKey", "round", "sessionId", "verdict" ]
       }
     }
   }

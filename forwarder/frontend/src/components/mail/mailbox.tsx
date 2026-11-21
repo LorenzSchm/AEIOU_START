@@ -4,7 +4,7 @@ import { ArrowDownLeft, ArrowLeft, ArrowUpRight, Inbox, MailOpen, Paperclip } fr
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useGetMail, useListMailsInfinite } from "@/api/generated/mails/mails";
-import type { ListMailsDirection, ListMailsParams } from "@/api/generated/model";
+import type { MailDirection, ListMailsParams } from "@/api/generated/model";
 import { SearchInput, Segmented } from "@/components/ui/fields";
 import { LoadMore } from "@/components/ui/load-more";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows } from "@/components/ui/states";
@@ -39,7 +39,7 @@ export function Mailbox() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedId = Number(searchParams.get("id")) || null;
-  const [direction, setDirection] = useState<"all" | ListMailsDirection>("all");
+  const [direction, setDirection] = useState<"all" | MailDirection>("all");
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim(), 250);
   const now = useNow();
@@ -69,7 +69,7 @@ export function Mailbox() {
       <div className={cn("flex min-h-0 flex-col border-r border-line", selectedId && "max-md:hidden")}>
         <div className="flex flex-col gap-2 border-b border-line p-3">
           <SearchInput value={search} onChange={setSearch} placeholder="Search subject, body, address…" />
-          <Segmented<"all" | ListMailsDirection>
+          <Segmented<"all" | MailDirection>
             value={direction}
             onChange={setDirection}
             options={[

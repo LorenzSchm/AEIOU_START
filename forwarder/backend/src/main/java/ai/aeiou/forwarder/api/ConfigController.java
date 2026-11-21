@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** Tariff review, carriers and runtime settings. */
 @RestController
 @RequestMapping("/api")
-@Tag(name = "configuration")
 public class ConfigController {
 
     private static final String HUMAN = "human";
@@ -37,18 +36,21 @@ public class ConfigController {
     }
 
     @GetMapping("/tariffs")
+    @Tag(name = "tariffs")
     @Operation(operationId = "listTariffs", summary = "All tariff versions, review queue first")
     public List<TariffSummary> tariffs() {
         return reference.tariffs();
     }
 
     @GetMapping("/tariffs/{id}")
+    @Tag(name = "tariffs")
     @Operation(operationId = "getTariff")
     public TariffDetail tariff(@PathVariable long id) {
         return reference.tariffDetail(id).orElseThrow(() -> ApiException.notFound("Tariff", id));
     }
 
     @PostMapping("/tariffs/{id}/activate")
+    @Tag(name = "tariffs")
     @Operation(operationId = "activateTariff", summary = "Activate a pending tariff version")
     public TariffSummary activate(@PathVariable long id) {
         tariffActions.activate(id);
@@ -56,6 +58,7 @@ public class ConfigController {
     }
 
     @PostMapping("/tariffs/{id}/reject")
+    @Tag(name = "tariffs")
     @Operation(operationId = "rejectTariff", summary = "Reject a pending tariff version")
     public TariffSummary reject(@PathVariable long id) {
         tariffActions.reject(id);
@@ -63,12 +66,14 @@ public class ConfigController {
     }
 
     @GetMapping("/carriers")
+    @Tag(name = "carriers")
     @Operation(operationId = "listCarriers")
     public List<Carrier> carriers() {
         return reference.carriers();
     }
 
     @GetMapping("/settings")
+    @Tag(name = "settings")
     @Operation(operationId = "listSettings")
     public List<Setting> listSettings() {
         return reference.settings();
@@ -76,6 +81,7 @@ public class ConfigController {
 
     /** The settings service writes the one {@code setting.changed} event (actor human, with the previous value). */
     @PutMapping("/settings/{key}")
+    @Tag(name = "settings")
     @Operation(operationId = "updateSetting", summary = "Change a runtime setting; takes effect immediately")
     public Setting updateSetting(@PathVariable String key, @RequestBody Setting.Update update) {
         if (update.value() == null) throw ApiException.badRequest("value is required");

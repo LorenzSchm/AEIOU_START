@@ -49,8 +49,13 @@ class OpenApiExportTest extends ApiTestBase {
                 .contains("NEW", "NEEDS_HUMAN", "EXPIRED");
         JsonNode summary = schemas.get("SessionSummary");
         List<String> required = summary.get("required").values().stream().map(JsonNode::asString).toList();
-        assertThat(required).contains("id", "publicRef", "status", "needsHuman", "lastEventAt")
-                .doesNotContain("customerAddr", "lane", "boardVerdict");
+        // responses: every field is always present, nullable ones may be null
+        assertThat(required).contains("id", "publicRef", "status", "needsHuman", "lastEventAt",
+                "customerAddr", "lane", "boardVerdict");
+        // request bodies: nullable fields may be omitted
+        List<String> liveRequired = schemas.at("/LiveUpdate/required").isMissingNode() ? List.of()
+                : schemas.at("/LiveUpdate/required").values().stream().map(JsonNode::asString).toList();
+        assertThat(liveRequired).doesNotContain("pollingEnabled", "autopilot");
         assertThat(isNullable(summary.at("/properties/customerAddr"))).isTrue();
         assertThat(isNullable(summary.at("/properties/publicRef"))).isFalse();
         assertThat(isNullable(schemas.at("/SessionDetail/properties/rfq"))).isTrue();

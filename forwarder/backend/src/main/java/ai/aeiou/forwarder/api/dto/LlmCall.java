@@ -1,6 +1,5 @@
 package ai.aeiou.forwarder.api.dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
 
@@ -16,7 +15,7 @@ public record LlmCall(
         @Schema(nullable = true) Integer latencyMs,
         boolean success,
         OffsetDateTime createdAt,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(nullable = true, description = "Detail endpoint only")
+        @Schema(nullable = true, description = "Detail endpoint only")
         Object request,
-        @JsonInclude(JsonInclude.Include.NON_NULL) @Schema(nullable = true, description = "Detail endpoint only")
+        @Schema(nullable = true, description = "Detail endpoint only")
         Object response) {}

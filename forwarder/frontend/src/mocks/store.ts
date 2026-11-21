@@ -15,7 +15,7 @@ import type {
   Carrier,
   Draft,
   EventItem,
-  EventItemActor,
+  Actor,
   LlmCall,
   MailDetail,
   PriceCandidate,
@@ -129,6 +129,8 @@ export function db(): MockDb {
       admin: {
         openAiKeyRegistered: false,
         openAiKeyMessage: "No key stored at the gateway yet.",
+        openAiKeyLast4: null,
+        openAiKeyCheckedAt: null,
         pollingEnabled: true,
         autopilot: true,
         envPollerEnabled: true,
@@ -202,7 +204,7 @@ export function addEvent(
   sessionId: number | null,
   kind: string,
   summary: string,
-  opts: { actor?: EventItemActor; payload?: unknown; mailId?: number | null } = {},
+  opts: { actor?: Actor; payload?: unknown; mailId?: number | null } = {},
 ): EventItem {
   const id = next("event");
   const e: EventItem = {

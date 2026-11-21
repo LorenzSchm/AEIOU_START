@@ -1,12 +1,12 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type {
   EventItem,
-  EventItemPage,
+  PageEventItem,
   ListEventsParams,
   ListSessionsParams,
   SessionDetail,
   SessionSummary,
-  SessionSummaryPage,
+  PageSessionSummary,
 } from "@/api/generated/model";
 import { getGetSessionQueryKey } from "@/api/generated/sessions/sessions";
 import { byPath, isInfiniteKey, keyParams } from "@/lib/query-keys";
@@ -42,7 +42,7 @@ export function applySession(qc: QueryClient, session: SessionSummary): void {
     const keep = matchesSessionFilter(session, params);
 
     if (isInfiniteKey(key)) {
-      qc.setQueryData<InfiniteData<SessionSummaryPage, unknown>>(key, (old) => {
+      qc.setQueryData<InfiniteData<PageSessionSummary, unknown>>(key, (old) => {
         if (!old || old.pages.length === 0) return old;
         const pages = old.pages.map((p) => ({ ...p, items: p.items.filter((s) => s.id !== session.id) }));
         if (keep) {
@@ -52,7 +52,7 @@ export function applySession(qc: QueryClient, session: SessionSummary): void {
         return { ...old, pages };
       });
     } else {
-      qc.setQueryData<SessionSummaryPage>(key, (old) => {
+      qc.setQueryData<PageSessionSummary>(key, (old) => {
         if (!old) return old;
         const items = old.items.filter((s) => s.id !== session.id);
         return { ...old, items: keep ? [session, ...items].sort(byLastEventDesc) : items };
@@ -65,7 +65,7 @@ export function applySession(qc: QueryClient, session: SessionSummary): void {
   );
 }
 
-function appendAscending(old: InfiniteData<EventItemPage, unknown> | undefined, event: EventItem) {
+function appendAscending(old: InfiniteData<PageEventItem, unknown> | undefined, event: EventItem) {
   if (!old || old.pages.length === 0) return old;
   if (old.pages.some((p) => p.items.some((e) => e.id === event.id))) return old;
   const lastIndex = old.pages.length - 1;
@@ -77,7 +77,7 @@ function appendAscending(old: InfiniteData<EventItemPage, unknown> | undefined, 
   return { ...old, pages };
 }
 
-function prependDescending(old: InfiniteData<EventItemPage, unknown> | undefined, event: EventItem) {
+function prependDescending(old: InfiniteData<PageEventItem, unknown> | undefined, event: EventItem) {
   if (!old || old.pages.length === 0) return old;
   const first = old.pages[0];
   if (first.items.some((e) => e.id === event.id)) return old;
@@ -91,7 +91,7 @@ export function applyEvent(qc: QueryClient, event: EventItem): void {
     const path = `/api/sessions/${event.sessionId}/events`;
     for (const query of qc.getQueryCache().findAll({ predicate: byPath(path) })) {
       if (isInfiniteKey(query.queryKey)) {
-        qc.setQueryData<InfiniteData<EventItemPage, unknown>>(query.queryKey, (old) => appendAscending(old, event));
+        qc.setQueryData<InfiniteData<PageEventItem, unknown>>(query.queryKey, (old) => appendAscending(old, event));
       }
     }
   }
@@ -100,7 +100,7 @@ export function applyEvent(qc: QueryClient, event: EventItem): void {
     const kind = keyParams<ListEventsParams>(query.queryKey)?.kind;
     if (kind && !event.kind.startsWith(kind)) continue;
     if (isInfiniteKey(query.queryKey)) {
-      qc.setQueryData<InfiniteData<EventItemPage, unknown>>(query.queryKey, (old) => prependDescending(old, event));
+      qc.setQueryData<InfiniteData<PageEventItem, unknown>>(query.queryKey, (old) => prependDescending(old, event));
     }
   }
 }

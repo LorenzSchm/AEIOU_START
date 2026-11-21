@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 /** Bookings, globe data, LLM call inspection, KPIs and board results. */
 @RestController
 @RequestMapping("/api")
-@Tag(name = "operations")
 public class OperationsController {
 
     private static final int MAX_STATS_HOURS = 24 * 7;
@@ -43,6 +42,7 @@ public class OperationsController {
     }
 
     @GetMapping("/llm-calls")
+    @Tag(name = "llm")
     @Operation(operationId = "listLlmCalls", summary = "LLM calls, newest first, without prompt/response")
     public Page<LlmCall> llmCalls(@RequestParam(required = false) Long sessionId,
                                   @RequestParam(required = false) Integer limit,
@@ -51,12 +51,14 @@ public class OperationsController {
     }
 
     @GetMapping("/llm-calls/{id}")
+    @Tag(name = "llm")
     @Operation(operationId = "getLlmCall", summary = "One LLM call with request and response")
     public LlmCall llmCall(@PathVariable long id) {
         return llmCalls.detail(id).orElseThrow(() -> ApiException.notFound("LLM call", id));
     }
 
     @GetMapping("/bookings")
+    @Tag(name = "bookings")
     @Operation(operationId = "listBookings", summary = "Bookings, newest first")
     public Page<Booking> bookings(@RequestParam(required = false) BookingStatus status,
                                   @RequestParam(required = false) Integer limit,
@@ -65,12 +67,14 @@ public class OperationsController {
     }
 
     @GetMapping("/shipments/active")
+    @Tag(name = "bookings")
     @Operation(operationId = "listActiveShipments", summary = "Booked/confirmed shipments with coordinates")
     public List<ActiveShipment> activeShipments() {
         return bookings.activeShipments();
     }
 
     @GetMapping("/stats")
+    @Tag(name = "stats")
     @Operation(operationId = "getStats", summary = "Dashboard KPIs; hourly series over the last `hours` hours")
     public Stats stats(@RequestParam(required = false, defaultValue = "24") int hours) {
         if (hours < 1 || hours > MAX_STATS_HOURS) {
@@ -80,6 +84,7 @@ public class OperationsController {
     }
 
     @GetMapping("/board")
+    @Tag(name = "board")
     @Operation(operationId = "listBoardResults", summary = "Cached results from the 5U board (/v1/board/me)")
     public List<BoardResult> board() {
         return reference.boardResults();

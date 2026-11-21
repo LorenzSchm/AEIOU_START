@@ -129,7 +129,7 @@ class ReadApiTest extends ApiTestBase {
                 VALUES (:s, 'extract', 'gpt-4o-mini', '{"messages": []}', '{"ok": true}') RETURNING id""")
                 .param("s", s).query(Long.class).single();
         JsonNode calls = getJson("/api/llm-calls?sessionId=" + s);
-        assertThat(calls.at("/items/0").has("request")).isFalse();
+        assertThat(calls.at("/items/0/request").isNull()).isTrue();  // payloads only on the detail endpoint
         assertThat(getJson("/api/llm-calls/" + call).at("/response/ok").asBoolean()).isTrue();
 
         long tariff = jdbc.sql("""

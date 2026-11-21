@@ -3,7 +3,7 @@
 import { format, parseISO } from "date-fns";
 import type { ReactNode } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { BoardResult, HourlyStat, SessionSummary } from "@/api/generated/model";
+import type { BoardResult, StatsHour, SessionSummary } from "@/api/generated/model";
 import { useThemeColors, type ThemeColors } from "@/lib/use-theme-colors";
 
 function axis(c: ThemeColors) {
@@ -46,7 +46,7 @@ function Legend({ items }: { items: { label: string; color: string }[] }) {
 
 const hourLabel = (h: string) => format(parseISO(h), "HH:mm");
 
-export function QuotesPerHour({ hourly }: { hourly: HourlyStat[] }) {
+export function QuotesPerHour({ hourly }: { hourly: StatsHour[] }) {
   const c = useThemeColors();
   const data = hourly.slice(-12).map((h) => ({ hour: hourLabel(h.hour), Quotes: h.quotes, Accepted: h.accepted, Rejected: h.rejected }));
   return (
@@ -67,7 +67,7 @@ export function QuotesPerHour({ hourly }: { hourly: HourlyStat[] }) {
   );
 }
 
-export function CostPerHour({ hourly }: { hourly: HourlyStat[] }) {
+export function CostPerHour({ hourly }: { hourly: StatsHour[] }) {
   const c = useThemeColors();
   const data = hourly.slice(-12).map((h) => ({ hour: hourLabel(h.hour), Cost: Number(h.llmCostUsd), perQuote: h.quotes ? Number(h.llmCostUsd) / h.quotes : 0 }));
   return (

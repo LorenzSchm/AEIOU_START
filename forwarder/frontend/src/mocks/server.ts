@@ -7,7 +7,7 @@ import type { NextRequest } from "next/server";
 import type {
   AdminStatus,
   EventItem,
-  LiveSwitches,
+  LiveUpdate,
   LlmCall,
   MailDetail,
   MailSummary,
@@ -235,14 +235,14 @@ function adminStatus(): AdminStatus {
   return { ...db().admin };
 }
 
-function setLive(body: LiveSwitches): Response {
+function setLive(body: LiveUpdate): Response {
   const d = db();
   const changes: string[] = [];
-  if (body.pollingEnabled !== undefined && body.pollingEnabled !== d.admin.pollingEnabled) {
+  if (body.pollingEnabled != null && body.pollingEnabled !== d.admin.pollingEnabled) {
     d.admin.pollingEnabled = body.pollingEnabled;
     changes.push(`mailbox polling ${body.pollingEnabled ? "on" : "off"}`);
   }
-  if (body.autopilot !== undefined && body.autopilot !== d.admin.autopilot) {
+  if (body.autopilot != null && body.autopilot !== d.admin.autopilot) {
     d.admin.autopilot = body.autopilot;
     d.settings = d.settings.map((s) => (s.key === "autopilot" ? { ...s, value: body.autopilot, updatedAt: nowIso(), updatedBy: "ops" } : s));
     changes.push(body.autopilot ? "automatic answering on" : "draft mode on");
@@ -429,7 +429,7 @@ export async function handleMockRequest(request: NextRequest, path: string[]): P
       return json(updated);
     }
     if (a === "admin" && b === "live") {
-      const body = await readJson<LiveSwitches>(request);
+      const body = await readJson<LiveUpdate>(request);
       return setLive(body ?? {});
     }
   }

@@ -3,7 +3,7 @@
  * steps the real agents take (ARCHITECTURE.md §4) and writes the same event
  * kinds, so the UI exercises every code path it will see in production.
  */
-import type { BidRequest, Booking, MailDetail, PriceCandidate, PriceCandidateSource, Rfq } from "@/api/generated/model";
+import type { BidRequest, Booking, MailDetail, PriceCandidate, PriceSource, Rfq } from "@/api/generated/model";
 import * as T from "./mails";
 import {
   AIRPORTS,
@@ -70,7 +70,7 @@ export interface RfqSpec {
 // ───────────────────────────── pricing ─────────────────────────────
 
 interface Quote {
-  source: PriceCandidateSource;
+  source: PriceSource;
   airline: string | null;
   totalEur: number;
   total: number;
@@ -82,7 +82,7 @@ interface Quote {
 
 const chargeable = (kg: number, cbm: number) => Math.max(kg, Math.round(cbm * 167 * 10) / 10);
 
-function airQuote(airline: string, spec: RfqSpec, source: PriceCandidateSource, factor = 1): Quote {
+function airQuote(airline: string, spec: RfqSpec, source: PriceSource, factor = 1): Quote {
   const region = AIRPORTS[spec.dest]?.region ?? "AS";
   const ch = chargeable(spec.kg, spec.cbm);
   const breakKg = [45, 100, 250, 500, 1000, 2000].filter((b) => b <= ch).pop() ?? 0;
