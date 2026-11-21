@@ -10,7 +10,7 @@ import OfferBars from "./OfferBars";
 import Timeline from "./Timeline";
 import { deriveProcess } from "../../lib/process";
 import { api } from "../../lib/api";
-import { clock, eur, kindLabel, secondsLeft, statusOf, transitLabel } from "../../lib/format";
+import { clock, eur, kindLabel, needsAttention, secondsLeft, statusOf, transitLabel } from "../../lib/format";
 import { spring } from "../../lib/motion";
 
 /** Stable sheet frame: slides in once; switching cases only crossfades the content. */
@@ -53,7 +53,16 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
   const closeRef = useRef(null);
 
   useEffect(() => {
-    const onKey = (e) => e.key === "Escape" && onClose();
+    // Esc closes the case, but never while typing: that would silently discard manual overrides.
+    const onKey = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const t = e.target;
+      if (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) {
+        t.blur();
+        return;
+      }
+      onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -114,6 +123,8 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
   );
 
   const canSend = proposal?.offer && !busy && !closed && !dirty;
+  // Anything that needs a human opens the override controls straight away.
+  const attention = Boolean(m.review_reason) || needsAttention(m);
   const canBook = m.delivery === "sent" && proposal?.offer?.rate_id && !m.booking;
 
   return (
@@ -191,7 +202,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
           <Section
             title="Shipment"
             icon="box"
-            defaultOpen={Boolean(m.review_reason)}
+            defaultOpen={attention}
             summary={[fields.weight_kg && fields.weight_kg + " kg", fields.volume_cbm && fields.volume_cbm + " m³", fields.preference]
               .filter(Boolean).join(" · ")}
           >
@@ -243,7 +254,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro }) {
         )}
 
         {request && (
-          <Section title="Carrier bids" icon="plane" badge={Object.keys(m.bid_requests || {}).length}
+          <Section title="Carrier bids" icon="plane" defaultOpen={attention} badge={Object.keys(m.bid_requests || {}).length}
                    summary={Object.values(m.bid_requests || {}).filter((v) => v === "priced").length + " priced"}>
             {Object.keys(m.bid_requests || {}).length > 0 && (
               <ul className="bid-list">
