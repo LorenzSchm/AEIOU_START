@@ -20,3 +20,21 @@ tasks.named('processResources') {
         into 'cloudline'
     }
 }
+
+// The optional native readers run in their own JVM and stay off the Spring classpath.
+tasks.register('edgeBundle', Zip) {
+    dependsOn tasks.named('bootJar'), gradle.includedBuild('edgelab').task(':installDist')
+    archiveFileName = 'dispatch-with-edge-tools.zip'
+    from(tasks.named('bootJar')) { rename { 'wave.jar' } }
+    from(rootProject.file('../edgelab/build/install/edgelab/lib')) { into 'edge-reader/lib' }
+}
+
+if (project.hasProperty('testEdgeBundle')) {
+    tasks.named('test') {
+        dependsOn gradle.includedBuild('edgelab').task(':installDist')
+        def libs = rootProject.file('../edgelab/build/install/edgelab/lib')
+        inputs.dir(libs)
+        systemProperty 'test.edge.lib', libs.absolutePath
+        environment 'EDGELAB_GATEWAY_ENABLED', 'false'
+    }
+}

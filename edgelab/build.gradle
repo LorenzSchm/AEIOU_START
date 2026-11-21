@@ -65,6 +65,13 @@ tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 tasks.withType(Test).configureEach {
     systemProperty 'edgelab.gateway.enabled', project.hasProperty('realGateway') ? 'true' : 'false'
 }
+// The standalone lab's live-branch purity check stays in 'test'. An integration
+// build deliberately modifies the backend, so run its reader contract separately.
+tasks.register('readerIntegrationTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    filter { excludeTestsMatching '*.BackendGuardTest.backendIsUntouchedComparedToLorenzBranch' }
+}
 // --- end gateway ---------------------------------------------------------------
 
 application {

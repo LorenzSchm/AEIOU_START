@@ -34,6 +34,7 @@ final class SoundTrack {
         int n = 0;
         boolean truncated = false;
         try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(new ByteArrayInputStream(bytes), bytes.length)) {
+            g.setOption("protocol_whitelist", "pipe");
             g.setSampleRate(AudioDecoder.SAMPLE_RATE);
             g.setAudioChannels(1);
             g.setSampleMode(FrameGrabber.SampleMode.FLOAT);

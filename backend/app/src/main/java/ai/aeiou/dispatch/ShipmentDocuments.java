@@ -8,6 +8,7 @@ import java.time.Clock;
 import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import javax.xml.stream.XMLStreamException;
 import org.springframework.web.client.ResourceAccessException;
@@ -70,6 +71,9 @@ final class ShipmentDocuments {
   private final Clock clock;
   private final Executor voiceExecutor;
   private final boolean packingTools;
+  private final EdgeAttachmentReader edgeReader;
+  private final Set<Attachment> pending = ConcurrentHashMap.newKeySet();
+  private final int readerVersion;
   private final Map<Attachment, PackingSafety.Document> extracted =
       new LinkedHashMap<>(64, 0.75f, true) {
         @Override
@@ -80,24 +84,32 @@ final class ShipmentDocuments {
 
   ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog, Clock clock, Executor voiceExecutor,
       boolean packingTools) {
+    this(ledger, upstream, catalog, clock, voiceExecutor, packingTools, null);
+  }
+
+  ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog, Clock clock, Executor voiceExecutor,
+      boolean packingTools, EdgeAttachmentReader edgeReader) {
     this.ledger = ledger;
     this.upstream = upstream;
     this.catalog = catalog;
     this.clock = clock;
     this.voiceExecutor = voiceExecutor;
     this.packingTools = packingTools;
-    if (packingTools) ledger.jdbc().execute("""
+    this.edgeReader = edgeReader;
+    this.readerVersion = edgeReader == null ? PACKING_READER_VERSION : 2;
+    if (packingTools || edgeReader != null) ledger.jdbc().execute("""
         CREATE TABLE IF NOT EXISTS packing_tool_read (
           message_id INTEGER, attachment_id INTEGER, reader_version INTEGER, text TEXT,
           PRIMARY KEY(message_id, attachment_id, reader_version))
         """);
   }
 
-  private List<PackingSafety.Document> read(Map<String, Object> message, boolean packing) {
+  private synchronized List<PackingSafety.Document> read(Map<String, Object> message, boolean packing) {
     var documents = new ArrayList<PackingSafety.Document>();
     for (Object raw : ledger.read(message.get("attachments"), List.class)) {
       var file = (Map<?, ?>) raw;
-      var key = new Attachment(Ledger.id(message.get("id")), Ledger.id(file.get("id")), packing && packingTools);
+      var key = new Attachment(Ledger.id(message.get("id")), Ledger.id(file.get("id")),
+          edgeReader != null || (packing && packingTools));
       try {
         if (!extracted.containsKey(key)) {
           String filename = Objects.toString(file.get("filename"), "");
@@ -120,9 +132,10 @@ final class ShipmentDocuments {
   private PackingSafety.Document readAttachment(Attachment key, String filename)
       throws IOException, XMLStreamException {
     if (key.recoverPacking()) {
+      if (pending.contains(key)) throw new WaveWorker.RetryLater("Reading the attachment.");
       var prior = ledger.jdbc().queryForList(
           "SELECT text FROM packing_tool_read WHERE message_id=? AND attachment_id=? AND reader_version=?",
-          String.class, key.messageId(), key.attachmentId(), PACKING_READER_VERSION);
+          String.class, key.messageId(), key.attachmentId(), readerVersion);
       if (!prior.isEmpty()) return prior.getFirst() == null ? null : new PackingSafety.Document(prior.getFirst());
     }
     // A download error is transient. Let read() retry it on the next pass.
@@ -135,7 +148,8 @@ final class ShipmentDocuments {
     if (!mislabeledPdf) {
       try {
         String text = PackingSafety.extract(filename, bytes);
-        if (!text.isBlank()) return new PackingSafety.Document(text);
+        if (!text.isBlank() && (edgeReader == null || text.indexOf('\0') < 0))
+          return new PackingSafety.Document(text);
       } catch (IOException | XMLStreamException unreadable) {
         // Try a complete plain-text packing document; binary containers stay on hold.
       }
@@ -150,9 +164,43 @@ final class ShipmentDocuments {
     } else {
       recovered = PackingAttachmentTools.recoverPackingText(bytes).orElse(null);
     }
-    ledger.jdbc().update("INSERT OR IGNORE INTO packing_tool_read(message_id,attachment_id,reader_version,text) VALUES(?,?,?,?)",
-        key.messageId(), key.attachmentId(), PACKING_READER_VERSION, recovered);
+    if (recovered == null && edgeReader != null) {
+      scheduleEdgeRead(key, filename, bytes);
+      throw new WaveWorker.RetryLater("Reading the attachment.");
+    }
+    storeResult(key, recovered);
     return recovered == null ? null : new PackingSafety.Document(recovered);
+  }
+
+  private void storeResult(Attachment key, String text) {
+    ledger.jdbc().update("INSERT OR IGNORE INTO packing_tool_read(message_id,attachment_id,reader_version,text) VALUES(?,?,?,?)",
+        key.messageId(), key.attachmentId(), readerVersion, text);
+  }
+
+  private void scheduleEdgeRead(Attachment key, String filename, byte[] bytes) {
+    if (pending.size() >= 2) throw new WaveWorker.RetryLater("Waiting for an attachment reader.");
+    pending.add(key);
+    try {
+      voiceExecutor.execute(() -> {
+        try {
+          String result = null;
+          try {
+            result = edgeReader.read(filename, bytes);
+          } catch (IOException | RuntimeException unreadable) {
+            // The existing document workflow will request a readable copy.
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+          storeResult(key, result);
+        } finally {
+          pending.remove(key);
+        }
+      });
+    } catch (RejectedExecutionException busy) {
+      pending.remove(key);
+      throw new WaveWorker.RetryLater("Waiting for an attachment reader.");
+    }
   }
 
   Map<String, Object> withAttachedRequest(Map<String, Object> original) {
@@ -164,7 +212,7 @@ final class ShipmentDocuments {
       message.put("voice_transcript", transcript);
       return message;
     }
-    if (!hasRequestAttachment(original)) return original;
+    if (!hasRequestAttachment(original) && (edgeReader == null || !hasSingleAttachment(original))) return original;
     var text = requestText(read(original, false));
     if (text == null) return original;
     return withRequestText(original, text);
@@ -172,7 +220,12 @@ final class ShipmentDocuments {
 
   private String voiceTranscript(Map<String, Object> message) {
     String transcript = Ledger.str(message, "voice_transcript");
-    return transcript.isBlank() ? transcribe(message) : transcript;
+    if (transcript.isBlank()) transcript = transcribe(message);
+    if (transcript.isBlank() && edgeReader != null && !awaitingVoice(message)) {
+      var files = read(message, false);
+      if (files.size() == 1 && files.getFirst() != null) return files.getFirst().text();
+    }
+    return transcript;
   }
 
   private Map<String, Object> withRequestText(Map<String, Object> original, String text) {
@@ -228,6 +281,11 @@ final class ShipmentDocuments {
     return hasAttachment(message, "quotation-request.pdf", "quotation-request.docx", "quotation-request.txt");
   }
 
+  private boolean hasSingleAttachment(Map<String, Object> message) {
+    var attachments = ledger.read(message.get("attachments"), List.class);
+    return attachments != null && attachments.size() == 1 && attachments.getFirst() instanceof Map<?, ?>;
+  }
+
   private boolean hasAttachment(Map<String, Object> message, String... names) {
     var attachments = ledger.read(message.get("attachments"), List.class);
     return attachments != null && attachments.size() == 1
@@ -263,7 +321,7 @@ final class ShipmentDocuments {
     var attachments = ledger.read(message.get("attachments"), List.class);
     if (attachments == null || attachments.size() != 1
         || !(attachments.getFirst() instanceof Map<?, ?> file)
-        || !Ledger.str(file, "filename").toLowerCase(Locale.ROOT).matches(".*\\.(?:txt|pdf|docx)"))
+        || (edgeReader == null && !Ledger.str(file, "filename").toLowerCase(Locale.ROOT).matches(".*\\.(?:txt|pdf|docx)")))
       return null;
     var files = read(message, false);
     if (files.size() != 1 || files.getFirst() == null) return null;
@@ -329,7 +387,7 @@ final class ShipmentDocuments {
     }
     if (dg) return dangerousGoods(dangerous, followUpDocuments, evidence);
     if (latestPacking == originalPacking && (voiceRequest
-        || (hasRequestAttachment(original) && requestText(latestPacking) != null))) {
+        || ((hasRequestAttachment(original) || edgeReader != null) && requestText(latestPacking) != null))) {
       var parsed = MailParser.request(Ledger.str(original, "subject"), Ledger.str(original, "body"),
           false, catalog, confirmedPickupZone, customerDeliveryAirport);
       return new Decision(null, null, null, parsed.issue() == null ? parsed.shipment() : null);

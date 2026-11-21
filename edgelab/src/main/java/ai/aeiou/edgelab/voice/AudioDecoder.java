@@ -43,7 +43,8 @@ public final class AudioDecoder {
         float[] out = new float[Math.min(maxSamples, 30 * SAMPLE_RATE)];
         int n = 0;
         boolean truncated = false;
-        try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(new ByteArrayInputStream(bytes), 0)) {
+        try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(new ByteArrayInputStream(bytes), bytes.length)) {
+            g.setOption("protocol_whitelist", "pipe");
             g.setSampleRate(SAMPLE_RATE);
             g.setAudioChannels(1);
             g.setSampleMode(FrameGrabber.SampleMode.FLOAT);

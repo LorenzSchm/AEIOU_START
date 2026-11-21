@@ -2018,6 +2018,44 @@ class WaveWorkerTest {
         ledger.jdbc().queryForObject("SELECT count(*) FROM packing_tool_read", Integer.class));
   }
 
+  @org.junit.jupiter.api.condition.EnabledIfSystemProperty(named = "test.edge.lib", matches = ".+")
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"packing.txt", "bundle.zip", "broken.zip"})
+  void edgeFallbackRunsOnlyForUnreadableAttachments(String name) throws Exception {
+    worker = new WaveWorker(ledger, catalog, upstream, clock,
+        new RfqGateway(upstream, ledger, catalog, mapper, clock, "gpt-4o-mini"),
+        new MailboxWebhook(ledger, catalog, clock, mapper, ""), true, START, 75, false,
+        Runnable::run, false, System.getProperty("test.edge.lib"));
+    String packing = "Packing List\nDestination airport: LAX\nTotal gross weight (kg): 100\n"
+        + "Total volume (cbm): 0.2\nDangerous goods: None";
+    receiveDocument(7, null, name, "Cheapest air freight from FRA to LAX. Please use the packing list.", packing);
+    if (name.equals("bundle.zip")) {
+      var bytes = new java.io.ByteArrayOutputStream();
+      try (var zip = new java.util.zip.ZipOutputStream(bytes)) {
+        zip.putNextEntry(new java.util.zip.ZipEntry("packing.txt"));
+        zip.write(packing.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      }
+      when(upstream.bytes(7, 1)).thenReturn(bytes.toByteArray());
+    } else if (name.equals("broken.zip")) {
+      when(upstream.bytes(7, 1)).thenReturn(new byte[]{0, 1, 2});
+    }
+    worker.work();
+    worker.work();
+    if (name.equals("broken.zip")) {
+      assertNotNull(ledger.delivery("packing-copy:7"));
+      verify(upstream, never()).rates(any(), any());
+    } else {
+      assertEquals("collecting", ledger.mail(7).get("stage"));
+      var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+      assertEquals(0, shipment.weightKg().compareTo(new java.math.BigDecimal("100")));
+      assertEquals(0, shipment.volumeCbm().compareTo(new java.math.BigDecimal("0.2")));
+      assertEquals("LAX", shipment.destination());
+    }
+    assertEquals(name.equals("packing.txt") ? 0 : 1,
+        ledger.jdbc().queryForObject("SELECT count(*) FROM packing_tool_read", Integer.class));
+    verify(upstream, times(1)).bytes(7, 1);
+  }
+
   @Test
   void automaticallyRequestsAndAppliesCorrectedPackingList() throws Exception {
     receiveDocument(

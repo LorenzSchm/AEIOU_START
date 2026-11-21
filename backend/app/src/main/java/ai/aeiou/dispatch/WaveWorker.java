@@ -46,6 +46,14 @@ class WaveWorker {
         counteroffers, Runnable::run, false);
   }
 
+  WaveWorker(
+      Ledger ledger, Catalog catalog, FiveU upstream, Clock clock, RfqGateway gateway, MailboxWebhook webhook,
+      boolean automatic, Instant start, long waitSeconds, boolean counteroffers, Executor voiceExecutor,
+      boolean packingTools) {
+    this(ledger, catalog, upstream, clock, gateway, webhook, automatic, start, waitSeconds,
+        counteroffers, voiceExecutor, packingTools, "");
+  }
+
   @org.springframework.beans.factory.annotation.Autowired
   WaveWorker(
       Ledger ledger,
@@ -59,7 +67,8 @@ class WaveWorker {
       @Value("${dispatch.bid-wait-seconds}") long waitSeconds,
       @Value("${dispatch.counteroffers}") boolean counteroffers,
       @org.springframework.beans.factory.annotation.Qualifier("voiceExecutor") Executor voiceExecutor,
-      @Value("${dispatch.packing-tools:false}") boolean packingTools) {
+      @Value("${dispatch.packing-tools:false}") boolean packingTools,
+      @Value("${dispatch.edge-reader-lib:}") String edgeReaderLibrary) {
     this.ledger = ledger;
     this.catalog = catalog;
     this.upstream = upstream;
@@ -70,7 +79,8 @@ class WaveWorker {
     this.start = start;
     this.waitSeconds = waitSeconds;
     this.counteroffers = counteroffers;
-    this.documents = new ShipmentDocuments(ledger, upstream, catalog, clock, voiceExecutor, packingTools);
+    this.documents = new ShipmentDocuments(ledger, upstream, catalog, clock, voiceExecutor, packingTools,
+        EdgeAttachmentReader.fromLibrary(edgeReaderLibrary));
     this.clarifications = new CustomerClarifications(ledger, catalog);
     this.carrierRestrictions = new CarrierRestrictions(ledger, upstream, clock);
   }

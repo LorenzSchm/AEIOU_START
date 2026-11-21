@@ -64,6 +64,23 @@ class PackingToolTest {
     verify(upstream, times(2)).bytes(7, 1);
   }
 
+  @Test void pendingEdgeReadYieldsToOtherRequestsAndPreservesTheHoldOnFailure() throws Exception {
+    var jobs = new ArrayDeque<Runnable>();
+    var ledger = new Ledger(temp.resolve("worker.sqlite").toString(), new ObjectMapper());
+    var docs = new ShipmentDocuments(ledger, upstream, new DispatchApplication().catalog(), Clock.systemUTC(),
+        jobs::add, false, (name, bytes) -> { throw new java.io.IOException("reader unavailable"); });
+    when(upstream.bytes(7, 1)).thenReturn(new byte[]{0, 1, 2});
+    when(upstream.bytes(8, 1)).thenReturn(packing.getBytes(StandardCharsets.UTF_8));
+    var broken = message(7, "unknown.zip");
+    assertThrows(WaveWorker.RetryLater.class, () -> inspect(docs, broken));
+    assertThrows(WaveWorker.RetryLater.class, () -> inspect(docs, broken));
+    assertFalse(inspect(docs, message(8, "packing.txt")).holdsQuote());
+    assertEquals(1, jobs.size());
+    jobs.remove().run();
+    assertEquals("packing-copy", inspect(docs, broken).action());
+    verify(upstream, times(1)).bytes(7, 1);
+  }
+
   @Test void aCorrectedAttachmentDoesNotInheritThePreviousResult() throws Exception {
     when(upstream.bytes(7, 1)).thenReturn(packing.getBytes(StandardCharsets.UTF_8));
     when(upstream.bytes(8, 1)).thenReturn((packing + "UN 1950").getBytes(StandardCharsets.UTF_8));

@@ -55,6 +55,7 @@ public final class FrameSampler {
     public Result sample(byte[] bytes) {
         try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(new ByteArrayInputStream(bytes), bytes.length);
              Java2DFrameConverter conv = new Java2DFrameConverter()) {
+            g.setOption("protocol_whitelist", "pipe");
             g.start();
             if (g.getVideoStream() < 0 || g.getImageWidth() <= 0) {
                 g.stop();
