@@ -29,6 +29,9 @@ const paths = {
   "mic-off": <><path d="M15 9.3V5.5a3 3 0 0 0-5.7-1.3M9 9v2.5a3 3 0 0 0 4.9 2.3M5 11a7 7 0 0 0 11.4 5.4M19 11a7 7 0 0 1-.5 2.6M12 18v3.5M3 3l18 18" /></>,
   play: <path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.8l-12-7.5A1 1 0 0 0 7 4.5z" fill="currentColor" />,
   pause: <><rect x="6" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" /><rect x="14" y="4.5" width="4" height="15" rx="1.2" fill="currentColor" /></>,
+  users: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14a6.5 6.5 0 0 1 3 6" /></>,
+  funnel: <path d="M3 4h18l-7 8.5V19l-4 2v-8.5z" />,
+  sort: <><path d="m7 15 5 5 5-5" /><path d="m7 9 5-5 5 5" /></>,
 };
 
 export default function Icon({ name, size = 18, className, title }) {

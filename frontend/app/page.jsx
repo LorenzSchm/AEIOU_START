@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Icon from "./components/ui/Icon";
 import Overview from "./components/overview/Overview";
 import Queue from "./components/queue/Queue";
+import Crm from "./components/crm/Crm";
 import CaseSheet from "./components/case/CaseSheet";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import { useDispatchData } from "./lib/api";
@@ -14,13 +15,15 @@ import { spring } from "./lib/motion";
 const NAV = [
   { id: "overview", label: "Overview", icon: "overview" },
   { id: "queue", label: "Queue", icon: "queue" },
+  { id: "crm", label: "Shipments", icon: "box" },
 ];
+const TITLES = { overview: "Overview", queue: "Queue", crm: "Shipments" };
 
 function readUrl() {
   if (typeof window === "undefined") return { view: "overview", caseId: null, scope: "attention" };
   const p = new URLSearchParams(window.location.search);
   return {
-    view: p.get("view") === "queue" ? "queue" : "overview",
+    view: ["queue", "crm"].includes(p.get("view")) ? p.get("view") : "overview",
     caseId: p.get("case") ? Number(p.get("case")) : null,
     scope: ["attention", "requests", "all"].includes(p.get("scope")) ? p.get("scope") : "attention",
   };
@@ -197,7 +200,7 @@ export default function Page() {
         <header className="page-head">
           <div>
             <div className="eyebrow">Air export · Live wave</div>
-            <h1>{nav.view === "queue" ? "Queue" : "Overview"}</h1>
+            <h1>{TITLES[nav.view] || "Overview"}</h1>
           </div>
         </header>
 
@@ -227,12 +230,17 @@ export default function Page() {
                        setScope={setScope} onSelect={openCase} />
               </KeptView>
             )}
+            {seen.current.has("crm") && (
+              <KeptView name="crm" active={nav.view === "crm"}>
+                <Crm messages={messages} onOpen={openCase} />
+              </KeptView>
+            )}
           </>
         )}
       </main>
 
       <AnimatePresence>
-        {current && nav.view === "overview" && (
+        {current && nav.view !== "queue" && (
           <motion.div key="scrim" className="scrim" onClick={closeCase}
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
         )}
