@@ -372,51 +372,49 @@ class WaveWorker {
       else ledger.stage(id, "review", issue);
       return;
     }
-    if (details.pickupReply() != null && s.pickupZone() != null)
-      sendInvitations(id, s, details, deadline, true);
+    // Carriers can work on the tender while the portal is answering rate reads.
+    sendInvitations(id, s, details, deadline);
     long queried = Ledger.id(w.get("queried"));
-    boolean completePortal = queried == -1;
+    boolean portalReady = queried == -1;
     if (queried == 0
         || (queried > 0
             && clock.instant().getEpochSecond() - queried >= 35
             && clock.instant().isBefore(deadline.minusSeconds(35)))) {
-      var result = upstream.rates(s, clock.instant());
-      completePortal = result.complete();
       var offers = new ArrayList<Offer>(Arrays.asList(cached(w)));
+      var result = offers.isEmpty() ? upstream.rates(s, clock.instant())
+          : upstream.rates(s, clock.instant(), offers, (String) w.get("portal_version"));
+      if (result.reset()) offers.clear();
+      portalReady = result.complete();
       for (var o : result.offers()) {
         offers.removeIf(
             old ->
                 old.airline().equals(o.airline()) && old.billedKg().compareTo(o.billedKg()) == 0);
         offers.add(o);
       }
+      long nextQuery = portalReady ? -1 : clock.instant().getEpochSecond();
+      if (result.reset() && offers.isEmpty()) nextQuery = 0;
+      String version = result.version();
+      if (!result.reset() && version == null) version = (String) w.get("portal_version");
       ledger
           .jdbc()
           .update(
-              "UPDATE wave_case SET offers=?,queried=? WHERE id=?",
-              ledger.write(offers),
-              result.complete() ? -1 : clock.instant().getEpochSecond(),
-              id);
-    }
-    if (s.pickupZone() == null && completePortal) {
-      var draft = calculate(id, s, null, true);
-      var offer = draft.offer();
-      if (offer != null
-          && "portal".equals(offer.source())
-          && offer.rateId() != null
-          && !offer.rateId().isBlank()
-          && offer.totalEur().signum() > 0
-          && offer.validUntil().isAfter(clock.instant().plusSeconds(120))) {
-        save(id, s, draft, false);
-        sendQuote(id, draft.revision());
+              "UPDATE wave_case SET offers=?,queried=?,portal_version=? WHERE id=?",
+              ledger.write(offers), nextQuery, version, id);
+      if (nextQuery == 0 && clock.instant().isBefore(deadline.minusSeconds(35))) {
+        ledger.stage(id, "collecting", "Portal dataset changed. Refreshing live rates.");
         return;
       }
     }
-    sendInvitations(id, s, details, deadline, false);
     var tenders = ledger.tenders(id);
     boolean allAnswered =
         !tenders.isEmpty() && tenders.stream().allMatch(t -> t.get("reply_id") != null);
-    Instant waitUntil = received.plusSeconds(waitSeconds);
-    if (!allAnswered && clock.instant().isBefore(waitUntil)) {
+    var firstBid = ledger.jdbc().queryForObject(
+        "SELECT min(attempted_at) FROM deliveries WHERE action LIKE ?", String.class, "bid:" + id + ":%");
+    Instant began = firstBid == null ? received : Ledger.instant(firstBid);
+    Instant waitUntil = began.plusSeconds(waitSeconds);
+    // Reserve time for the final gateway check and delivery, even after a late clarification.
+    if (waitUntil.isAfter(deadline.minusSeconds(25))) waitUntil = deadline.minusSeconds(25);
+    if ((!allAnswered || !portalReady) && clock.instant().isBefore(waitUntil)) {
       ledger.stage(id, "collecting", null);
       return;
     }
@@ -501,7 +499,8 @@ class WaveWorker {
       }
     }
     if (awaitingReply) return;
-    long initialSlots = catalog.invitations(shipment).stream().filter(Catalog.Carrier::truck).count();
+    long initialSlots = invitations(id, shipment, details.pickupReply() != null).stream()
+        .filter(Catalog.Carrier::truck).count();
     for (var carrier : catalog.carriers) {
       if (active.size() >= initialSlots + 2 || !clock.instant().isBefore(deadline.minusSeconds(38))) return;
       if (!carrier.truck() || !carrier.serves(shipment.pickupZone()) || !active.add(carrier.email())) continue;
@@ -590,7 +589,7 @@ class WaveWorker {
   }
 
   private List<Catalog.Carrier> invitations(long id, Shipment shipment, boolean confirmedPickup) {
-    var selected = catalog.invitations(shipment);
+    var selected = catalog.invitations(shipment, priorCoverage(id, shipment));
     if (!confirmedPickup || shipment.pickupZone() == null) return selected;
     var airlines = selected.stream().filter(c -> !c.truck()).toList();
     var trucks = new LinkedHashSet<Catalog.Carrier>();
@@ -604,16 +603,20 @@ class WaveWorker {
   }
 
   private void sendInvitations(long id, Shipment shipment, CustomerClarifications.Details details,
-      Instant deadline, boolean trucksOnly) {
+      Instant deadline) {
     for (var carrier : invitations(id, shipment, details.pickupReply() != null)) {
       if (clock.instant().isAfter(deadline.minusSeconds(8))) return;
-      if (trucksOnly && !carrier.truck()) continue;
       try {
         invite(id, shipment, carrier, details);
       } catch (Conflict ex) {
         log.info("RFQ {} bid to {}: {}", id, carrier.name(), ex.getMessage());
       }
     }
+  }
+
+  private Map<String, Boolean> priorCoverage(long id, Shipment shipment) {
+    // Fix the cutoff at arrival: repeated ticks must keep the same invitation budget.
+    return ledger.coverage(id, shipment, Ledger.instant(ledger.mail(id).get("received")));
   }
 
   private boolean sameAirShipment(Shipment first, Shipment second) {
@@ -932,7 +935,8 @@ class WaveWorker {
 
   private Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c,
       CustomerClarifications.Details details) {
-    if (catalog.problem(s) != null || !c.serves(c.truck() ? s.pickupZone() : s.destination()))
+    if (catalog.problem(s) != null || (!c.serves(c.truck() ? s.pickupZone() : s.destination())
+        && (c.truck() || !Boolean.TRUE.equals(priorCoverage(id, s).get(c.email())))))
       throw new IllegalArgumentException("Check shipment and carrier coverage.");
     var previous = ledger.tenders(id).stream().filter(t -> c.email().equals(t.get("email"))).findFirst();
     boolean citywide = c.truck() && details.area() != null;

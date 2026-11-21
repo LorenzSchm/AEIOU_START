@@ -880,7 +880,9 @@ class WaveWorkerTest {
         }
       }
     } else {
-      assertEquals(1, outbound.size());
+      assertTrue(outbound.stream().allMatch(m -> m.get("subject").toString().startsWith("Rate request")));
+      assertNull(ledger.delivery("quote:7"));
+      clock.current = START.plusSeconds(75);
     }
     worker.work();
     assertEquals("sent", ledger.delivery("quote:7"));
@@ -946,6 +948,58 @@ class WaveWorkerTest {
   }
 
   @Test
+  void anAirlineBidAtFiftySecondsCanBeatAnImmediatePortalOffer() {
+    request("");
+    var portal = new Offer("Portal", 2, new java.math.BigDecimal("100"),
+        new java.math.BigDecimal("100"), "portal", "R-price", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenAnswer(call -> {
+      assertEquals(5, outbound.size());
+      return new FiveU.Rates(List.of(portal), true);
+    });
+    worker.work();
+    var invite = outbound.getFirst();
+    clock.current = START.plusSeconds(50);
+    receive(20, invite.get("to").toString(), "Re: " + invite.get("subject"),
+        "All-in EUR 70.00, transit 2 days.", Ledger.id(invite.get("id")));
+    worker.work();
+    assertNull(ledger.delivery("quote:7"));
+    clock.current = START.plusSeconds(75);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 70.00"));
+  }
+
+  @Test
+  void usesEarlierCarrierMailToChooseRoundFourInvitationsAfterRestart() throws Exception {
+    var waves = mapper.readTree(getClass().getResource("/six-wave-rfqs.json"));
+    long reply = 50;
+    for (int round : List.of(0, 1)) {
+      var fixture = waves.get(round);
+      long id = round == 0 ? 7 : 100;
+      receive(id, "buyer@example.invalid", fixture.get("subject").asText(), fixture.get("body").asText(), null);
+      worker.work();
+      for (var invite : List.copyOf(outbound)) {
+        if (!invite.get("subject").toString().startsWith("Rate request AEIOU-" + id + " ")) continue;
+        String email = invite.get("to").toString();
+        receive(reply++, email, "Re: " + invite.get("subject"), fixture.get("replies").required(email).asText(),
+            Ledger.id(invite.get("id")));
+      }
+      clock.current = START.plusSeconds((round + 1) * 60);
+    }
+    restart();
+    var fourth = waves.get(3);
+    receive(200, "buyer@example.invalid", fourth.get("subject").asText(), fourth.get("body").asText(), null);
+    worker.work();
+    var addresses = ledger.tenders(200).stream().map(t -> t.get("email")).toList();
+    assertEquals(5, addresses.size());
+    assertTrue(addresses.contains("ibisair-cargo@hackloop.mail"));
+    assertFalse(addresses.contains("borealis-freight-airways@hackloop.mail"));
+    assertFalse(addresses.contains("elbflug-air-freight@hackloop.mail"));
+    var s = mapper.treeToValue(fourth.get("shipment"), Shipment.class);
+    assertTrue(ledger.coverage(200, s, START.plusSeconds(3601)).isEmpty());
+  }
+
+  @Test
   void ambiguousUnitsUseOneGatewayCallAcrossPolls() {
     receive(
         7,
@@ -982,7 +1036,7 @@ class WaveWorkerTest {
     // Round 8 portal observations. Only the HTTP boundary and rate IDs are fixtures.
     var rateReads = new ArrayList<String>();
     var portal =
-        new FiveU("http://localhost", "fixture") {
+        new FiveU("http://localhost", "fixture", ledger) {
           @Override
           Map<String, Object> get(String uri, Object... args) {
             if (uri.endsWith("/ports"))
@@ -1047,8 +1101,11 @@ class WaveWorkerTest {
     worker.work();
     var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
     assertEquals(List.of("AU-486", "BX-486", "AU-500", "BX-500"), rateReads);
+    assertNull(ledger.delivery("quote:7"));
+    clock.current = START.plusSeconds(75);
+    worker.work();
     assertEquals("sent", ledger.delivery("quote:7"));
-    assertEquals(1, outbound.size());
+    assertEquals(1, outbound.stream().filter(m -> "buyer@example.invalid".equals(m.get("to"))).count());
     var quote = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
     assertEquals("BX-500", quote.offer().rateId());
     assertEquals("1475.00", quote.offer().totalEur().toPlainString());
@@ -1166,9 +1223,10 @@ class WaveWorkerTest {
                         START.plusSeconds(900))),
                 true));
     worker.work();
+    clock.current = START.plusSeconds(75);
+    worker.work();
     assertEquals("sent", ledger.delivery("quote:7"));
-    assertEquals(1, outbound.size());
-    assertTrue(outbound.getFirst().get("body").toString().contains("EUR 50.00"));
+    assertEquals(1, outbound.stream().filter(m -> m.get("body").toString().contains("EUR 50.00")).count());
     verify(upstream, times(1)).parseRfq(anyMap());
   }
 

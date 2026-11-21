@@ -77,6 +77,7 @@ class Ledger {
         """);
     ensureColumn("tender", "bid_action", "TEXT");
     ensureColumn("wave_case", "customer_reply", "INTEGER");
+    ensureColumn("wave_case", "portal_version", "TEXT");
     db.execute(
         "CREATE TABLE IF NOT EXISTS retry(action TEXT PRIMARY KEY, after_epoch INTEGER NOT NULL)");
     db.execute(
@@ -167,6 +168,40 @@ class Ledger {
   List<Map<String, Object>> tenders(long id) {
     return db.queryForList("SELECT * FROM tender WHERE request_id=? ORDER BY email", id);
   }
+
+  // Replay correlated carrier mail in observation order. Existing installations already
+  // have this evidence, including useful route lists inside unsuccessful bid replies.
+  Map<String, Boolean> coverage(long id, Shipment shipment, Instant now) {
+    var coverage = new HashMap<String, Boolean>();
+    String lane = shipment.origin() + "-" + shipment.destination();
+    for (var row : db.queryForList("""
+        SELECT m.sender,m.body,t.terms,t.euros,t.reply_id,m.id FROM mail m
+        JOIN tender t ON t.request_id=m.root AND t.email=m.sender AND t.leg='airline'
+        WHERE m.kind='carrier' AND m.stage IN ('bid unreadable','bid received')
+          AND m.root<? AND julianday(m.received) BETWEEN julianday(?) AND julianday(?)
+        ORDER BY julianday(m.received),m.id
+        """, id, now.minusSeconds(3600).toString(), now.toString())) {
+      String body = MailParser.authoredText(str(row, "body"));
+      String email = str(row, "sender");
+      var listed = FLOWN_LANES.matcher(body);
+      if (listed.find() && Arrays.asList(listed.group(1).toUpperCase(Locale.ROOT).split("\\s*,\\s*")).contains(lane))
+        coverage.put(email, true);
+      var denied = REFUSED_LANE.matcher(body);
+      if (denied.find() && lane.equalsIgnoreCase(denied.group(1))) coverage.put(email, false);
+      if (row.get("euros") != null && Objects.equals(row.get("reply_id"), row.get("id"))) {
+        var terms = read(row.get("terms"), Shipment.class);
+        if (terms != null && shipment.origin().equals(terms.origin())
+            && shipment.destination().equals(terms.destination())) coverage.put(email, true);
+      }
+    }
+    return coverage;
+  }
+
+  private static final String LANE = "[A-Z]{3}-[A-Z]{3}";
+  private static final Pattern FLOWN_LANES = Pattern.compile(
+      "(?i)\\bwe fly\\s+(" + LANE + "(?:\\s*,\\s*" + LANE + ")*)\\b");
+  private static final Pattern REFUSED_LANE = Pattern.compile(
+      "(?i)\\b(?:we )?do not serve (?:this |the )?(?:lane/zone|lane|route)\\s*:\\s*(" + LANE + ")\\b");
 
   static String bidAction(Map<String, Object> tender) {
     return tender.get("bid_action") == null
