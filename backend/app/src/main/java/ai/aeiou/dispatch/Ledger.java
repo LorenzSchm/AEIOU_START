@@ -562,7 +562,8 @@ class Ledger {
       String recipient,
       String subject,
       String body,
-      Instant time) {}
+      Instant time,
+      String language) {}
 
   private Map<Long, List<Outgoing>> outgoing(Map<Long, Long> parents) {
     Map<Long, List<Outgoing>> result = new HashMap<>();
@@ -592,7 +593,8 @@ class Ledger {
               recipient,
               str(payload, "subject"),
               (String) payload.get("body"),
-              time);
+              time,
+              MessageLanguage.detect((String) payload.get("body")));
       result.computeIfAbsent(owner, ignored -> new ArrayList<>()).add(item);
     }
     return result;
@@ -623,6 +625,7 @@ class Ledger {
       for (String k : List.of("fields", "attachments", "proposal", "booking", "board_result"))
         row.put(k, read(row.get(k), Object.class));
       row.put("thread_id", threadId(mid, parents));
+      row.put("language", MessageLanguage.detect((String) row.get("body")));
       row.put("outgoing", outgoing.getOrDefault(mid, List.of()));
       row.put("delivery", delivery("quote:" + mid));
       row.put("reply_delivery", delivery("reply:" + mid));
