@@ -37,8 +37,14 @@ crashes come back as `UNREADABLE` with a note.
 
 `Router` sends each detected type to one named slot: photo (`image/*`), voice (`audio/*`),
 video (`video/*`), container (zip, eml, msg, ...), plain text (`text/plain`), office
-(everything else, the Tika catch-all). Plain text and office are wired; the others answer
-"no ... reader yet". Each later reader replaces its own line in `Router.standard()`.
+(everything else, the Tika catch-all). All six slots are wired in `Router.standard()`.
+
+The video reader samples up to three frames for the photo reader and forwards an available
+audio track to the voice reader. Sampled video returns `PARTIAL` because text can appear
+between frames. Archives and email use Tika to enumerate parts. Each member goes through
+content detection again. A shared budget limits the walk to 32 parts, three container
+levels and 32 MiB of member data, with up to 8 MiB per part and 100,000 characters of
+output. Check the status and notes for skipped content.
 
 ## Office reader (`ai.aeiou.edgelab.office`)
 
@@ -48,8 +54,7 @@ body of eml/msg mails. Table rows come out one per line, cells joined with ` | `
 English decimals (2.85). Attachments and embedded files are not opened here; a note lists
 them. A PDF page with almost no text gets the note `page N looks scanned`, and the Reading is
 `partial`; `OfficeReader.extract(...)` returns the pages so the photo reader can render them.
-eml/msg are routed to the container slot; until the container walker exists they only read
-when the office reader is called directly.
+The container reader handles EML and MSG bodies together with their attachments.
 
 ## Packing tools
 

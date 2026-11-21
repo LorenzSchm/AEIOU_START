@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import ai.aeiou.edgelab.EdgeReader;
 import ai.aeiou.edgelab.Reading;
-import ai.aeiou.edgelab.Router;
 
 class OfficeReaderTest {
 
@@ -19,13 +18,6 @@ class OfficeReaderTest {
 
     /** The production wiring. */
     private static final EdgeReader READER = new EdgeReader();
-
-    /**
-     * eml/msg route to the container slot, which ticket 07 builds. Until then this
-     * stands in for it: the container slot hands mails to the office reader.
-     */
-    private static final EdgeReader MAIL_READER = new EdgeReader(
-            Router.standard().withContainer(OFFICE), EdgeReader.DEFAULT_MAX_BYTES);
 
     private static Reading read(String name, byte[] bytes) {
         return READER.read(name, bytes);
@@ -160,7 +152,7 @@ class OfficeReaderTest {
 
     @Test
     void emlBodyIsReadThroughTheContainerSlot() {
-        Reading r = MAIL_READER.read("rfq.eml", OfficeFixtures.eml());
+        Reading r = READER.read("rfq.eml", OfficeFixtures.eml());
         assertOk(r, "message/rfc822", "please quote 3 pieces, 412 kg", "Grüße");
     }
 

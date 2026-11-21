@@ -44,14 +44,16 @@ public final class Router {
 
     /** The production wiring. Later tickets swap their one line here. */
     public static Router standard() {
-        return empty()
-                .withPhoto(ai.aeiou.edgelab.photo.PhotoReader.standard())  // ticket 05: photo reader
-                .withVoice(ai.aeiou.edgelab.voice.VoiceReader.standard())  // ticket 02: voice reader
-                .withVideo(FormatReader.notYetSupported("video"))          // ticket: video reader
-                .withContainer(FormatReader.notYetSupported("container"))  // ticket: container walker
+        FormatReader photo = ai.aeiou.edgelab.photo.PhotoReader.standard();
+        FormatReader voice = ai.aeiou.edgelab.voice.VoiceReader.standard();
+        Router leaves = empty()
+                .withPhoto(photo)
+                .withVoice(voice)
+                .withVideo(new VideoReader(photo, voice))
                 .withPlainText(new PlainTextReader())
                 // ticket 04: Tika catch-all; ticket 05 wraps it so scanned PDF pages go to the photo reader
                 .withOffice(ai.aeiou.edgelab.photo.ScanAwareOfficeReader.standard());
+        return leaves.withContainer(new ContainerReader(new EdgeReader(leaves, EdgeReader.DEFAULT_MAX_BYTES)));
     }
 
     /** Every slot set to "not yet supported". */

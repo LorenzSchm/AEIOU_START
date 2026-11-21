@@ -43,7 +43,9 @@ public final class AudioDecoder {
         float[] out = new float[Math.min(maxSamples, 30 * SAMPLE_RATE)];
         int n = 0;
         boolean truncated = false;
-        try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(new ByteArrayInputStream(bytes), 0)) {
+        // MP4/M4A may place the track index at the end. The in-memory stream supports seeking.
+        try (FFmpegFrameGrabber g = new FFmpegFrameGrabber(new ByteArrayInputStream(bytes), bytes.length)) {
+            g.setOption("protocol_whitelist", "pipe");
             g.setSampleRate(SAMPLE_RATE);
             g.setAudioChannels(1);
             g.setSampleMode(FrameGrabber.SampleMode.FLOAT);
