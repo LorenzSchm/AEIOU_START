@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import ai.aeiou.freight.*;
 import com.fasterxml.jackson.databind.*;
 import java.math.BigDecimal;
-import java.nio.file.Path;
+import java.nio.file.*;
+import java.time.LocalDate;
+import java.util.zip.ZipFile;
 import java.time.Instant;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -32,6 +34,7 @@ class MarketReplayTest {
     final List<String> reads = new ArrayList<>();
     final Map<String, Offer> recorded = new LinkedHashMap<>();
     String version = "fixture-v1";
+    int limitAfter = Integer.MAX_VALUE;
     Shipment shipment;
     Instant now;
 
@@ -53,12 +56,60 @@ class MarketReplayTest {
                 .map(a -> Map.of("code", a, "name", a)).toList())));
       if (uri.contains("/brackets")) return Map.of("breaks_kg", List.of(0, 500));
       String name = (String) args[2];
+      if (reads.size() == limitAfter) {
+        var headers = new org.springframework.http.HttpHeaders();
+        headers.set("Retry-After", "35");
+        throw org.springframework.web.client.HttpClientErrorException.create(
+            org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, "limited", headers, null, null);
+      }
       reads.add(name);
       var o = recorded.get(name);
       return Map.of("airline", name, "currency", "EUR", "total", o.totalEur(),
           "chargeable_weight_kg", o.billedKg(), "transit_days", (int) o.days(),
           "valid_until", now.plusSeconds(900).toString(), "rate_id", o.rateId(),
           "dataset_version", version);
+    }
+  }
+
+  @Test void archivedFirstWavesReachMoreDocumentedAirlines() throws Exception {
+    var file = Path.of("../../aeiou-data-2026-11-21.zip");
+    var db = temp.resolve("archive.sqlite");
+    var catalog = new DispatchApplication().catalog();
+    try (var archive = new ZipFile(file.toFile())) {
+      String state = "aeiou-data/backend/state/";
+      try (var input = archive.getInputStream(archive.getEntry(state + "dispatch.sqlite3"))) {
+        Files.copy(input, db);
+      }
+      var prior = new Ledger(db.toString(), mapper);
+      var ports = mapper.readTree(archive.getInputStream(archive.getEntry(state + "prewave-live-rates.json")))
+          .required("lanes").required("lanes");
+      var cases = prior.jdbc().queryForList("""
+          SELECT request_id, MIN(terms) AS shipment FROM tender WHERE leg='airline' GROUP BY request_id
+          """);
+      int before = 0, after = 0, slots = 0;
+      for (var row : cases) {
+        var shipment = prior.read(row.get("shipment"), Shipment.class);
+        var declared = prior.airlineRoutesBefore(Ledger.id(row.get("request_id")));
+        var documented = new HashSet<String>();
+        for (var lane : ports) {
+          if (shipment.origin().equals(lane.path("origin").asText())
+              && shipment.destination().equals(lane.path("destination").asText()))
+            lane.required("airlines").forEach(c -> documented.add(c.required("name").asText()));
+        }
+        catalog.price(shipment, LocalDate.of(2026, 11, 21)).forEach(o -> documented.add(o.airline()));
+        var baseline = catalog.invitations(shipment, declared);
+        var revised = catalog.invitations(shipment, declared, documented);
+        assertEquals(baseline.stream().filter(Catalog.Carrier::truck).toList(),
+            revised.stream().filter(Catalog.Carrier::truck).toList());
+        assertEquals(baseline.size(), revised.size());
+        slots += (int) revised.stream().filter(c -> !c.truck()).count();
+        before += (int) baseline.stream().filter(c -> documented.contains(c.name())).count();
+        after += (int) revised.stream().filter(c -> documented.contains(c.name())).count();
+      }
+      assertEquals(25, cases.size());
+      assertEquals(83, slots);
+      assertEquals(60, before);
+      assertEquals(69, after);
     }
   }
 
@@ -77,9 +128,9 @@ class MarketReplayTest {
       if (portal.recorded.keySet().stream().limit(2).anyMatch(winner.airline()::equals)) baselineFirstTwo++;
       reads += portal.reads.size();
       available += portal.recorded.size();
-      if (i == 3) assertEquals(List.of("Xenon Cargo Airlines", "Aurelia Air Cargo"), portal.reads);
+      if (i == 3) assertEquals(List.of("Xenon Cargo Airlines", "Aurelia Air Cargo"), portal.reads.subList(0, 2));
     }
-    assertEquals(available - 2, reads);
+    assertEquals(available, reads);
     assertEquals(baselineFirstTwo + 1, firstTwo);
     System.out.printf("Portal replay: %d rounds, %d/%d live reads, best in first two %d vs %d.%n",
         rounds.size(), reads, available, firstTwo, baselineFirstTwo);
@@ -90,13 +141,15 @@ class MarketReplayTest {
     portal.load(0);
     portal.rates(portal.shipment, portal.now);
     portal.load(3);
-    var old = portal.recorded.get("Xenon Cargo Airlines");
-    portal.recorded.put(old.airline(), new Offer(old.airline(), old.days(), new BigDecimal("2200"),
+    var old = portal.recorded.values().stream()
+        .max(Offer.order("cheapest")).orElseThrow();
+    portal.recorded.put(old.airline(), new Offer(old.airline(), old.days(), new BigDecimal("1.00"),
         old.billedKg(), old.source(), "changed-rate", old.validUntil()));
     var fresh = portal.rates(portal.shipment, portal.now);
-    assertTrue(fresh.reset());
+    assertTrue(fresh.complete());
     assertEquals(4, portal.reads.size());
-    assertEquals("Aurelia Air Cargo", Collections.min(fresh.offers(), Offer.order("cheapest")).airline());
+    assertTrue(portal.reads.indexOf(old.airline()) >= 2);
+    assertEquals("changed-rate", Collections.min(fresh.offers(), Offer.order("cheapest")).rateId());
   }
 
   @Test void aVersionChangeForcesFreshReadsEvenWithIdenticalPrices() throws Exception {
@@ -105,7 +158,7 @@ class MarketReplayTest {
     portal.rates(portal.shipment, portal.now);
     portal.load(3);
     portal.version = "fixture-v2";
-    assertTrue(portal.rates(portal.shipment, portal.now).reset());
+    assertTrue(portal.rates(portal.shipment, portal.now).complete());
     assertEquals(4, portal.reads.size());
   }
 
@@ -122,9 +175,16 @@ class MarketReplayTest {
   @Test void partialLookupResumesOnTheSameVersionAndDiscardsCacheOnChange() throws Exception {
     var portal = new Portal();
     portal.load(0);
+    portal.limitAfter = 1;
     var confirmed = portal.rates(portal.shipment, portal.now);
-    var partial = List.of(confirmed.offers().getFirst());
-    portal.reads.clear();
+    assertFalse(confirmed.complete());
+    var partial = confirmed.offers();
+    assertEquals(1, partial.size());
+    var waiting = portal.rates(portal.shipment, portal.now.plusSeconds(34), partial, confirmed.version());
+    assertTrue(waiting.offers().isEmpty());
+    assertEquals(confirmed.version(), waiting.version());
+    portal = new Portal();
+    portal.load(0);
     var rest = portal.rates(portal.shipment, portal.now.plusSeconds(35), partial, confirmed.version());
     assertEquals(3, rest.offers().size());
     assertFalse(portal.reads.contains(partial.getFirst().airline()));

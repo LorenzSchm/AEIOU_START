@@ -11,7 +11,6 @@ import org.springframework.jdbc.core.RowCallbackHandler;
 /** Historical rates are search hints. Only FiveU can return a current, bookable offer. */
 final class MarketMemory {
   private final Ledger ledger;
-  private static final BigDecimal TOLERANCE = new BigDecimal("0.05");
 
   MarketMemory(Ledger ledger) {
     this.ledger = ledger;
@@ -29,11 +28,6 @@ final class MarketMemory {
       return total.multiply(weight).divide(kg, MathContext.DECIMAL64);
     }
 
-    boolean disagrees(Offer fresh, String currentVersion) {
-      var expected = estimate(fresh.billedKg());
-      return !version.equals(currentVersion) || days != fresh.days()
-          || fresh.totalEur().subtract(expected).abs().compareTo(expected.multiply(TOLERANCE)) > 0;
-    }
   }
 
   Map<Key, Sample> recent(Shipment s, Instant now) {

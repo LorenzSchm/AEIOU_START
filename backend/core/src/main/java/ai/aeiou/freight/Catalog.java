@@ -107,10 +107,21 @@ public final class Catalog {
     return invitations(s, Map.of());
   }
 
-  public List<Carrier> invitations(Shipment s, Map<String, Boolean> coverage) {
+  public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes) {
+    return invitations(s, airlineRoutes, Set.of());
+  }
+
+  public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes,
+      Set<String> documentedAirlines) {
+    String route = s.origin() + "-" + s.destination();
     var airlines = carriers.stream()
-        .filter(c -> !c.truck() && coverage.getOrDefault(c.email(), c.serves(s.destination())))
-        .sorted(Comparator.comparing(c -> !coverage.containsKey(c.email())))
+        .filter(c -> !c.truck())
+        .filter(c -> airlineRoutes.containsKey(c.email())
+            ? airlineRoutes.get(c.email()).contains(route)
+            : documentedAirlines.contains(c.name())
+                || c.serves(s.destination()))
+        .sorted(Comparator.comparing((Carrier c) -> !airlineRoutes.containsKey(c.email()))
+            .thenComparing(c -> !documentedAirlines.contains(c.name())))
         .toList();
     var trucks = carriers.stream().filter(c -> c.truck() && c.serves(s.pickupZone())).toList();
     // In zone 60 these truckers returned the lowest initial bids in the pre-wave comparison.

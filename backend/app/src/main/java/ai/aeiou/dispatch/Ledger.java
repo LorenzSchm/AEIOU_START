@@ -20,6 +20,8 @@ class Ledger {
   private static final Pattern CASE_REFERENCE = Pattern.compile("(?i)\\bAEIOU-(\\d{1,18})\\b");
   private static final Pattern COUNTER_REFERENCE =
       Pattern.compile("(?i)\\bAEIOU-(\\d{1,18})\\s*\\|\\s*counteroffer\\b");
+  private static final Pattern AIRLINE_ROUTES = Pattern.compile(
+      "(?m)^We fly ([A-Z]{3}-[A-Z]{3}(?:,\\h*[A-Z]{3}-[A-Z]{3})*)\\.?\\h*$");
   private static final Pattern REVISED_RATE =
       Pattern.compile(
           "(?i)Revised all-in rate:\\s*EUR\\s+\\d+(?:[.,]\\d{1,2})?\\s*\\.?"
@@ -78,8 +80,15 @@ class Ledger {
     ensureColumn("tender", "bid_action", "TEXT");
     ensureColumn("wave_case", "customer_reply", "INTEGER");
     ensureColumn("wave_case", "portal_version", "TEXT");
+    ensureColumn("wave_case", "invitation_lane", "TEXT");
+    ensureColumn("wave_case", "invitation_airlines", "TEXT");
     db.execute(
         "CREATE TABLE IF NOT EXISTS retry(action TEXT PRIMARY KEY, after_epoch INTEGER NOT NULL)");
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS board_result(received TEXT PRIMARY KEY, result TEXT NOT NULL)");
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS truck_bid_parse(reply_id INTEGER PRIMARY KEY, state TEXT NOT NULL,"
+            + " result TEXT, verified_days REAL)");
     db.execute(
         """
         CREATE TABLE IF NOT EXISTS rfq_parse(request_id INTEGER PRIMARY KEY, state TEXT NOT NULL,
@@ -169,39 +178,29 @@ class Ledger {
     return db.queryForList("SELECT * FROM tender WHERE request_id=? ORDER BY email", id);
   }
 
-  // Replay correlated carrier mail in observation order. Existing installations already
-  // have this evidence, including useful route lists inside unsuccessful bid replies.
-  Map<String, Boolean> coverage(long id, Shipment shipment, Instant now) {
-    var coverage = new HashMap<String, Boolean>();
-    String lane = shipment.origin() + "-" + shipment.destination();
+  Map<String, Set<String>> airlineRoutesBefore(long request) {
+    var routes = new HashMap<String, Set<String>>();
     for (var row : db.queryForList("""
-        SELECT m.sender,m.body,t.terms,t.euros,t.reply_id,m.id FROM mail m
-        JOIN tender t ON t.request_id=m.root AND t.email=m.sender AND t.leg='airline'
-        WHERE m.kind='carrier' AND m.stage IN ('bid unreadable','bid received')
-          AND m.root<? AND julianday(m.received) BETWEEN julianday(?) AND julianday(?)
-        ORDER BY julianday(m.received),m.id
-        """, id, now.minusSeconds(3600).toString(), now.toString())) {
-      String body = MailParser.authoredText(str(row, "body"));
-      String email = str(row, "sender");
-      var listed = FLOWN_LANES.matcher(body);
-      if (listed.find() && Arrays.asList(listed.group(1).toUpperCase(Locale.ROOT).split("\\s*,\\s*")).contains(lane))
-        coverage.put(email, true);
-      var denied = REFUSED_LANE.matcher(body);
-      if (denied.find() && lane.equalsIgnoreCase(denied.group(1))) coverage.put(email, false);
-      if (row.get("euros") != null && Objects.equals(row.get("reply_id"), row.get("id"))) {
-        var terms = read(row.get("terms"), Shipment.class);
-        if (terms != null && shipment.origin().equals(terms.origin())
-            && shipment.destination().equals(terms.destination())) coverage.put(email, true);
-      }
+        SELECT sender,body FROM mail WHERE kind='carrier' AND id<? AND body LIKE '%We fly %'
+        ORDER BY id DESC
+        """, request)) {
+      String sender = str(row, "sender");
+      if (routes.containsKey(sender)) continue;
+      var declared = AIRLINE_ROUTES.matcher(MailParser.authoredText(str(row, "body")));
+      if (declared.find())
+        routes.put(sender, Set.copyOf(Arrays.asList(declared.group(1).split(",\\h*"))));
     }
-    return coverage;
+    return routes;
   }
 
-  private static final String LANE = "[A-Z]{3}-[A-Z]{3}";
-  private static final Pattern FLOWN_LANES = Pattern.compile(
-      "(?i)\\bwe fly\\s+(" + LANE + "(?:\\s*,\\s*" + LANE + ")*)\\b");
-  private static final Pattern REFUSED_LANE = Pattern.compile(
-      "(?i)\\b(?:we )?do not serve (?:this |the )?(?:lane/zone|lane|route)\\s*:\\s*(" + LANE + ")\\b");
+  Instant lastInvitation(long request) {
+    return db.queryForList("""
+        SELECT d.attempted_at FROM tender t JOIN deliveries d
+          ON d.action=COALESCE(t.bid_action,'bid:'||t.request_id||':'||t.email)
+        WHERE t.request_id=? AND d.state IN ('sent','pending','uncertain')
+        """, String.class, request).stream().map(Ledger::instant).filter(Objects::nonNull)
+        .max(Instant::compareTo).orElse(null);
+  }
 
   static String bidAction(Map<String, Object> tender) {
     return tender.get("bid_action") == null
@@ -385,10 +384,11 @@ class Ledger {
 
   void recheckOpenTruckBids(Instant receivedAfter, Catalog catalog) {
     var candidates = db.queryForList("""
-        SELECT t.request_id,t.email,t.reply_id,t.euros,f.body
+        SELECT t.request_id,t.email,t.reply_id,f.body,p.verified_days
         FROM tender t JOIN mail r ON r.id=t.request_id JOIN wave_case w ON w.id=r.id
           JOIN mail f ON f.id=t.reply_id AND f.root=r.id AND f.sender=t.email
-        WHERE w.operator=0 AND t.leg='trucker' AND (t.euros IS NULL OR t.days IS NULL)
+          LEFT JOIN truck_bid_parse p ON p.reply_id=t.reply_id
+        WHERE w.operator=0 AND t.leg='trucker'
           AND f.kind='carrier' AND f.stage IN ('bid received','bid unreadable')
           AND r.stage IN ('new','collecting','waiting for pickup','waiting for air price','waiting for customer')
           AND julianday(r.received)>julianday(?)
@@ -399,13 +399,20 @@ class Ledger {
       String sender = str(row, "email");
       var parsed = parseCarrierBid(request, sender, str(row, "body"), true, catalog);
       var bid = parsed.terms().orElse(null);
-      if (bid == null || (bid.days() == null && row.get("euros") != null)) continue;
+      String euros = bid == null ? null : bid.euros().toPlainString();
+      Number storedDays = (Number) row.get("verified_days");
+      Double days = bid == null ? null : bid.days();
+      if (bid != null && days == null && storedDays != null) days = storedDays.doubleValue();
+      Double transit = days;
       tx.executeWithoutResult(t -> {
         int updated = db.update("""
-            UPDATE tender SET euros=?,days=?,issue=NULL WHERE request_id=? AND email=? AND reply_id=?
-              AND (euros IS NULL OR days IS NULL)
-            """, bid.euros().toPlainString(), bid.days(), request, sender, row.get("reply_id"));
-        if (updated > 0) db.update("UPDATE mail SET stage='bid received' WHERE id=?", row.get("reply_id"));
+            UPDATE tender SET euros=?,days=?,issue=? WHERE request_id=? AND email=? AND reply_id=?
+              AND (euros IS NOT ? OR days IS NOT ? OR issue IS NOT ?)
+            """, euros, transit, parsed.issue(), request, sender, row.get("reply_id"),
+            euros, transit, parsed.issue());
+        if (updated > 0)
+          db.update("UPDATE mail SET stage=? WHERE id=?",
+              bid == null ? "bid unreadable" : "bid received", row.get("reply_id"));
       });
     }
   }
@@ -530,9 +537,10 @@ class Ledger {
   List<Map<String, Object>> inbox() {
     var rows =
         db.queryForList(
-            "SELECT m.*,COALESCE(w.reason,CASE WHEN m.booking IS NULL THEN b.issue END) AS"
+            "SELECT m.*,s.result AS board_result,COALESCE(w.reason,CASE WHEN m.booking IS NULL THEN b.issue END) AS"
                 + " review_reason FROM mail m LEFT JOIN wave_case w ON w.id=m.id LEFT JOIN"
-                + " booking_attempt b ON b.request_id=m.id ORDER BY m.id DESC");
+                + " booking_attempt b ON b.request_id=m.id LEFT JOIN board_result s"
+                + " ON m.kind='request' AND s.received=m.received ORDER BY m.id DESC");
     Map<Long, Long> parents = new HashMap<>();
     for (var row : rows) {
       long mid = id(row.get("id"));
@@ -542,7 +550,7 @@ class Ledger {
     var outgoing = outgoing(parents);
     for (var row : rows) {
       long mid = id(row.get("id"));
-      for (String k : List.of("fields", "attachments", "proposal", "booking"))
+      for (String k : List.of("fields", "attachments", "proposal", "booking", "board_result"))
         row.put(k, read(row.get(k), Object.class));
       row.put("thread_id", threadId(mid, parents));
       row.put("outgoing", outgoing.getOrDefault(mid, List.of()));

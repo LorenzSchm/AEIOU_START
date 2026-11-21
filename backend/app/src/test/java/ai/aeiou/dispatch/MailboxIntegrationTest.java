@@ -9,6 +9,7 @@ import java.net.*;
 import java.net.http.*;
 import java.nio.file.*;
 import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -92,7 +93,10 @@ class MailboxIntegrationTest {
                         "body",
                         truck
                             ? "Our all-in rate is 25.00 EUR. Transit time from pickup to delivery is 16 hours, and the rate"
-                                + " is valid until 21 Nov 2026 14:16 UTC."
+                                + " is valid until "
+                                + DateTimeFormatter.ofPattern("d MMM uuuu HH:mm 'UTC'", Locale.ENGLISH)
+                                    .withZone(ZoneOffset.UTC).format(Instant.now().plusSeconds(900))
+                                + "."
                             : "All-in EUR 70.00, transit 2 days.",
                         "in_reply_to",
                         id,

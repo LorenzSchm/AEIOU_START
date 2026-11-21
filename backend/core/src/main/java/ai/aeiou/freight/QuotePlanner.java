@@ -48,9 +48,10 @@ public final class QuotePlanner {
       }
     }
     final var shipment = priced;
+    var pickupExpiry = trucker == null ? null : truck.validUntil();
     var ranked =
         offers.stream()
-            .map(o -> o.addPickup(shipment))
+            .map(o -> o.addPickup(shipment, pickupExpiry))
             .sorted(Offer.order(s.preference()))
             .toList();
     var best = ranked.isEmpty() ? null : ranked.getFirst();

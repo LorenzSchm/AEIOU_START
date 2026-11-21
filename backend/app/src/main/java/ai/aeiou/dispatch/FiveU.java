@@ -67,12 +67,6 @@ class FiveU {
   private record RateQuery(String airline, String name, BigDecimal weight, BigDecimal billed,
                            MarketMemory.Key key, MarketMemory.Sample sample) {
     BigDecimal estimate() { return sample.estimate(billed); }
-
-    boolean clearlyWorseThan(Offer best, String preference) {
-      if ("fastest".equals(preference) && sample.days() != best.days())
-        return sample.days() > best.days();
-      return estimate().multiply(new BigDecimal("0.95")).compareTo(best.totalEur()) > 0;
-    }
   }
   private record LiveRate(Offer offer, String version) {}
 
@@ -107,36 +101,67 @@ class FiveU {
     return new LiveRate(offer, Ledger.str(r, "dataset_version"));
   }
 
-  private record QueryPlan(List<RateQuery> ordered, boolean complete, boolean predictable) {}
+  private record QueryPlan(List<RateQuery> ordered, boolean complete) {}
+  private record Carrier(String code, String name) {}
+  private List<?> lanes = List.of();
+  private Instant lanesExpire = Instant.MIN;
 
-  private QueryPlan plan(Shipment shipment, Map<MarketMemory.Key, MarketMemory.Sample> history) {
+  private synchronized List<Carrier> carriers(Shipment shipment, Instant now) {
+    if (!now.isBefore(lanesExpire)) {
+      var ports = get("/v1/portal/ports");
+      if (ports == null || !(ports.get("lanes") instanceof List<?> published))
+        throw new IllegalArgumentException("Missing portal lanes");
+      lanes = published;
+      lanesExpire = now.plusSeconds(30);
+    }
+    var result = new ArrayList<Carrier>();
+    for (var raw : lanes) {
+      if (!(raw instanceof Map<?, ?> lane)
+          || !shipment.origin().equals(lane.get("origin"))
+          || !shipment.destination().equals(lane.get("destination"))) continue;
+      if (!(lane.get("airlines") instanceof List<?> airlines))
+        throw new IllegalArgumentException("Missing lane airlines");
+      for (var airline : airlines) {
+        if (!(airline instanceof Map<?, ?> c) || Ledger.str(c, "code").isBlank())
+          throw new IllegalArgumentException("Missing airline code");
+        result.add(new Carrier(Ledger.str(c, "code"), Ledger.str(c, "name")));
+      }
+    }
+    return result;
+  }
+
+  Set<String> portalAirlines(Shipment shipment, Instant now) {
+    var names = new HashSet<String>();
+    try {
+      for (var carrier : carriers(shipment, now))
+        if (!carrier.name().isBlank()) names.add(carrier.name());
+    } catch (RestClientException | IllegalArgumentException unavailable) {
+      // The invitation wave can still use carrier declarations and kit tariffs.
+    }
+    return names;
+  }
+
+  private QueryPlan plan(Shipment shipment, Instant now, Map<MarketMemory.Key, MarketMemory.Sample> history) {
     boolean complete = true;
     var queries = new ArrayList<RateQuery>();
     var higherBreaks = new ArrayList<RateQuery>();
-    var ports = get("/v1/portal/ports");
-    for (Object raw : (List<?>) ports.get("lanes")) {
-      var lane = (Map<?, ?>) raw;
-      if (!shipment.origin().equals(lane.get("origin"))
-          || !shipment.destination().equals(lane.get("destination"))) continue;
-      for (Object airline : (List<?>) lane.get("airlines")) {
-        var carrier = (Map<?, ?>) airline;
-        String code = carrier.get("code").toString();
-        String name = Ledger.str(carrier, "name");
-        var billed = shipment.chargeableKg();
-        var breaks = new TreeSet<BigDecimal>();
-        try {
-          var brackets = get("/v1/portal/brackets?airline={a}", code);
-          if (!(brackets.get("breaks_kg") instanceof List<?> published))
-            throw new IllegalArgumentException("Missing portal weight brackets");
-          for (var kg : published) breaks.add(new BigDecimal(kg.toString()));
-        } catch (RestClientException | IllegalArgumentException ex) {
-          complete = false;
-        }
-        if (!breaks.isEmpty()) breaks.add(BigDecimal.ZERO);
-        queries.add(query(code, name, shipment.weightKg(), billed, breaks.floor(billed), history));
-        var next = breaks.higher(billed);
-        if (next != null) higherBreaks.add(query(code, name, next, next, next, history));
+    for (var carrier : carriers(shipment, now)) {
+      String code = carrier.code();
+      String name = carrier.name();
+      var billed = shipment.chargeableKg();
+      var breaks = new TreeSet<BigDecimal>();
+      try {
+        var brackets = get("/v1/portal/brackets?airline={a}", code);
+        if (!(brackets.get("breaks_kg") instanceof List<?> published))
+          throw new IllegalArgumentException("Missing portal weight brackets");
+        for (var kg : published) breaks.add(new BigDecimal(kg.toString()));
+      } catch (RestClientException | IllegalArgumentException ex) {
+        complete = false;
       }
+      if (!breaks.isEmpty()) breaks.add(BigDecimal.ZERO);
+      queries.add(query(code, name, shipment.weightKg(), billed, breaks.floor(billed), history));
+      var next = breaks.higher(billed);
+      if (next != null) higherBreaks.add(query(code, name, next, next, next, history));
     }
     queries.addAll(higherBreaks);
     var predicted = Comparator.comparing(RateQuery::estimate);
@@ -147,9 +172,7 @@ class FiveU {
     if (!known.isEmpty()) ordered.add(known.getFirst());
     queries.stream().filter(q -> q.sample() == null).forEach(ordered::add);
     ordered.addAll(known.stream().skip(1).toList());
-    boolean predictable = !queries.isEmpty() && known.size() == queries.size()
-        && known.stream().map(q -> q.sample().version()).distinct().count() == 1;
-    return new QueryPlan(ordered, complete, predictable);
+    return new QueryPlan(ordered, complete);
   }
 
   synchronized Rates rates(Shipment shipment, Instant now) {
@@ -158,22 +181,19 @@ class FiveU {
 
   synchronized Rates rates(Shipment shipment, Instant now, List<Offer> verified, String priorVersion) {
     List<Offer> offers = new ArrayList<>();
-    if (now.isBefore(retryAt)) return new Rates(offers, false);
+    if (now.isBefore(retryAt)) return new Rates(offers, false, false, priorVersion);
     boolean complete = true;
-    boolean reset = false;
-    String version = priorVersion;
+    boolean reset = !verified.isEmpty() && (priorVersion == null || priorVersion.isBlank());
+    String version = reset ? null : priorVersion;
     var history = memory.recent(shipment, now);
     try {
-      var plan = plan(shipment, history);
+      var plan = plan(shipment, now, history);
       complete = plan.complete();
-      boolean canShorten = complete && plan.predictable() && verified.isEmpty();
-      var checkedAirlines = new HashSet<String>();
-      Offer best = null;
       for (var query : plan.ordered()) {
-        if (!reset && verified.stream().anyMatch(o -> o.airline().equals(query.name())
-            && o.billedKg().compareTo(query.billed()) == 0 && o.validUntil() != null
-            && o.validUntil().isAfter(now.plusSeconds(120)))) continue;
-        if (canShorten && checkedAirlines.size() >= 2 && query.clearlyWorseThan(best, shipment.preference())) break;
+        if (priorVersion != null && !priorVersion.isBlank() && verified.stream().anyMatch(o ->
+            o.airline().equals(query.name()) && o.billedKg().compareTo(query.billed()) == 0
+                && o.rateId() != null && !o.rateId().isBlank() && o.validUntil() != null
+                && o.validUntil().isAfter(now.plusSeconds(120)))) continue;
         try {
           var live = rate(shipment, query, now);
           var offer = live.offer();
@@ -183,20 +203,13 @@ class FiveU {
             return new Rates(List.of(), false, true, null);
           }
           version = live.version();
-          if (!reset && query.sample() != null && query.sample().disagrees(offer, version)) {
+          if (!history.isEmpty() && query.sample() != null && !query.sample().version().equals(version)) {
             memory.forget(shipment);
-            reset = true;
-            canShorten = false;
-            if (!verified.isEmpty()) return new Rates(List.of(), false, true, null);
+            history.clear();
           }
-          if (version.isBlank() || offer.rateId() == null || offer.rateId().isBlank()
-              || offer.billedKg().compareTo(query.billed()) != 0
-              || !offer.validUntil().isAfter(now.plusSeconds(120))) canShorten = false;
           if (query.key() != null && offer.billedKg().compareTo(query.billed()) == 0)
             memory.record(shipment, query.key(), offer, version, now);
           offers.add(offer);
-          checkedAirlines.add(query.airline());
-          if (best == null || Offer.order(shipment.preference()).compare(offer, best) < 0) best = offer;
         } catch (HttpClientErrorException.TooManyRequests ex) {
           String seconds =
               ex.getResponseHeaders() == null
@@ -208,10 +221,9 @@ class FiveU {
           return new Rates(offers, false, reset, version);
         } catch (RestClientException | IllegalArgumentException ex) {
           complete = false;
-          canShorten = false;
         }
       }
-    } catch (RestClientException ex) {
+    } catch (RestClientException | IllegalArgumentException ex) {
       complete = false;
     }
     return new Rates(offers, complete, reset, version);

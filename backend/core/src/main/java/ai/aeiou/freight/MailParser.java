@@ -1,6 +1,8 @@
 package ai.aeiou.freight;
 
 import java.math.BigDecimal;
+import java.time.*;
+import java.time.format.*;
 import java.util.*;
 import java.util.regex.*;
 
@@ -41,7 +43,9 @@ public final class MailParser {
   }
 
   public static boolean requestsPickup(String subject, String body) {
-    String text = subject + "\n" + body;
+    String text = (subject + "\n" + body).replaceAll(
+        "(?iu)\\b(?:no need to arrange|no need for) (?:a |the )?(?:truck )?(?:pick[ -]?up|collection)\\b",
+        "");
     if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "");
     return has(text, "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from|arrange (?:the |a )?truck|door["
         + " -]to|abhol|vorlauf|ex[ -]?works|\\bEXW\\b");
@@ -296,6 +300,58 @@ public final class MailParser {
 
   public record Bid(BigDecimal euros, Double days) {}
 
+  public record PackingCorrection(Set<String> destinations, Set<String> weightsKg, Set<String> volumesCbm) {
+    public PackingCorrection followedBy(PackingCorrection later) {
+      return new PackingCorrection(
+          later.destinations.isEmpty() ? destinations : later.destinations,
+          later.weightsKg.isEmpty() ? weightsKg : later.weightsKg,
+          later.volumesCbm.isEmpty() ? volumesCbm : later.volumesCbm);
+    }
+  }
+
+  public static Optional<PackingCorrection> confirmedPackingCorrection(String body) {
+    String text = authoredText(body);
+    String packing = "(?:attached (?:document|packing specification|packing list)|"
+        + "packing (?:specification|list)(?: already attached)?)";
+    if (!has(text, "(?:^|[.!?]\\s+|\\R)\\h*(?:(?:sorry for the confusion|to clarify):\\h*)?"
+        + "(?:(?:the )?" + packing + " is (?:right|correct|accurate)|"
+        + "please (?:use|refer to) (?:the )?" + packing + "(?: for the correct totals)?)"
+        + "\\h*(?:[.!;]|$|\\R)")) return Optional.empty();
+    var destinations = captures(text,
+        "\\b(?:correct )?destination(?: airport)?\\h*(?:[:=]\\h*|is\\h+)([A-Z]{3})\\b");
+    return Optional.of(new PackingCorrection(
+        Set.copyOf(destinations.stream().map(s -> s.toUpperCase(Locale.ROOT)).toList()),
+        packingTotals(text, "kg|kgs|kilograms?"),
+        packingTotals(text, "cbm|m³|m3|cubic met(?:er|re)s?")));
+  }
+
+  private static Set<String> packingTotals(String text, String unit) {
+    return Set.copyOf(captures(text, NUM + "\\h*(?:" + unit
+        + ")\\b(?!\\h*(?:each|per (?:piece|pallet|item|carton|crate))\\b)"));
+  }
+
+  public static BigDecimal packingNumber(String value, BigDecimal documented) {
+    var result = number(value);
+    if (result != null) return result.stripTrailingZeros();
+    // A single separator followed by three digits can be decimal or grouping.
+    if (documented == null || !value.matches("[1-9]\\d*[.,]\\d{3}")) return null;
+    return documented.compareTo(new BigDecimal(value.replace(',', '.'))) == 0
+            || documented.compareTo(new BigDecimal(value.replaceAll("[.,]", ""))) == 0
+        ? documented : null;
+  }
+
+  private static final Pattern BID_EXPIRY =
+      pattern("\\bvalid until:?\\h+(\\d{1,2} [A-Z]{3} \\d{4} \\d{2}:\\d{2}) UTC\\b");
+  private static final DateTimeFormatter BID_EXPIRY_FORMAT =
+      new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("d MMM uuuu HH:mm")
+          .toFormatter(Locale.ENGLISH).withResolverStyle(ResolverStyle.STRICT);
+
+  public static Instant bidValidUntil(String body) {
+    var dates = BID_EXPIRY.matcher(authoredText(body)).results().map(m -> m.group(1));
+    return dates.map(date -> LocalDateTime.parse(date, BID_EXPIRY_FORMAT).toInstant(ZoneOffset.UTC))
+        .min(Instant::compareTo).orElse(null);
+  }
+
   private static final Pattern EXCLUDES_COLLECTION_WAIT =
       pattern("(?:\\h*[,;]\\h*)?\\bexcluding\\h+(?:(?:the|any)\\h+)?wait(?:ing\\h+time)?"
           + "\\h+(?:before|until)\\h+(?:pickup|collection)\\b");
@@ -317,24 +373,54 @@ public final class MailParser {
   private static final String FROM_PICKUP_TO_DELIVERY =
       "(?:from (?:actual )?(?:pickup|collection) to (?:airport )?delivery|"
           + "(?:pickup|collection)[ -]to[ -](?:airport[ -])?delivery(?: time)?)";
+  private static final String TRUCK_TRANSIT_LABEL =
+      "\\b(?:(?:(?:road|truck(?:ing)?) )?transit(?: time)?(?: "
+          + FROM_PICKUP_TO_DELIVERY + ")?|" + FROM_PICKUP_TO_DELIVERY + ")";
+  private static final String TIMING_SEPARATOR = "\\s*(?:is\\s+|of\\s+|takes\\s+|[:=]\\s*)?";
+  private static final String DURATION_NUMBER = "\\d{1,4}(?:[.,]\\d{1,2})?";
+  private static final String DURATION_UNIT = "hours?|hrs?|h|minutes?|mins?|days?|tage?";
   private static final String DURATION =
-      "(\\d{1,4}(?:[.,]\\d{1,2})?)\\s*(hours?|hrs?|h|minutes?|mins?|days?|tage?)\\b";
+      "(" + DURATION_NUMBER + ")\\s*(" + DURATION_UNIT + ")\\b";
+  private static final String DURATION_RANGE =
+      DURATION_NUMBER + "(?:\\h*(?:" + DURATION_UNIT + ")\\b)?\\h*(?:[-–—]|to)\\h*"
+          + DURATION_NUMBER + "\\h*(?:" + DURATION_UNIT + ")\\b";
   private static final Pattern TRUCK_TRANSIT =
-      pattern("\\b(?:(?:(?:road|truck(?:ing)?) )?transit(?: time)?(?: "
-          + FROM_PICKUP_TO_DELIVERY + ")?|" + FROM_PICKUP_TO_DELIVERY + ")"
-          + "\\s*(?:is\\s+|of\\s+|takes\\s+|[:=]\\s*)?" + DURATION);
+      pattern(TRUCK_TRANSIT_LABEL + TIMING_SEPARATOR + DURATION);
   private static final Pattern TRUCK_TRANSIT_AFTER_DURATION =
       pattern(DURATION + "\\s+" + FROM_PICKUP_TO_DELIVERY);
+  private static final Pattern TRUCK_TRANSIT_RANGE =
+      pattern(TRUCK_TRANSIT_LABEL + TIMING_SEPARATOR + DURATION_RANGE
+          + "|" + DURATION_RANGE + "\\s+" + FROM_PICKUP_TO_DELIVERY);
+  private static final Pattern TRUCK_DURATION = pattern(DURATION);
+  private static final Pattern ANY_DURATION_RANGE = pattern(DURATION_RANGE);
+  private static final Pattern ROAD_CONTEXT = pattern(
+      "\\b(?:driving|drive|on the road|road (?:leg|journey|travel)|fahrtzeit|fahrtdauer)\\b");
+  private static final Pattern AFTER_COLLECTION = pattern(
+      "\\b(?:after|once)\\b[^.!?]{0,60}\\b(?:pick[ -]?up|picked up|collect(?:ed|ion)?|loaded|loading)\\b");
+  private static final Pattern DELIVERY_CONTEXT = pattern(
+      "\\b(?:reach(?:es)?|arrive[sd]?|deliver(?:y|ed|s)?|airport|flughafen)\\b");
+  private static final Pattern QUALIFIED_TIMING = pattern(
+      "\\b(?:cannot|can[’']t|not|unconfirmed|unavailable|subject to|if|unless|depending on|or)\\b");
+  private static final Pattern COLLECTION_WAIT_CONTEXT = pattern(
+      "\\b(?:wait(?:ing)?|(?:until|before|time to|drive to) (?:actual )?(?:pick[ -]?up|collection)"
+          + "|from (?:cargo |shipment )?readiness|(?:pick[ -]?up|collection) (?:in|within))\\b");
+  private static final String TRUCK_TIMING_DESCRIPTION =
+      "(?:(?:road |airport |truck(?:ing)? )?transit(?: time)?(?: " + FROM_PICKUP_TO_DELIVERY + ")?"
+          + "|(?:the )?(?:total )?time to delivery(?: at [A-Z]{3} airport)?"
+          + "|(?:pickup|collection|delivery) time|(?:time )?" + FROM_PICKUP_TO_DELIVERY + ")";
+  private static final Pattern UNCONFIRMED_TRUCK_TIMING =
+      pattern("\\b(?:(?:cannot|can[’']t|unable to) confirm\\h+(?:(?:a|an|the|our)\\h+)?"
+          + "(?:(?:separate\\h+)?estimate\\h+(?:for\\h+)?)?"
+          + "(?:exact |estimated )?" + TRUCK_TIMING_DESCRIPTION
+          + "|" + TRUCK_TIMING_DESCRIPTION + "\\h+(?:is (?:unavailable|unconfirmed)|cannot be confirmed))"
+          + "(?=\\h*(?:[.!?;\\r\\n]|$))");
 
   private static Double truckTransit(String text) {
+    if (TRUCK_TRANSIT_RANGE.matcher(text).find()) return null;
     var durations = new HashSet<Double>();
     for (var expression : List.of(TRUCK_TRANSIT, TRUCK_TRANSIT_AFTER_DURATION)) {
       for (var match : expression.matcher(text).results().toList()) {
-        double duration = Double.parseDouble(match.group(1).replace(',', '.'));
-        String unit = match.group(2).toLowerCase(Locale.ROOT);
-        if (unit.startsWith("h")) duration /= 24;
-        else if (unit.startsWith("min")) duration /= 24 * 60;
-        durations.add(duration);
+        durations.add(durationDays(match));
       }
     }
     if (durations.size() != 1) return null;
@@ -342,33 +428,61 @@ public final class MailParser {
     return days <= 90 ? days : null;
   }
 
+  private static double durationDays(MatchResult match) {
+    double duration = Double.parseDouble(match.group(1).replace(',', '.'));
+    String unit = match.group(2).toLowerCase(Locale.ROOT);
+    if (unit.startsWith("h")) return duration / 24;
+    if (unit.startsWith("min")) return duration / (24 * 60);
+    return duration;
+  }
+
+  /** Candidate clauses for resolving unusual road timing in an otherwise usable truck bid. */
+  public static Map<String, Double> roadTransitEvidence(String body) {
+    var candidates = new LinkedHashMap<String, Double>();
+    String text = authoredText(body);
+    if (text.length() > 3500 || TRUCK_TRANSIT_RANGE.matcher(text).find()) return candidates;
+    for (String raw : text.split("\\R+|(?<=[.!?])\\h+")) {
+      String clause = raw.strip();
+      if (clause.length() > 240 || QUALIFIED_TIMING.matcher(clause).find()
+          || COLLECTION_WAIT_CONTEXT.matcher(clause).find()) continue;
+      boolean road = DELIVERY_CONTEXT.matcher(clause).find()
+          && (ROAD_CONTEXT.matcher(clause).find() || AFTER_COLLECTION.matcher(clause).find());
+      if (!road) continue;
+      if (ANY_DURATION_RANGE.matcher(clause).find()) return Map.of();
+      var durations = TRUCK_DURATION.matcher(clause).results().toList();
+      if (durations.size() != 1) continue;
+      double days = durationDays(durations.getFirst());
+      if (days > 0 && days <= 90) candidates.put(clause, days);
+    }
+    return candidates;
+  }
+
   /**
    * Never promote a per-kg, provisional, mixed-currency or multi-option number to an all-in price.
    */
   public static Optional<Bid> bid(String body, boolean truck) {
     String text = authoredText(body);
-    String priceTerms = truck ? text.replaceAll(
-        "(?iu)\\b(?:cannot|can[’']t|unable to) confirm[^.!?\\r\\n]*(?:\\b(?:time|transit|hours?)\\b|"
-            + "\\bestimate " + FROM_PICKUP_TO_DELIVERY + ")",
-        "") : text;
-    if (truck) priceTerms = EXCLUDES_COLLECTION_WAIT.matcher(priceTerms).replaceAll("");
+    String priceTerms = truck
+        ? EXCLUDES_COLLECTION_WAIT.matcher(UNCONFIRMED_TRUCK_TIMING.matcher(text).replaceAll(""))
+            .replaceAll("")
+        : text;
     if (has(
         priceTerms,
         "\\b(?:USD|GBP|CHF|plus|excluding|excluded|estimated (?:price|cost|rate|total)|"
             + "estimate(?:d)? (?:of )?(?:EUR|price|rate|cost)|(?:price|rate|cost) (?:is )?(?:an )?estimate|"
             + (!truck ? "estimate|" : "")
-            + "indicative|unavailable|unable|cannot|can[’']t|decline|separately|additional"
+            + "indicative|provisional|unconfirmed|unavailable|unable|cannot|can[’']t|decline|separately|additional"
             + " charges|starting at|extras"
             + " apply)\\b|\\+\\s*(?:VAT|fuel|security)|(?:per|/)\\s*(?:kg|km|pallet)|\\bsubject"
-            + " to\\b")) return Optional.empty();
+            + " to\\b|\\b(?:rate|price|cost|total) (?:is )?(?:not (?:yet )?confirmed|pending confirmation)\\b"))
+      return Optional.empty();
     var amounts = new ArrayList<>(captures(text, "(?:\\bEUR\\s*|€\\s*)" + NUM));
     amounts.addAll(captures(text, NUM + "\\s*(?:EUR\\b|€)"));
     var price = number(only(amounts));
     if (price == null || price.signum() <= 0) return Optional.empty();
-    // A range, or separate options with different transit times, requires review.
-    if (has(text,
+    if (!truck && has(text,
         "\\d+\\s*(?:-|–|to)\\s*\\d+\\s*(?:business |working )?(?:days?|tage?|hours?|hrs?|h)"))
-      return truck ? Optional.of(new Bid(price, null)) : Optional.empty();
+      return Optional.empty();
     String timing =
         pattern(
                 "(?:valid(?:ity)?|gültig)\\s*(?:for|of|:)?\\s*\\d+\\s*(?:days?|tage?|hours?|hrs?|h)\\b")

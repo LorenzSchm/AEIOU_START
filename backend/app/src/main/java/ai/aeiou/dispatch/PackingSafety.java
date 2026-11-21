@@ -29,7 +29,7 @@ final class PackingSafety {
   private static final Pattern GENERAL =
       Pattern.compile(
           "(?im)^\\h*(?:dangerous goods|hazmat|gefahrgut)\\h*[:=]?\\h*(?:no|none|nein|n/a|not"
-              + " regulated|non-dangerous)\\h*[.]?\\h*$|\\b(?:general cargo\\s*,?\\s*non[-"
+              + " (?:regulated|restricted)|non-dangerous)\\h*[.]?\\h*$|\\b(?:general cargo\\s*,?\\s*non[-"
               + " ]dangerous|non[- ]dangerous\\s+goods)\\b");
   private static final Pattern PACKING =
       Pattern.compile(
