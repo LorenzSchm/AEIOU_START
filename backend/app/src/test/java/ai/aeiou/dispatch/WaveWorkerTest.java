@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import ai.aeiou.freight.*;
 import com.fasterxml.jackson.databind.*;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 import java.time.*;
 import java.util.*;
@@ -100,6 +101,15 @@ class WaveWorkerTest {
               return gatewayResponse(fields.toString());
             });
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(), true));
+    when(upstream.currentRate(any(), any(), any())).thenAnswer(call -> {
+      Offer candidate = call.getArgument(1);
+      // The recorded discovery response is also the live response unless the test changes it.
+      var matching = ledger.jdbc().queryForList("""
+          SELECT rate.value FROM wave_case w, json_each(w.offers) rate
+          WHERE json_extract(rate.value,'$.rate_id')=?
+          """, String.class, candidate.rateId());
+      return matching.isEmpty() ? candidate : ledger.read(matching.getFirst(), Offer.class);
+    });
     when(upstream.post(eq("/v1/mailbox/messages"), anyMap()))
         .thenAnswer(
             call -> {
@@ -1032,6 +1042,114 @@ class WaveWorkerTest {
     assertEquals(3, laneReplies.size());
     assertEquals(2009L, ((Number) laneReplies.getLast().get("in_reply_to")).longValue());
     assertTrue(laneReplies.getLast().get("body").toString().contains("BK-SMMUWG2S"));
+  }
+
+  private Offer portalOffer(String airline, int euros, String rateId) {
+    return new Offer(airline, 2, BigDecimal.valueOf(euros), BigDecimal.valueOf(100), "portal",
+        rateId, START.plusSeconds(900));
+  }
+
+  @Test
+  void automaticQuoteChecksAnotherCarrierWhenTheEarlierWinnerGetsMoreExpensive() {
+    request("");
+    var first = portalOffer("Fjordline Air Cargo", 50, "R-OLD-1");
+    var second = portalOffer("Nova Atlas Cargo", 60, "R-OLD-2");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(first, second), true));
+    worker.work();
+    verify(upstream, never()).currentRate(any(), any(), any());
+
+    doReturn(portalOffer(first.airline(), 90, "R-NEW-1"))
+        .when(upstream).currentRate(any(), eq(first), any());
+    doReturn(portalOffer(second.airline(), 65, "R-NEW-2"))
+        .when(upstream).currentRate(any(), eq(second), any());
+    clock.current = START.plusSeconds(76);
+    worker.work();
+
+    var order = inOrder(upstream);
+    order.verify(upstream).parseRfq(anyMap());
+    order.verify(upstream).currentRate(any(), eq(first), eq(clock.current));
+    order.verify(upstream).currentRate(any(), eq(second), eq(clock.current));
+    order.verify(upstream).post(eq("/v1/mailbox/messages"), anyMap());
+    var quote = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("R-NEW-2", quote.offer().rateId());
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 65.00"));
+    assertEquals("sent", ledger.delivery("quote:7"));
+  }
+
+  @Test
+  void manualSendRequiresAnotherComparisonWhenTheDisplayedPriceChanges() {
+    request("");
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    var offer = portalOffer("Fjordline Air Cargo", 50, "R-DISPLAYED");
+    var repriced = portalOffer(offer.airline(), 65, "R-REPRICED");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true),
+        new FiveU.Rates(List.of(repriced), true));
+    doReturn(repriced).when(upstream).currentRate(any(), eq(offer), any());
+    var preview = worker.price(7, shipment, null);
+
+    assertThrows(WaveWorker.Conflict.class, () -> worker.sendQuote(7, preview.revision()));
+    assertNull(ledger.delivery("quote:7"));
+    assertTrue(outbound.isEmpty());
+
+    var newPreview = worker.price(7, shipment, null);
+    doReturn(portalOffer(offer.airline(), 65, "R-AT-SEND"))
+        .when(upstream).currentRate(any(), eq(repriced), any());
+    worker.sendQuote(7, newPreview.revision());
+    var sent = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("R-AT-SEND", sent.offer().rateId());
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 65.00"));
+  }
+
+  @Test
+  void customerAcceptanceDoesNotBookWhenTheLivePriceChanges() {
+    request("");
+    var offer = portalOffer("Fjordline Air Cargo", 50, "R-QUOTED");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true));
+    worker.work();
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+
+    receive(2001, "buyer@hackloop.mail", "Re: RFQ", "Please book it.", 7L);
+    doReturn(portalOffer(offer.airline(), 65, "R-REPRICED"))
+        .when(upstream).currentRate(any(), eq(offer), any());
+    var bookings = new PortalBookings(ledger, upstream, clock, true);
+    bookings.bookAccepted();
+    bookings.bookAccepted();
+
+    verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
+    var attempt = ledger.jdbc().queryForMap("SELECT * FROM booking_attempt WHERE request_id=7");
+    assertEquals(0, Ledger.id(attempt.get("submitted")));
+    assertTrue(Ledger.str(attempt, "issue").contains("Get customer approval"));
+    var sent = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("R-QUOTED", sent.offer().rateId());
+  }
+
+  @Test
+  void lostBookingAcknowledgmentReplaysThePreviouslyVerifiedRateAfterRestart() throws Exception {
+    request("");
+    var offer = portalOffer("Fjordline Air Cargo", 50, "R-QUOTED");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true));
+    worker.work();
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+
+    doReturn(portalOffer(offer.airline(), 50, "R-AT-BOOKING"),
+        portalOffer(offer.airline(), 65, "R-REPRICED"))
+        .when(upstream).currentRate(any(), eq(offer), any());
+    var booking = Map.<String, Object>of("team_reference", "AEIOU-7", "rate_id", "R-AT-BOOKING");
+    when(upstream.post("/v1/portal/bookings", booking))
+        .thenThrow(new ResourceAccessException("Lost response"))
+        .thenReturn(Map.of("team_reference", "AEIOU-7", "rate_id", "R-AT-BOOKING",
+            "booking_reference", "BK-TEST"));
+    assertThrows(ResourceAccessException.class, () -> new PortalBookings(ledger, upstream, clock, true).book(7));
+
+    restart();
+    new PortalBookings(ledger, upstream, clock, true).book(7);
+    verify(upstream, times(2)).currentRate(any(), eq(offer), any());
+    verify(upstream, times(2)).post("/v1/portal/bookings", booking);
+    assertNotNull(ledger.mail(7).get("booking"));
   }
 
   @Test

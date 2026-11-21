@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.List;
 
 public record Offer(
     String airline,
@@ -41,7 +40,7 @@ public record Offer(
     return addPickup(s, null);
   }
 
-  Offer addPickup(Shipment s, Instant pickupExpiry) {
+  public Offer addPickup(Shipment s, Instant pickupExpiry) {
     if (s.pickupZone() == null) return this;
     if (s.pickupEur() == null) throw new IllegalArgumentException("Missing confirmed pickup price");
     return new Offer(
@@ -53,23 +52,5 @@ public record Offer(
         rateId,
         pickupExpiry != null && (validUntil == null || pickupExpiry.isBefore(validUntil))
             ? pickupExpiry : validUntil);
-  }
-
-  /** Equal price and transit weights among competing airline email bids. */
-  public static Offer balancedBid(List<Offer> bids, String preference) {
-    var prices = bids.stream().mapToDouble(o -> o.totalEur.doubleValue()).summaryStatistics();
-    var times = bids.stream().mapToDouble(Offer::days).summaryStatistics();
-    return bids.stream()
-        .min(
-            Comparator.<Offer>comparingDouble(
-                    o ->
-                        normalize(o.totalEur.doubleValue(), prices.getMin(), prices.getMax())
-                            + normalize(o.days, times.getMin(), times.getMax()))
-                .thenComparing(order(preference)))
-        .orElseThrow();
-  }
-
-  private static double normalize(double value, double low, double high) {
-    return high == low ? 0 : (value - low) / (high - low);
   }
 }
