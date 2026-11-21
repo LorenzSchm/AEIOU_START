@@ -1,0 +1,15 @@
+# Loaded on top of the main application.yml in every test (classpath:/config/ wins).
+# Tests never reach the real 5U API or an LLM: both point at unresolvable hosts unless a test overrides them
+# with its own mock server.
+app:
+  fiveu:
+    base-url: http://5u.invalid
+    api-key: test-team-key
+  llm:
+    base-url: http://llm.invalid/v1
+    api-key: test-llm-key
+  poller:
+    enabled: false
+  mail:
+    send-enabled: false
+    customer-replies-enabled: false
