@@ -118,6 +118,12 @@ public final class Pricing {
             .toString());
   }
 
+  public static int transitHours(JsonNode offer) {
+    return offer.has("transitHours")
+        ? offer.get("transitHours").asInt()
+        : offer.path("transitDays").asInt() * 24;
+  }
+
   public static Optional<JsonNode> choose(
       List<JsonNode> offers, String objective, Instant at, int revision, String pin) {
     if (!Set.of("CHEAPEST", "FASTEST").contains(objective)) return Optional.empty();
@@ -135,17 +141,29 @@ public final class Pricing {
     if (!pin.isEmpty()) return eligible.stream().filter(x -> str(x, "id").equals(pin)).findFirst();
     Comparator<JsonNode> cost =
         Comparator.comparing(x -> decimal(x.get("comparisonTotal"), "amount"));
-    Comparator<JsonNode> time = Comparator.comparingInt(x -> x.get("transitDays").asInt());
+    Comparator<JsonNode> time = Comparator.comparingInt(Pricing::transitHours);
     Comparator<JsonNode> stable =
         Comparator.comparing((JsonNode x) -> str(x, "provider")).thenComparing(x -> str(x, "id"));
     List<JsonNode> pool =
         new ArrayList<>(eligible.stream().filter(x -> !str(x, "source").equals("BID")).toList());
-    var bids = eligible.stream().filter(x -> str(x, "source").equals("BID")).toList();
+    Comparator<JsonNode> objectiveOrder =
+        (objective.equals("FASTEST") ? time.thenComparing(cost) : cost.thenComparing(time))
+            .thenComparing(stable);
+    // The same airline bid may have several pickup options. Select its best complete itinerary
+    // first.
+    var bestPerAirBid = new LinkedHashMap<String, JsonNode>();
+    for (var offer : eligible)
+      if (str(offer, "source").equals("BID"))
+        bestPerAirBid.merge(
+            offer.path("airBidId").asText(str(offer, "id")),
+            offer,
+            (a, b) -> objectiveOrder.compare(a, b) <= 0 ? a : b);
+    var bids = bestPerAirBid.values();
     if (!bids.isEmpty()) {
       var low = decimal(bids.stream().min(cost).orElseThrow().get("comparisonTotal"), "amount");
       var high = decimal(bids.stream().max(cost).orElseThrow().get("comparisonTotal"), "amount");
-      int fast = bids.stream().min(time).orElseThrow().get("transitDays").asInt();
-      int slow = bids.stream().max(time).orElseThrow().get("transitDays").asInt();
+      int fast = transitHours(bids.stream().min(time).orElseThrow());
+      int slow = transitHours(bids.stream().max(time).orElseThrow());
       pool.add(
           bids.stream()
               .min(
@@ -156,15 +174,12 @@ public final class Pricing {
                                       high.subtract(low))
                                   .add(
                                       normalize(
-                                          BigDecimal.valueOf(b.get("transitDays").asInt() - fast),
+                                          BigDecimal.valueOf(transitHours(b) - fast),
                                           BigDecimal.valueOf(slow - fast))))
                       .thenComparing(stable))
               .orElseThrow());
     }
-    return pool.stream()
-        .min(
-            (objective.equals("FASTEST") ? time.thenComparing(cost) : cost.thenComparing(time))
-                .thenComparing(stable));
+    return pool.stream().min(objectiveOrder);
   }
 
   private static BigDecimal normalize(BigDecimal delta, BigDecimal span) {

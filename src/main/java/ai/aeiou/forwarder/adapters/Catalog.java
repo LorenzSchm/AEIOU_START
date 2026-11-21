@@ -103,8 +103,13 @@ public class Catalog {
   }
 
   public List<Contact> contacts(String kind, String coverage) {
+    return contacts(kind, coverage, Set.of());
+  }
+
+  public List<Contact> contacts(String kind, String coverage, Set<String> preferred) {
     return directory.stream()
         .filter(c -> c.kind.equals(kind) && c.serves.contains(coverage))
+        .sorted(Comparator.comparing(c -> !preferred.contains(c.name())))
         .limit(5)
         .toList();
   }

@@ -178,6 +178,8 @@ public class Workflow {
             "grossKg",
             "volumeCbm",
             "zone",
+            "pickupPostcode",
+            "readyDate",
             "constraints",
             "pieces",
             "quoteDeadline",
@@ -272,6 +274,23 @@ public class Workflow {
     store.changed(d, "FACTS", "Normalized shipment facts and priced applicable tariff rows", at);
   }
 
+  private static String arrivalEstimate(String ready, int hours, boolean de) {
+    LocalDate date = LocalDate.parse(ready);
+    String first = date.plusDays(hours / 24).toString();
+    String last = date.plusDays(Math.ceilDiv(hours, 24)).toString();
+    String arrival = first.equals(last) ? first : first + (de ? " bis " : " to ") + last;
+    return de
+        ? " Bei Transportbeginn am " + ready + " erwarten wir die Ankunft am " + arrival + "."
+        : " If transport starts on " + ready + ", estimated arrival is " + arrival + ".";
+  }
+
+  private static Instant serviceStart(ObjectNode d, Instant at) {
+    String ready = d.at("/inputs/readyDate").asText("");
+    if (ready.isEmpty()) return at;
+    Instant earliest = LocalDate.parse(ready).atStartOfDay(ZoneOffset.UTC).toInstant();
+    return earliest.isAfter(at) ? earliest : at;
+  }
+
   public void offer(ObjectNode d, ObjectNode candidate, Instant at) {
     var s = session(d);
     String id = str(candidate, "id");
@@ -287,7 +306,8 @@ public class Workflow {
     }
     candidate.remove("includesPickup");
     if (d.path("inputs").has("deliveryDeadline")
-        && at.plus(java.time.Duration.ofDays(candidate.path("transitDays").asInt()))
+        && serviceStart(d, at)
+            .plus(Duration.ofHours(Pricing.transitHours(candidate)))
             .isAfter(Instant.parse(d.at("/inputs/deliveryDeadline").asText()))) {
       candidate.put("eligible", false);
       candidate.withArray("reasons").add("Transit exceeds requested delivery deadline");
@@ -303,7 +323,8 @@ public class Workflow {
     if (needPickup) for (var pickup : d.path("pickupLegs")) combine(d, id, pickup, at);
     if (d.at("/latestDecision/action").asText().equals("WAIT")
         && !d.has("quote")
-        && str(s, "control").equals("AUTO")) decide(d, at);
+        && str(s, "control").equals("AUTO"))
+      store.schedule(sid(d) + ":recheck:" + id, sid(d), "DECIDE", clock.now(), obj());
   }
 
   public void pickup(ObjectNode d, ObjectNode pickup, Instant at) {
@@ -319,9 +340,18 @@ public class Workflow {
         || !str(air.get("quotedTotal"), "currency").equals("EUR")) return;
     var c = (ObjectNode) air.deepCopy();
     String id = airId + "_" + str(pickup, "id");
+    int hours = Pricing.transitHours(air) + Pricing.transitHours(pickup);
+    if (pickup.has("validUntil")
+        && (!air.has("validUntil")
+            || Instant.parse(str(pickup, "validUntil"))
+                .isBefore(Instant.parse(str(air, "validUntil")))))
+      c.set("validUntil", pickup.get("validUntil"));
+    c.put("airBidId", airId);
+    c.set("airTotal", air.get("quotedTotal"));
     c.put("id", id)
         .put("includesPickup", true)
-        .put("transitDays", air.get("transitDays").asInt() + pickup.get("transitDays").asInt());
+        .put("transitHours", hours)
+        .put("transitDays", Math.ceilDiv(hours, 24));
     var total =
         Pricing.money(
             Pricing.decimal(air.get("quotedTotal"), "amount")
@@ -357,7 +387,7 @@ public class Workflow {
         "reason",
         reason,
         "policyVersion",
-        "baseline-v1",
+        "baseline-v1.1",
         "pendingSources",
         action.equals("WAIT") ? arr("carrier replies") : arr(),
         "cutoff",
@@ -437,22 +467,36 @@ public class Workflow {
       var total = c.get("quotedTotal");
       boolean de = str(s, "language").equals("de");
       String route = str(s, "origin") + " → " + str(s, "destination");
-      String body = de ? "Guten Tag,\n\nunser Angebot für " : "Hello,\n\nOur offer for ";
-      body +=
-          route
-              + " ("
-              + str(s, "scope")
-              + ", "
-              + str(c, "provider")
-              + ")"
-              + (de ? " beträgt " : " is ")
+      String service =
+          str(s, "scope").equals("DOOR_TO_PORT")
+              ? (de ? "inklusive Abholung in " : "including collection in ")
+                  + d.at("/inputs/pickupPostcode").asText(d.at("/inputs/zone").asText())
+              : (de ? "von Flughafen zu Flughafen" : "airport to airport");
+      int hours = Pricing.transitHours(c);
+      String duration =
+          hours % 24 == 0
+              ? hours / 24 + (de ? " Tage" : hours == 24 ? " day" : " days")
+              : hours + (de ? " Stunden" : " hours");
+      String ready = d.at("/inputs/readyDate").asText("");
+      String body =
+          (de ? "Guten Tag,\n\nfür " : "Hello,\n\nFor ")
+              + route
+              + (de ? " können wir Ihnen " : " we can offer ")
               + str(total, "amount")
               + " "
               + str(total, "currency")
-              + (de ? " gesamt. Laufzeit: " : " all-in. Transit: ")
-              + c.get("transitDays").asInt()
-              + (de ? " Tage." : " days.")
-              + "\n\nTeam AEIOU";
+              + (de ? " gesamt anbieten, " : " all-in, ")
+              + service
+              + ". "
+              + (de ? "Die geschätzte Laufzeit mit " : "Estimated transit with ")
+              + str(c, "provider")
+              + (de ? " beträgt " : " is ")
+              + duration
+              + "."
+              + (ready.isEmpty() ? "" : arrivalEstimate(ready, hours, de))
+              + (de
+                  ? "\n\nSollen wir den Transport für Sie buchen?\nTeam AEIOU"
+                  : "\n\nShall we book this for you?\nTeam AEIOU");
       d.set(
           "latestDecision",
           decision(
@@ -532,7 +576,7 @@ public class Workflow {
     store.message(sid(d), m);
     if (str(m, "category").equals("QUOTE")) {
       session(d).put("phase", "QUOTED");
-      ((ObjectNode) d.get("quote")).put("sendState", "SENT");
+      ((ObjectNode) d.get("quote")).put("sendState", "SENT").put("sentAt", at.toString());
     }
     store.changed(d, "MESSAGE", "Dispatched " + str(m, "category"), at);
   }
@@ -569,7 +613,7 @@ public class Workflow {
             c.get("rateId")));
     d.put("acceptedParent", parent);
     var pickup = d.path("pickupBookings").path(str(c, "id"));
-    if (pickup.isObject())
+    if (pickup.isObject() && pickup.path("bookingRequired").asBoolean(true))
       queueMail(
           d,
           "book-pickup",
@@ -578,8 +622,8 @@ public class Workflow {
           str(pickup, "parent"),
           "Please arrange the quoted collection for "
               + str(s, "reference")
-              + " in postal zone "
-              + str(d.get("inputs"), "zone")
+              + " at postcode "
+              + d.at("/inputs/pickupPostcode").asText(d.at("/inputs/zone").asText())
               + ".",
           at);
     if (c.has("rateId") || !clock.live)
@@ -599,15 +643,18 @@ public class Workflow {
                       "booking-request",
                       "BOOKING",
                       contact.email(),
-                      null,
+                      c.has("carrierMail") ? str(c, "carrierMail") : null,
                       "Please book "
+                          + (c.has("carrierReference") ? str(c, "carrierReference") + " for " : "")
                           + str(s, "reference")
                           + " on "
                           + str(s, "origin")
                           + " to "
                           + str(s, "destination")
                           + " as quoted: "
-                          + d.at("/quote/total/amount").asText()
+                          + str(
+                              c.has("airTotal") ? c.get("airTotal") : c.get("quotedTotal"),
+                              "amount")
                           + " "
                           + d.at("/quote/total/currency").asText()
                           + ".",
@@ -653,6 +700,42 @@ public class Workflow {
     store.save(d);
   }
 
+  private static final java.util.regex.Pattern MOVEMENT =
+      java.util.regex.Pattern.compile(
+          "(?im)^\\s*(?:the (?:shipment|flight) (?:has )?)?(departed(?: from)?|arrived at|delivered"
+              + " to)\\s+([A-Z]{3})\\s+(?:at |on"
+              + " )?(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2})?(?:Z|[+-]\\d{2}:\\d{2}))\\s*[.!]?\\s*$");
+
+  public void carrierMilestones(ObjectNode d, ObjectNode m, String body, Instant observed) {
+    var matches = MOVEMENT.matcher(body);
+    while (matches.find()) {
+      try {
+        Instant effective = OffsetDateTime.parse(matches.group(3)).toInstant();
+        if (!effective.isAfter(observed))
+          d.withArray("milestones")
+              .add(
+                  obj(
+                      "label",
+                      matches.group(1) + " " + matches.group(2),
+                      "kind",
+                      "CONFIRMED",
+                      "effectiveAt",
+                      effective.toString(),
+                      "observedAt",
+                      observed.toString(),
+                      "evidence",
+                      arr(
+                          evidence(
+                              "MAIL",
+                              str(m, "id"),
+                              "carrier update",
+                              matches.group().strip(),
+                              observed.toString()))));
+      } catch (DateTimeException ignored) {
+      }
+    }
+  }
+
   public void tracking(ObjectNode d, ObjectNode question, Instant at) {
     if (d.withArray("milestones").isEmpty()) {
       d.withObject("/pendingTracking").set(str(question, "id"), question.deepCopy());
@@ -676,7 +759,19 @@ public class Workflow {
         "TRACKING",
         str(question, "from"),
         str(question, "id"),
-        intro + str(milestone, "label") + " (" + str(milestone, "effectiveAt") + ").",
+        str(session(d), "origin")
+            + " → "
+            + str(session(d), "destination")
+            + ", "
+            + d.at("/booking/provider").asText()
+            + " ("
+            + d.at("/booking/bookingReference").asText()
+            + "). "
+            + intro
+            + str(milestone, "label")
+            + " ("
+            + str(milestone, "effectiveAt")
+            + ").",
         at);
     store.changed(d, "TRACKING", "Answered from the confirmed shipment record", at);
   }

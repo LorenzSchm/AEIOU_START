@@ -66,6 +66,42 @@ class DomainTest {
     assertTrue(Pricing.choose(values, "CHEAPEST", now, 2, "").isEmpty());
   }
 
+  @Test
+  void classifiesCustomerHandoverAndPreservesPostcode() {
+    var airport =
+        ShipmentFacts.extract(
+            "Fastest option from DUS to JFK. Ready on 2026-11-27, and we will deliver it to DUS"
+                + " ourselves. 1 piece, 1540 kg, 5.90 cbm.");
+    assertEquals("AIRPORT_TO_AIRPORT", str(airport, "scope"));
+    assertEquals("2026-11-27", str(airport, "readyDate"));
+    var pickup =
+        ShipmentFacts.extract(
+            "Fastest freight option to JFK. Ready for pickup at our site in 61018 (Bad Homburg),"
+                + " Germany, on 2026-11-25. 6 pieces, 1233 kg, 10.78 cbm.");
+    assertEquals("DOOR_TO_PORT", str(pickup, "scope"));
+    assertEquals("JFK", str(pickup, "destination"));
+    assertEquals("61018", str(pickup, "pickupPostcode"));
+    assertEquals("2026-11-25", str(pickup, "readyDate"));
+    assertEquals(6, pickup.path("pieces").asInt());
+  }
+
+  @Test
+  void ranksPickupVariantsForTheSameAirlineBidInHours() {
+    var fast =
+        (com.fasterxml.jackson.databind.node.ObjectNode) candidate("express", "BID", "320", 3);
+    var cheap =
+        (com.fasterxml.jackson.databind.node.ObjectNode) candidate("regular", "BID", "220", 3);
+    fast.put("airBidId", "same").put("transitHours", 60);
+    cheap.put("airBidId", "same").put("transitHours", 67);
+    var values = List.<com.fasterxml.jackson.databind.JsonNode>of(cheap, fast);
+    assertEquals(
+        "express",
+        str(Pricing.choose(values, "FASTEST", Instant.EPOCH, 1, "").orElseThrow(), "id"));
+    assertEquals(
+        "regular",
+        str(Pricing.choose(values, "CHEAPEST", Instant.EPOCH, 1, "").orElseThrow(), "id"));
+  }
+
   private com.fasterxml.jackson.databind.JsonNode candidate(
       String id, String source, String total, int days) {
     return obj(

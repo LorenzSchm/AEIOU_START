@@ -43,6 +43,10 @@ public class ShipmentFacts {
     var route =
         Pattern.compile("\\b([A-Z]{3})\\s*(?:→|[-–>]+|to|nach|bis)\\s*([A-Z]{3})\\b").matcher(text);
     if (route.find()) result.put("origin", route.group(1)).put("destination", route.group(2));
+    else {
+      var destination = Pattern.compile("\\b(?:to|nach)\\s+([A-Z]{3})\\b").matcher(text);
+      if (destination.find()) result.put("destination", destination.group(1));
+    }
     var weights = measures(text, "kg|lbs?|kilograms?");
     var volumes = measures(text, "cbm|m³|m3");
     if (weights.size() == 1) result.put("grossKg", weights.getFirst().toPlainString());
@@ -116,6 +120,11 @@ public class ShipmentFacts {
         && lower.matches("(?s).*(?:kg|lb)\\s*(?:per piece|each|je stück).*"))
       result.put(
           "grossKg", weights.getFirst().multiply(BigDecimal.valueOf(pieces)).toPlainString());
+    if (!result.has("pieces")) {
+      var count =
+          Pattern.compile("(?i)\\b(\\d{1,6})\\s+(?:pieces?|pcs|packages?|stück)\\b").matcher(text);
+      if (count.find()) result.put("pieces", Integer.parseInt(count.group(1)));
+    }
     if (lower.matches("(?s).*(cheapest|günstigst|preiswert|billigst).*"))
       result.put("objective", "CHEAPEST");
     if (lower.matches("(?s).*(fastest|schnellst).*")) result.put("objective", "FASTEST");
@@ -123,6 +132,20 @@ public class ShipmentFacts {
       result.put("scope", "AIRPORT_TO_AIRPORT");
     if (lower.matches("(?s).*(door[- ]to[- ]port|pickup|abholung).*"))
       result.put("scope", "DOOR_TO_PORT");
+    if (lower.matches(
+        "(?s).*\\b(?:we (?:will |can )?(?:deliver|bring)"
+            + " [^.]{0,70}ourselves|self.delivery|selbstanlieferung)\\b.*"))
+      result.put("scope", "AIRPORT_TO_AIRPORT");
+    var ready =
+        Pattern.compile(
+                "(?i)\\b(?:ready|abholbereit)\\b[^.!?\\n]{0,140}?\\b(\\d{4}-\\d{2}-\\d{2})\\b")
+            .matcher(text);
+    if (ready.find()) {
+      try {
+        result.put("readyDate", java.time.LocalDate.parse(ready.group(1)).toString());
+      } catch (java.time.DateTimeException ignored) {
+      }
+    }
     if (lower.matches("(?s).*(?:not|nicht)\\s+(?:the |die )?(?:fastest|schnellste).*")
         && lower.matches("(?s).*(cheapest|günstigst).*")) result.put("objective", "CHEAPEST");
     if (lower.matches("(?s).*(?:not|nicht)\\s+(?:the |die )?(?:cheapest|günstigste).*")
@@ -144,7 +167,7 @@ public class ShipmentFacts {
       } catch (java.time.DateTimeException ignored) {
       }
     var zone = Pattern.compile("\\b(\\d{2})\\d{3}\\b").matcher(text);
-    if (zone.find()) result.put("zone", zone.group(1));
+    if (zone.find()) result.put("zone", zone.group(1)).put("pickupPostcode", zone.group());
     result.put(
         "language", lower.matches("(?s).*(bitte|günstig|schnellst|abholung).*") ? "de" : "en");
     return result;

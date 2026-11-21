@@ -104,7 +104,7 @@ public class ForwarderApi {
                 d ->
                     Duration.between(
                             Instant.parse(d.at("/session/receivedAt").asText()),
-                            Instant.parse(d.at("/quote/at").asText()))
+                            Instant.parse(d.at("/quote/sentAt").asText(d.at("/quote/at").asText())))
                         .toSeconds())
             .sorted()
             .toList();

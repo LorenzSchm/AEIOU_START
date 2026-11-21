@@ -61,7 +61,7 @@ public class ShadowPolicy {
         if (c.path("eligible").asBoolean() && c.has("comparisonTotal"))
           improves =
               other.at("/session/objective").asText().equals("FASTEST")
-                  ? c.get("transitDays").asInt() < baseline.get().path("transitDays").asInt()
+                  ? Pricing.transitHours(c) < Pricing.transitHours(baseline.get())
                   : Pricing.decimal(c.get("comparisonTotal"), "amount")
                           .compareTo(
                               Pricing.decimal(baseline.get().get("comparisonTotal"), "amount"))
