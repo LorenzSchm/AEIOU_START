@@ -70,3 +70,21 @@ tasks.register('read', JavaExec) {
     mainClass = 'ai.aeiou.edgelab.ReadFile'
     workingDir = projectDir
 }
+
+// ---- Change alarm (ticket 08) ------------------------------------------------
+// Read-only Postgres access and JSON for the alarm's snapshot/memory.
+dependencies {
+    implementation 'org.postgresql:postgresql:42.7.7'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.2'
+}
+
+// ./gradlew alarm   (Ctrl+C stops it). Reads DATABASE_URL from ../.env, read-only.
+tasks.register('alarm', JavaExec) {
+    group = 'edgelab'
+    description = 'Runs the change alarm: polls the shared DB every 60 s, pops up on new things.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ai.aeiou.edgelab.alarm.AlarmMain'
+    workingDir = projectDir
+    standardInput = System.in
+}

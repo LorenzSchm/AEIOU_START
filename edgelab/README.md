@@ -81,3 +81,37 @@ Voice fixtures (`src/test/resources/voice/`) were made with Windows' built-in vo
 (PowerShell `System.Speech.Synthesis.SpeechSynthesizer`, Zira en-US and Hedda de-DE,
 16 kHz mono wav); the mp3s come from those wavs via `MakeVoiceFixtures` (test sources).
 Voice tests skip with a message if the model cannot be downloaded.
+
+## Change alarm (Thure's laptop only)
+
+Watches the shared Postgres every 60 s and pops up a Windows tray message when something
+new shows up. It needs `DATABASE_URL=postgresql://user:password@host:port/db` in the
+repo-root `.env` (or in the environment). It never needs the team key and never calls the 5U API.
+
+```bash
+export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.13.10002-hotspot"
+./gradlew -q --console=plain alarm             # runs until Ctrl+C
+./gradlew -q alarm --args="--once"             # one poll, then exit
+./gradlew -q alarm --args="--replay"           # what today's history would raise (no pop-ups, memory untouched)
+```
+
+- **Strictly read-only.** The session starts with `default_transaction_read_only=on`, the
+  connection is marked read-only, and only SELECTs run. The alarm refuses to start if the
+  server does not confirm read-only. Proof against the real DB (skipped by default):
+  `EDGELAB_DB_TEST=1 ./gradlew test --tests '*ReadOnlyDatabaseTest'` (a write is rejected
+  with SQLState 25006).
+- **First run** (no `alarm-memory.json` yet) learns everything in history as normal and
+  sends no alerts. After that each new thing alerts exactly once, also across restarts.
+- **What alerts:** a new rejection reason or verdict, a new hold reason in `wave_case`, a
+  new attachment type (ending + content type), a mail in an "unreadable" stage with a new
+  type or a new sender, a request with no quote (or a mail in `review`) after 4 minutes, a
+  new mail kind or sender, a board result with an `adjustment` deduction, a `no answer`
+  round or an `expired` request.
+- **Output:** a one-line pop-up (at most 3 per poll, then "and N more"), and a full entry in
+  `alerts.log`: time, topic, round, example mail id and subject, and which edgelab reader
+  fits. `alerts.log` and `alarm-memory.json` are git-ignored. Delete the memory file to
+  learn a fresh baseline.
+- **Stopping:** Ctrl+C. Memory is written atomically after each poll, so stopping at any
+  moment loses nothing.
+- The pure part is `ChangeDetector.decide(snapshot, memory)`; it is tested on an anonymised
+  snapshot of the real DB from 2026-11-21 (no mail bodies) in `src/test/resources/alarm/`.
