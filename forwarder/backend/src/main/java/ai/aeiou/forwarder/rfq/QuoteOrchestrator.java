@@ -459,6 +459,11 @@ public class QuoteOrchestrator {
      *
      * @return true if this call made the decision
      */
+    /** Automatic answer to a customer's follow-up after the quote (never a second price). */
+    public QuoteSender.Outcome answerFollowUp(RfqRepository.RfqRecord rfq, ai.aeiou.forwarder.mail.StoredMail followUp) {
+        return sender.answerFollowUp(rfq, followUp);
+    }
+
     public boolean decide(long sessionId, String trigger) {
         if (!repo.claimDecision(sessionId)) return false;
         scheduler.cancel(sessionId);
@@ -479,9 +484,12 @@ public class QuoteOrchestrator {
                                             "rejectReason", e.rejectReason()))
                                     .toList()));
             if (chosen == null) {
-                sessions.flagNeedsHuman(sessionId, "No price to quote: " + decision.reasoning());
+                // Nothing usable yet: reopen the decision so a late answer still produces a quote automatically.
+                repo.releaseDecision(sessionId);
+                sessions.flagNeedsHuman(sessionId, "No price to quote yet: " + decision.reasoning());
                 return true;
             }
+            if (decision.attention() != null) sessions.flagNeedsHuman(sessionId, "Quoted on a fallback: " + decision.attention());
             sender.deliver(rfq, chosen);
         } catch (RuntimeException e) {
             log.error("Decision failed for session {}", sessionId, e);

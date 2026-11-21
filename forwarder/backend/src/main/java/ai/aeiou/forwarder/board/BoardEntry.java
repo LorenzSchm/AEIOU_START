@@ -1,5 +1,6 @@
 package ai.aeiou.forwarder.board;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,11 +17,12 @@ import tools.jackson.databind.JsonNode;
  * @param refs    short string identifiers (public refs, booking/team references); matched against sessions/bookings
  */
 record BoardEntry(String requestKey, String round, String verdict, String reasonCode, Map<String, Double> points,
-                  List<Long> mailIds, List<String> refs, JsonNode raw) {
+                  List<Long> mailIds, List<String> refs, OffsetDateTime sentAt, JsonNode raw) {
 
     private static final List<String> KEY_FIELDS =
             List.of("request_id", "requestId", "request", "id", "message_id", "messageId", "email_id", "mail_id");
     private static final List<String> LIST_FIELDS = List.of("requests", "results", "items", "rows", "entries", "data");
+    private static final List<String> ROUND_FIELDS = List.of("round_no", "roundNo", "round");
     private static final List<String> REASON_FIELDS = List.of("reason_code", "reasonCode", "reason");
     private static final List<String> POINTS_FIELDS = List.of("points", "points_by_kind", "pointsByKind", "score");
     private static final int MAX_REF_LENGTH = 40;
@@ -49,14 +51,30 @@ record BoardEntry(String requestKey, String round, String verdict, String reason
         return List.of();
     }
 
+    /**
+     * The live rows carry no request id, e.g. {@code {"round_no": 3, "sent_at": "...", "verdict": "accepted",
+     * "reason": null}}: the round number is the key then, and {@code sent_at} matches the row to our RFQ by time.
+     */
     static BoardEntry parse(JsonNode row) {
         if (row == null || !row.isObject()) return null;
+        String round = firstScalar(row, ROUND_FIELDS);
         String key = firstScalar(row, KEY_FIELDS);
+        if (key == null && round != null) key = "round:" + round;
         if (key == null) return null;
         String verdict = firstScalar(row, List.of("verdict"));
-        return new BoardEntry(key, firstScalar(row, List.of("round")),
+        return new BoardEntry(key, round,
                 verdict == null ? null : verdict.trim().toLowerCase(Locale.ROOT),
-                firstScalar(row, REASON_FIELDS), points(row), mailIds(row), refs(row), row);
+                firstScalar(row, REASON_FIELDS), points(row), mailIds(row), refs(row), sentAt(row), row);
+    }
+
+    private static OffsetDateTime sentAt(JsonNode row) {
+        String raw = firstScalar(row, List.of("sent_at", "sentAt", "received_at"));
+        if (raw == null) return null;
+        try {
+            return OffsetDateTime.parse(raw);
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
     }
 
     boolean isFinal() {

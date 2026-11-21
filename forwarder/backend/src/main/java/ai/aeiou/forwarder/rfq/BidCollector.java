@@ -73,7 +73,9 @@ public class BidCollector {
             case "ratedesk" -> CandidateSource.ratedesk;
             default -> CandidateSource.bid;
         };
-        Candidate c = new Candidate(null, source, row.carrierCode(), who, price, currency, eur.get(), transit, null,
+        // A carrier's own R-... reference books through the portal like a portal rate id.
+        String rateId = bid != null && bid.rateId() != null && bid.rateId().matches("R-[A-Za-z0-9_-]{8,40}") ? bid.rateId() : null;
+        Candidate c = new Candidate(null, source, row.carrierCode(), who, price, currency, eur.get(), transit, rateId,
                 validUntil, payload("bidRequestId", row.id(), "mailId", mail.id(), "notes", bid.notes()));
         long id = repo.insertCandidate(sessionId, c);
         boolean late = repo.findRfq(sessionId).map(r -> r.decidedAt() != null).orElse(false);

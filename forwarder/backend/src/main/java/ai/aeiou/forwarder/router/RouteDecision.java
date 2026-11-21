@@ -7,8 +7,8 @@ import java.util.List;
  * Combines the stage-1 result and the stage-2 extraction into the final route (pure, no I/O).
  *
  * <p>Hard facts from stage 1 win over the LLM; a disagreement is reported as a problem. Every problem
- * flags the session for a human, but the mail is still dispatched when the type is known with
- * reasonable confidence, so the 6-minute quote window is never lost while waiting for a person.
+ * flags the session for attention, but the best-guess type is always dispatched: the system runs fully
+ * automatically and never waits for a person inside the 6-minute quote window.
  *
  * @param stage    1 if stage 1 decided the type, 2 if the LLM did
  * @param problems reasons a human should look at the session (empty if none)
@@ -17,11 +17,10 @@ import java.util.List;
 record RouteDecision(MailType type, double confidence, int stage, List<String> problems, boolean dispatch) {
 
     /**
-     * @param threshold   setting {@code routerConfidenceThreshold}: below it a human is asked
-     * @param minDispatch below this confidence an LLM-typed mail is not dispatched at all
+     * @param threshold setting {@code routerConfidenceThreshold}: below it the session is flagged for attention
      */
     static RouteDecision decide(Stage1Classifier.Result s1, Extraction extraction, String llmError,
-                                String threadSessionType, double threshold, double minDispatch) {
+                                String threadSessionType, double threshold) {
         List<String> problems = new ArrayList<>();
         if (llmError != null) problems.add("LLM routing failed: " + llmError);
 
@@ -47,7 +46,7 @@ record RouteDecision(MailType type, double confidence, int stage, List<String> p
         if (inThread && type == MailType.NEW_RFQ && "RFQ".equals(threadSessionType)) {
             problems.add("NEW_RFQ inside an existing RFQ thread");
         }
-        return new RouteDecision(type, confidence, 2, List.copyOf(problems), confidence >= minDispatch);
+        return new RouteDecision(type, confidence, 2, List.copyOf(problems), true);
     }
 
     boolean needsHuman() {

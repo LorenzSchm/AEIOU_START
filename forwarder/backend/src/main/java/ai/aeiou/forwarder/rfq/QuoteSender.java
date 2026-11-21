@@ -56,7 +56,10 @@ public class QuoteSender {
 
     public enum Outcome { SENT, DRAFTED, ALREADY_QUOTED, NO_DRAFT, FAILED }
 
-    /** Writes the quote and sends it, or leaves it as a draft when a human has to look first. */
+    /**
+     * Writes the quote and sends it. Only the autopilot switches stop it (global off, or a human took the session
+     * over); a needs-human flag is an attention marker and never holds a quote back.
+     */
     public Outcome deliver(RfqRecord rfq, Candidate chosen) {
         long sessionId = rfq.sessionId();
         StoredMail customerMail = gateway.findById(rfq.mailId())
@@ -68,14 +71,12 @@ public class QuoteSender {
 
         SessionView session = sessions.find(sessionId).orElseThrow();
         // Both switches must be on: the global "answer live mails automatically" and the session's own autopilot.
-        if (session.needsHuman() || !session.autopilot() || !settings.autopilot()) {
+        if (!session.autopilot() || !settings.autopilot()) {
             repo.saveDraft(new Draft(sessionId, DRAFT_PURPOSE_QUOTE, mail.to(), mail.subject(), body, mail.inReplyToExt(),
                     draftMeta(chosen)));
-            String why = session.needsHuman() ? "session needs a human"
-                    : !settings.autopilot() ? "global autopilot is off" : "autopilot is off for this session";
+            String why = !settings.autopilot() ? "global autopilot is off" : "a human took this session over";
             events.system(sessionId, "quote.drafted", "Quote " + totalLabel + " drafted, waiting for approval: " + why,
                     payload("candidateId", chosen.id(), "total", chosen.total(), "currency", chosen.currency()));
-            if (!session.needsHuman()) sessions.flagNeedsHuman(sessionId, "Quote " + totalLabel + " ready for approval (" + why + ")");
             return Outcome.DRAFTED;
         }
         return claimAndSend(sessionId, mail, chosen.total(), chosen.currency(), chosen.totalEur(), chosen.id(), Actor.system);
@@ -139,6 +140,45 @@ public class QuoteSender {
                 payload("total", total, "currency", currency, "totalEur", totalEur, "candidateId", candidateId,
                         "mailId", sent.id()));
         events.forget(sessionId);
+        return Outcome.SENT;
+    }
+
+    /**
+     * Answers a customer's follow-up after our quote, automatically, with the facts of the quote we already sent.
+     * It never makes a new offer: the quoted total is the only price it may state (only the first quote counts).
+     */
+    public Outcome answerFollowUp(RfqRecord rfq, StoredMail followUp) {
+        long sessionId = rfq.sessionId();
+        SessionView session = sessions.find(sessionId).orElseThrow();
+        Candidate quoted = repo.chosenCandidate(sessionId).orElse(null);
+        Map<String, Object> facts = quoted != null ? facts(rfq, quoted) : new LinkedHashMap<>();
+        if (quoted == null && session.quotedTotal() != null) {
+            facts.put(Facts.TOTAL, Money.amount(session.quotedTotal()));
+            facts.put(Facts.CURRENCY, session.quotedCurrency());
+        }
+        facts.put("alreadyQuoted", true);
+        facts.put("bookingStatus", session.booked() ? "booked" : "not booked yet");
+        List<String> mustContain = List.of();
+        String body;
+        try {
+            WrittenMail written = writer.write(new MailIntent(sessionId, Purpose.FOLLOW_UP_ANSWER, List.of(followUp), facts,
+                    mustContain, rfq.language(), rfq.customerName(),
+                    "Do not make a new offer or change the price. If they want to go ahead, tell them to simply reply "
+                            + "to confirm and we book it."));
+            body = written.body();
+        } catch (RuntimeException e) {
+            log.warn("Follow-up writer failed for session {}", sessionId, e);
+            return Outcome.FAILED;
+        }
+        OutgoingMail mail = OutgoingMail.reply(followUp, body);
+        if (!session.autopilot() || !settings.autopilot()) {
+            repo.saveDraft(new Draft(sessionId, "other", mail.to(), mail.subject(), body, mail.inReplyToExt(),
+                    payload("kind", "follow_up_answer")));
+            events.system(sessionId, "follow_up.drafted", "Follow-up answer drafted (autopilot off)", payload());
+            return Outcome.DRAFTED;
+        }
+        StoredMail sent = gateway.send(sessionId, mail);
+        events.append(sessionId, sent.id(), "follow_up.answered", Actor.system, "Answered the customer's follow-up", payload());
         return Outcome.SENT;
     }
 

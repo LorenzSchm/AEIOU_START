@@ -22,6 +22,33 @@ class BoardIngestTest extends ApiTestBase {
     @Autowired BoardIngest ingest;
 
     @Test
+    void liveRowsWithoutIdsAreKeyedByRoundAndMatchedByTime() {
+        OffsetDateTime received = OffsetDateTime.parse("2026-11-21T15:13:10.4Z");
+        long rfq = data.session("AEI-TIME", "RFQ", "QUOTED", received, false);
+        data.mail(7001, "in", rfq, "Air freight quote request", "quote please", received);
+        long earlier = data.session("AEI-EARLY", "RFQ", "QUOTED", received.minusMinutes(6), false);
+        data.mail(7002, "in", earlier, "Air freight quote request", "quote please", received.minusMinutes(6));
+
+        // The real /v1/board/me shape: no request id at all.
+        BoardIngest.Result r = ingest.ingest("""
+                {"team": "aeiou", "rank": 11, "requests": [
+                  {"round_no": 3, "sent_at": "2026-11-21T15:13:10.155511+00:00", "answered_at": "2026-11-21T15:13:58.647750+00:00",
+                   "verdict": "accepted", "reason": null, "booked": null},
+                  {"round_no": 2, "sent_at": "2026-11-21T15:07:05.268407+00:00", "verdict": "rejected", "reason": "too_high"},
+                  {"round_no": 1, "sent_at": "2026-11-21T14:30:00+00:00", "verdict": "accepted"}
+                ], "bookings": []}""");
+
+        assertThat(r.seen()).isEqualTo(3);
+        assertThat(sessionOf("round:3")).isEqualTo(rfq);
+        assertThat(sessionOf("round:2")).isEqualTo(earlier);
+        assertThat(sessionOf("round:1")).isNull();  // nothing of ours within ±10 s
+        assertThat(jdbc.sql("SELECT reason_code FROM board_result WHERE request_key = 'round:2'").query(String.class).single())
+                .isEqualTo("too_high");
+        assertThat(jdbc.sql("SELECT round FROM board_result WHERE request_key = 'round:3'").query(String.class).single())
+                .isEqualTo("3");
+    }
+
+    @Test
     void storesVerdictsMapsSessionsAndAlertsOnStreaksAndNewReasons() {
         long rfq = data.session("AEI-ONE", "RFQ", "QUOTED", OffsetDateTime.now(), false);
         data.mail(5001, "in", rfq, "RFQ", "quote please", OffsetDateTime.now());
@@ -35,7 +62,7 @@ class BoardIngestTest extends ApiTestBase {
                     "points": {"price": 0, "speed": 3}},
                    {"request_id": "r2", "team_reference": "AEI-TWO", "verdict": "rejected", "reason_code": "LATE"},
                    {"request_id": "r1", "message_id": 5001, "verdict": "pending"},
-                   {"round": 1, "verdict": "accepted"}
+                   {"verdict": "accepted"}
                  ]}""";
         BoardIngest.Result first = ingest.ingest(snapshot);
 

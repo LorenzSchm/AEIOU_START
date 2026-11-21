@@ -37,6 +37,17 @@ public class ReferenceRepository {
                 .optional();
     }
 
+    /** Destination airport by city or airport name ("Kuala Lumpur" → KUL). */
+    public Optional<String> airportByCity(String city) {
+        return jdbc.sql("""
+                        SELECT iata FROM airport
+                        WHERE lower(city) = lower(:c) OR lower(name) = lower(:c) OR lower(name) LIKE lower(:c) || '%'
+                        ORDER BY (lower(city) = lower(:c)) DESC, iata LIMIT 1""")
+                .param("c", city.trim())
+                .query(String.class)
+                .optional();
+    }
+
     private List<Carrier> carriers(String kind, String serves) {
         return jdbc.sql("""
                         SELECT id, name, code, kind, email, serves

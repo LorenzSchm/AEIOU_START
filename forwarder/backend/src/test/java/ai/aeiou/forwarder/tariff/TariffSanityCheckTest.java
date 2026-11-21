@@ -27,12 +27,14 @@ class TariffSanityCheckTest {
                 lane("MUC", "JFK", "4.00", "3.00")), current, old.lanes(), TODAY).passed()).isTrue();
 
         assertThat(TariffSanityCheck.check(tariff("EUR", lane("FRA", "SIN", "6.10", "3.00"), lane("FRA", "JFK", "4.00", "3.00"),
-                lane("MUC", "JFK", "4.00", "3.00")), current, old.lanes(), TODAY).problems())
+                lane("MUC", "JFK", "4.00", "3.00")), current, old.lanes(), TODAY).warnings())
                 .anyMatch(p -> p.contains("FRA-SIN 4.00 -> 6.10"));
-        assertThat(TariffSanityCheck.check(tariff("EUR", lane("FRA", "SIN", "4.00", "3.00")), current, old.lanes(), TODAY).problems())
+        assertThat(TariffSanityCheck.check(tariff("EUR", lane("FRA", "SIN", "4.00", "3.00")), current, old.lanes(), TODAY).warnings())
                 .anyMatch(p -> p.contains("Lane count dropped from 3 to 1"));
-        assertThat(TariffSanityCheck.check(tariff("USD", old.lanes().toArray(ParsedLane[]::new)), current, old.lanes(), TODAY).problems())
-                .anyMatch(p -> p.contains("Currency changed from EUR to USD"));
+        // big moves are warnings, not blockers: the hourly setup changes may legitimately move prices
+        TariffSanityCheck.Result usd = TariffSanityCheck.check(tariff("USD", old.lanes().toArray(ParsedLane[]::new)), current, old.lanes(), TODAY);
+        assertThat(usd.warnings()).anyMatch(p -> p.contains("Currency changed from EUR to USD"));
+        assertThat(usd.passed()).isTrue();
     }
 
     @Test

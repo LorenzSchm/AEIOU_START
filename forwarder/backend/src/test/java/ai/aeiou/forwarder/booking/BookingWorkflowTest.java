@@ -87,6 +87,7 @@ class BookingWorkflowTest {
         settings = mock(SettingsService.class);
         EventLog events = mock(EventLog.class);
         when(settings.getBool(anyString(), anyBoolean())).thenAnswer(inv -> inv.getArgument(1));
+        when(settings.getBool(eq("autopilot"), anyBoolean())).thenReturn(true);  // the live switch: answer automatically
         when(writer.write(any())).thenAnswer(inv -> {
             MailIntent intent = inv.getArgument(0);
             return new WrittenMail("Re: RFQ FRA-SIN", "Mail for " + intent.purpose() + " " + intent.mustContain(), false);
@@ -194,27 +195,30 @@ class BookingWorkflowTest {
     }
 
     @Test
-    void knownExpiredRateGoesStraightToRequoteAndAPriceJumpNeedsAHuman() {
+    void knownExpiredRateGoesStraightToRequoteAndAPriceJumpIsBookedAndFlagged() {
         portalCandidate(NOW.minusMinutes(1));
         expectRate("R-freshrate01", "1450.00");
+        expectBooking("R-freshrate01", HttpStatus.CREATED, "BK-JUMP0001");
 
         accept();
 
         server.verify();
-        assertThat(bookingCount()).isZero();
+        assertThat(bookingRow()).containsEntry("status", "booked").containsEntry("rate_id", "R-freshrate01");
         verify(sessions).flagNeedsHuman(eq(sessionId), contains("more than 1%"));
-        verify(mailGateway, never()).send(anyLong(), any());
+        assertThat(sentMails(1).getFirst().to()).isEqualTo(CUSTOMER);
     }
 
     @Test
-    void conflictNeedsAHuman() {
+    void conflictBooksAFreshRateAutomatically() {
         portalCandidate(NOW.plusMinutes(10));
         expectBooking("R-abcdefgh12", HttpStatus.CONFLICT, null);
+        expectRate("R-freshrate02", "1387.35");
+        expectBooking("R-freshrate02", HttpStatus.CREATED, "BK-CONF0001");
 
         accept();
 
-        assertThat(bookingCount()).isZero();
-        verify(sessions).flagNeedsHuman(eq(sessionId), contains("409"));
+        server.verify();
+        assertThat(bookingRow()).containsEntry("status", "booked").containsEntry("booking_reference", "BK-CONF0001");
     }
 
     @Test

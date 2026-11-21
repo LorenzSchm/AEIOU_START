@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -106,11 +107,26 @@ public class BoardIngest {
         return out;
     }
 
+    /** A board row's {@code sent_at} and our stored RFQ mail time may differ by this much. */
+    static final java.time.Duration TIME_MATCH_WINDOW = java.time.Duration.ofSeconds(10);
+
     /**
-     * Maps a board row to our session: the RFQ mail's 5U id (or its thread root), then our public ref,
-     * then a booking/team reference. Unmatched rows are kept with a null session and retried next poll.
+     * Maps a board row to our session: by time (the row's {@code sent_at} next to an RFQ mail we received), then the
+     * RFQ mail's 5U id (or its thread root), then our public ref, then a booking/team reference. Unmatched rows are
+     * kept with a null session and retried next poll.
      */
     private Long resolveSession(BoardEntry e) {
+        if (e.sentAt() != null) {
+            Optional<Long> byTime = jdbc.sql("""
+                            SELECT s.id FROM session s JOIN mail m ON m.session_id = s.id AND m.direction = 'in'
+                            WHERE s.type = 'RFQ' AND m.sent_at BETWEEN :t - make_interval(secs => :w) AND :t + make_interval(secs => :w)
+                            ORDER BY abs(extract(epoch FROM m.sent_at - :t)), m.id LIMIT 1""")
+                    .param("t", e.sentAt())
+                    .param("w", TIME_MATCH_WINDOW.toSeconds())
+                    .query(Long.class)
+                    .optional();
+            if (byTime.isPresent()) return byTime.get();
+        }
         List<Long> ids = e.mailIds().isEmpty() ? List.of(Long.MIN_VALUE) : e.mailIds();
         List<String> refs = e.refs().isEmpty() ? List.of("") : e.refs();
         return jdbc.sql("""

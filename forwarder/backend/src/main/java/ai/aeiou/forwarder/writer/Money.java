@@ -72,6 +72,33 @@ public final class Money {
         }
     }
 
+    /** One amount found in a text, with its ISO currency. */
+    public record Amount(BigDecimal value, String currency) {}
+
+    /** Every money amount (number + currency) a text states, in order. */
+    public static java.util.List<Amount> amounts(String text) {
+        java.util.List<Amount> found = new java.util.ArrayList<>();
+        if (text == null) return found;
+        Matcher m = AMOUNT.matcher(text);
+        while (m.find()) {
+            String number = m.group(2) != null ? m.group(2) : m.group(3) != null ? m.group(3) : m.group(5);
+            String cur = m.group(1) != null ? m.group(1) : m.group(4) != null ? m.group(4) : m.group(6);
+            Optional<BigDecimal> value = parse(number);
+            if (value.isPresent()) found.add(new Amount(value.get(), isoCurrency(cur)));
+        }
+        return found;
+    }
+
+    private static String isoCurrency(String raw) {
+        String c = raw.trim().toLowerCase(Locale.ROOT);
+        return switch (c) {
+            case "€", "euro", "euros" -> "EUR";
+            case "$", "dollar", "dollars" -> "USD";
+            case "£" -> "GBP";
+            default -> c.toUpperCase(Locale.ROOT);
+        };
+    }
+
     /** How many money amounts (number + currency) a text states. */
     public static int countAmounts(String text) {
         if (text == null) return 0;

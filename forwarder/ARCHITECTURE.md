@@ -9,7 +9,8 @@ Companion to [BRIEF.md](../BRIEF.md). Facts from the brief and API docs are mark
 | Within 5% of the best price **(given)** | A deterministic pricing module that checks every source (sheet, portal, bids, rate desk) and tries every weight break |
 | LLM cost: full points at $0, zero at $0.10 per quote, and a quote with no gateway call gets no cost points **(given)** | Exactly 1–2 small LLM calls per RFQ. No LLM in the price math |
 | Only the first quote in a thread counts **(given)** | A database constraint allows one quote per session |
-| Unannounced changes every hour **(given)** | Settings editable at runtime, a watchdog on `/v1/board/me`, an LLM fallback when parsing fails, a human in the loop |
+| Unannounced changes every hour **(given)** | Settings editable at runtime, a watchdog on `/v1/board/me`, an LLM fallback when parsing fails, an optional human who can watch and step in |
+| Scored automatically, all night **(given)** | **Fully autonomous.** A human never blocks or delays a mail. `needs_human` is an attention marker only (see §4.0) |
 | Jury judges UX, codebase and how human the emails read **(given)** | Full audit trail, live control panel, 3D globe, **every** outgoing mail (customer replies, bid requests, rate-desk questions) written by `EmailWriter` to read like a real person |
 
 ## 2. System overview
@@ -63,7 +64,9 @@ Everything runs in `docker compose`: `postgres`, `backend`, `frontend`.
   "tracking": { "reference", "question" } }
 ```
 - Customer mails always reach stage 2, because the RFQ has to be extracted anyway, so classifying it in the same call costs almost nothing.
-- **Needs human** when confidence is below the threshold (setting, default 0.75), when the result contradicts a stage-1 hint, or when the schema fails validation. The session is flagged and shown at the top of the control panel.
+- **Attention flag** when confidence is below the threshold (setting, default 0.75), when the result contradicts a stage-1 hint, or when the schema fails validation. The session is flagged in the control panel, but the best-guess type is **always dispatched**.
+- **Fallbacks:** a failed LLM call is retried once. After that, stage-1 hints decide, and without hints a keyword check routes request-looking mails as `NEW_RFQ`.
+- **Carrier and rate-desk answers** are read by pattern first (`BidMailParser`: price, currency, transit days, validity, `R-…` rate id, `TRK-…` reference, declines). The LLM only reads the ambiguous ones, which saves most of the LLM cost of an RFQ.
 - Every decision is stored as a `route.decision` event, and human corrections as `human.reroute`. Together they form a labelled dataset in case we add an embedding classifier later.
 
 ### 3.3 Sessions
@@ -83,11 +86,26 @@ T+~2s   fan out in parallel:
 T+bidWait (setting, default 90 s) or all answered → decide
 T+~100s quote mail in the customer thread (one all-in total + currency, given)
 ```
+### 4.0 Fully autonomous (applies to every agent)
+Only three things stop a mail from going out automatically: the global `autopilot` setting, a human's `take_over` of one session, and the env guards (`SEND_ENABLED`, `CUSTOMER_REPLIES_ENABLED`). Every failure path falls back to the best automatic action and flags the session for attention:
+
+| Situation | Automatic action |
+|---|---|
+| Door pickup without a trucker price | Quote the best air option |
+| No weight, but a volume | Price the volume weight (cbm × 167) |
+| Destination only as a city | Resolve it via the airport table |
+| No price yet at decision time | Reopen the decision; the next answer quotes |
+| Follow-up after the quote | Answered with the quoted facts; never a second price |
+| Booking 410 / 404 / 409 | Book a fresh rate, also if it moved more than 1% |
+| Unexpected portal error | Book by email with the airline |
+| Tracking reference unknown | Honest holding answer |
+| Tariff with big price moves | Goes live; only a structurally broken sheet waits for review |
+
 **Decision.** All candidates are converted to EUR, using `fx_eur_per_usd` when given.
 - `cheapest`: lowest all-in total.
 - `fastest`: lowest transit; ties go to the lower price.
 - Carrier bids: the most balanced bid, price and speed 50/50 **(given)**. Our formula: `score = 0.5·price/minPrice + 0.5·transit/minTransit`, lowest wins. It needs checking against the first results.
-- Door-to-port: trucker price + air price.
+- Door-to-port: trucker price + air price. Without a trucker price, the best air option is quoted.
 
 Every candidate is stored in `price_candidate` with `chosen` or a `reject_reason`, so the UI can show why it won.
 
@@ -96,19 +114,22 @@ Every candidate is stored in `price_candidate` with `chosen` or a `reject_reason
 **One quote per session.** `UPDATE session SET quoted_at=now() WHERE id=? AND quoted_at IS NULL` must affect exactly 1 row before anything is sent.
 
 **Acceptance.** The `rate_id` behind the chosen candidate goes to `POST /v1/portal/bookings` with `team_reference = session.public_ref`.
-- 410 means the rate expired: get a new rate and book again.
-- 503 means book by email with the airline.
+- 410, 404 or 409: get a new rate for the same airline and lane, and book it.
+- 503 or anything unexpected: book by email with the airline.
+- A carrier bid's own `R-…` rate id is booked through the portal the same way.
 
 Confirm to the customer, and mark the booking `confirmed` when the "Booking … confirmed" mail arrives. Rate IDs are only valid for 15 minutes **(given)**, so a late acceptance always triggers a new rate.
 
 ### 4.2 Tracking agent
 - Look up the booking by reference, customer or thread, then answer from the CRM (status, airline, booking ref, departure, ETA). One small LLM call writes the reply.
 - A correct answer on a booked shipment is worth +10 **(given)**.
-- If nothing matches, the session needs a human.
+- If nothing matches, an honest holding answer goes out automatically and the session is flagged.
 
 ### 4.3 Tariff ingestion
 - **Start kit, run once and seeded:** one parser per format (xlsx via Apache POI, pdf via PDFBox, docx via POI, txt). The two Danube Wings JPGs go through a vision model once offline and are checked by hand. Each sheet gets a unit test.
-- **Monthly tariff mails:** if the file matches a known layout, use the deterministic parser; otherwise an LLM extracts it into the `tariff_lane` schema. Sanity checks against the previous version: lane count, rate deltas within ±50%, break order. If a check fails, the tariff is saved as `pending_review` and needs a human; it is never activated silently.
+- **Monthly tariff mails:** if the file matches a known layout, use the deterministic parser; otherwise an LLM extracts it into the `tariff_lane` schema. Checks:
+  - **Structural** (lanes, IATA pairs, numbers in range, ascending breaks, not expired): failure → `pending_review`.
+  - **Against the previous version** (rate deltas within ±50%, lane count, currency): warnings only. The sheet goes live and is flagged, because the hourly setup changes may legitimately move prices.
 - The new version becomes active from its `valid_from`, and the in-memory `TariffStore` reloads atomically.
 
 ## 5. Pricing module
@@ -217,9 +238,10 @@ setting           key PK, value JSONB, updated_at, updated_by
 
 ## 12. Detecting hourly changes
 - **BoardWatcher** polls `/v1/board/me` every 60 s and stores verdicts and reason codes as `board.verdict` events. Two rejections in a row, or a new reason code, raise `system.alert`, shown as a banner in the UI.
+  Its rows carry no request id (`round_no`, `sent_at`, `answered_at`, `verdict`, `reason`), so a row is matched to our RFQ session by `sent_at` ≈ the RFQ mail's receive time (±10 s).
 - **Defensive defaults:**
   - Any unexpected HTTP status from the portal sends us to the email channel (rate desk or airline).
-  - Extraction or parsing failures fall back to an LLM, and if that fails too, the session goes to a human.
+  - Extraction or parsing failures fall back to an LLM, and if that fails too, to the best automatic default (flagged, never waiting).
   - Tariff versions are compared before activation.
 - All tuning knobs live in `setting` and can be changed in the UI without a redeploy.
 

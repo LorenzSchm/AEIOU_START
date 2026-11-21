@@ -123,7 +123,7 @@ class QuoteOrchestratorTest {
         orchestrator = new QuoteOrchestrator(pricing, portal, new PortalRateLimiter(), reference, repo, writer, gateway,
                 sessions, events, settings, fx, scheduler, sender);
         handler = new RfqHandler(sessions, repo, reference, orchestrator, new BidCollector(repo, events, fx, orchestrator),
-                writer, events);
+                events);
 
         when(writer.write(any())).thenAnswer(inv -> politeWriter(inv.getArgument(0)));
         when(pricing.priceFromSheets(any())).thenReturn(List.of(
@@ -305,7 +305,6 @@ class QuoteOrchestratorTest {
         newRfq("cheapest", false);
 
         assertThat(gateway.sentTo(CUSTOMER)).isEmpty();
-        assertThat(sessions.needsHuman).isTrue();
         assertThat(repo.findDraft(sessionId)).hasValueSatisfying(d -> {
             assertThat(d.purpose()).isEqualTo("quote");
             assertThat(d.meta()).containsEntry("total", "1500.00").containsEntry("currency", "EUR");
@@ -319,7 +318,7 @@ class QuoteOrchestratorTest {
     }
 
     @Test
-    void missingWeightGoesToAHumanWithADraftInsteadOfAQuestion() {
+    void missingWeightAndVolumeIsFlaggedWithoutSendingAQuestion() {
         noPortalLane();
         StoredMail mail = gateway.store(sessionId, "in", CUSTOMER, "aeiou@hackloop.mail", "RFQ", "FRA to SIN please", null);
         handler.handle(new RoutedMail(mail, MailType.NEW_RFQ, 0.9, 2, sessionId, extraction(
@@ -328,11 +327,47 @@ class QuoteOrchestratorTest {
         assertThat(gateway.sent).isEmpty();
         assertThat(sessions.needsHuman).isTrue();
         assertThat(sessions.needsHumanReason).contains("weight");
-        assertThat(repo.findDraft(sessionId)).hasValueSatisfying(d -> assertThat(d.purpose()).isEqualTo("other"));
+        assertThat(repo.findDraft(sessionId)).isEmpty();
     }
 
     @Test
-    void followUpAfterTheQuoteIsHandedToAHuman() {
+    void missingWeightFallsBackToTheVolumeWeightAndQuotes() {
+        noPortalLane();
+        settingsStore.values.put("bidsEnabled", false);
+        StoredMail mail = gateway.store(sessionId, "in", CUSTOMER, "aeiou@hackloop.mail", "RFQ", "FRA to SIN, 1.5 cbm", null);
+        handler.handle(new RoutedMail(mail, MailType.NEW_RFQ, 0.9, 2, sessionId, extraction(
+                new Extraction.Rfq(null, null, "FRA", "SIN", null, new BigDecimal("1.5"), null, "cheapest", false, null, null, null))));
+
+        assertThat(repo.findRfq(sessionId)).hasValueSatisfying(r -> assertThat(r.weightKg()).isEqualByComparingTo("250.5"));
+        assertThat(gateway.sentTo(CUSTOMER)).hasSize(1);
+    }
+
+    @Test
+    void aQuoteIsSentEvenWhileTheSessionIsFlaggedForAttention() {
+        noPortalLane();
+        settingsStore.values.put("bidsEnabled", false);
+        sessions.flagNeedsHuman(sessionId, "router was unsure");
+
+        newRfq("cheapest", false);
+
+        assertThat(gateway.sentTo(CUSTOMER)).hasSize(1);
+        assertThat(sessions.claims.get()).isEqualTo(1);
+    }
+
+    @Test
+    void doorPickupWithoutTruckerPriceStillQuotesTheBestAirOption() {
+        noPortalLane();
+        settingsStore.values.put("bidsEnabled", false);
+
+        newRfq("cheapest", true);
+        orchestrator.decide(sessionId, "timer");  // the truckers never answer
+
+        assertThat(gateway.sentTo(CUSTOMER)).hasSize(1);
+        assertThat(sessions.needsHumanReason).contains("no trucker price");
+    }
+
+    @Test
+    void followUpAfterTheQuoteIsAnsweredAutomaticallyWithoutASecondQuote() {
         noPortalLane();
         settingsStore.values.put("bidsEnabled", false);
         StoredMail rfq = newRfq("cheapest", false);
@@ -342,8 +377,10 @@ class QuoteOrchestratorTest {
                 "Could you do it cheaper?", rfq.externalId());
         handler.handle(new RoutedMail(followUp, MailType.FOLLOW_UP, 0.9, 2, sessionId, null));
 
-        assertThat(gateway.sentTo(CUSTOMER)).hasSize(1);
-        assertThat(sessions.needsHumanReason).startsWith("Follow-up after quote: Could you do it cheaper?");
+        assertThat(gateway.sentTo(CUSTOMER)).hasSize(2);
+        assertThat(gateway.sentTo(CUSTOMER).get(1).inReplyToExt()).isEqualTo(followUp.externalId());
+        assertThat(sessions.claims.get()).isEqualTo(1);  // no second quote claim
+        assertThat(sessions.quotedTotal).isEqualByComparingTo("1500.00");
     }
 
     // helpers ----------------------------------------------------------------------------------------------------

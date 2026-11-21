@@ -70,6 +70,11 @@ public class RfqRepository {
                 .param(sessionId).update() == 1;
     }
 
+    /** Reopens the decision when it found nothing to quote, so the next answer decides again. */
+    public void releaseDecision(long sessionId) {
+        jdbc.sql("UPDATE rfq SET decided_at = NULL WHERE session_id = ?").param(sessionId).update();
+    }
+
     /** RFQ sessions created after {@code since} that were neither decided nor quoted. */
     public List<Long> undecidedSessions(java.time.Instant since) {
         return jdbc.sql("""
@@ -141,7 +146,17 @@ public class RfqRepository {
     }
 
     public List<Candidate> candidates(long sessionId) {
-        return jdbc.sql("SELECT * FROM price_candidate WHERE session_id = ? ORDER BY id")
+        return candidates("SELECT * FROM price_candidate WHERE session_id = ? ORDER BY id", sessionId);
+    }
+
+    /** The candidate we quoted, if any. */
+    public Optional<Candidate> chosenCandidate(long sessionId) {
+        return candidates("SELECT * FROM price_candidate WHERE session_id = ? AND chosen ORDER BY id DESC LIMIT 1", sessionId)
+                .stream().findFirst();
+    }
+
+    private List<Candidate> candidates(String sql, long sessionId) {
+        return jdbc.sql(sql)
                 .param(sessionId)
                 .query((rs, n) -> new Candidate(rs.getLong("id"), CandidateSource.valueOf(rs.getString("source")),
                         rs.getString("airline_code"), rs.getString("airline_name"), rs.getBigDecimal("total"),

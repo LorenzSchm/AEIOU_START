@@ -33,7 +33,6 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -63,6 +62,7 @@ class TrackingHandlerTest {
         SettingsService settings = mock(SettingsService.class);
         EventLog events = mock(EventLog.class);
         when(settings.getBool(anyString(), anyBoolean())).thenAnswer(inv -> inv.getArgument(1));
+        when(settings.getBool(eq("autopilot"), anyBoolean())).thenReturn(true);  // the live switch: answer automatically
         when(writer.write(any())).thenAnswer(inv -> new WrittenMail("Re: Where is my shipment", "Answer", false));
 
         handler = new TrackingHandler(new BookingRepository(jdbc), sessions, events, writer,
@@ -140,13 +140,13 @@ class TrackingHandlerTest {
     }
 
     @Test
-    void unknownReferenceNeedsAHumanAndLeavesADraft() {
+    void unknownReferenceGetsAnAutomaticHoldingAnswerAndAFlag() {
         handler.handle(tracking(TRACKING, trackingSession, "Status BK-ZZZZZZZZ", "Where is BK-ZZZZZZZZ?", "BK-ZZZZZZZZ"));
 
         verify(sessions).flagNeedsHuman(eq(trackingSession), anyString());
-        verify(mailGateway, never()).send(anyLong(), any());
-        Map<String, Object> draft = jdbc.sql("SELECT * FROM draft WHERE session_id = ?").param(trackingSession).query().singleRow();
-        assertThat(draft).containsEntry("purpose", "tracking_answer").containsEntry("to_addr", TRACKING);
+        verify(mailGateway).send(eq(trackingSession), any());
+        assertThat(jdbc.sql("SELECT count(*) FROM draft WHERE session_id = ?").param(trackingSession).query(Long.class).single())
+                .isZero();
         assertThat(writtenIntent().purpose()).isEqualTo(Purpose.HOLDING_REPLY);
     }
 }

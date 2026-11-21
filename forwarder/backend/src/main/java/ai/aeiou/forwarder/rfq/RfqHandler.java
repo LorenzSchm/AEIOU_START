@@ -2,10 +2,10 @@ package ai.aeiou.forwarder.rfq;
 
 import static ai.aeiou.forwarder.rfq.RfqEvents.payload;
 
-import ai.aeiou.forwarder.mail.OutgoingMail;
+
 import ai.aeiou.forwarder.mail.StoredMail;
 import ai.aeiou.forwarder.pricing.Shipment;
-import ai.aeiou.forwarder.rfq.RfqRepository.Draft;
+
 import ai.aeiou.forwarder.rfq.RfqRepository.RfqRecord;
 import ai.aeiou.forwarder.router.Extraction;
 import ai.aeiou.forwarder.router.MailHandler;
@@ -14,9 +14,9 @@ import ai.aeiou.forwarder.router.RoutedMail;
 import ai.aeiou.forwarder.session.SessionService;
 import ai.aeiou.forwarder.session.SessionService.SessionView;
 import ai.aeiou.forwarder.session.SessionStatus;
-import ai.aeiou.forwarder.writer.EmailWriter;
-import ai.aeiou.forwarder.writer.EmailWriter.MailIntent;
-import ai.aeiou.forwarder.writer.EmailWriter.Purpose;
+
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -24,8 +24,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,24 +34,21 @@ import org.springframework.stereotype.Component;
 public class RfqHandler implements MailHandler {
 
     static final String SESSION_TYPE = "RFQ";
-    private static final Logger log = LoggerFactory.getLogger(RfqHandler.class);
 
     private final SessionService sessions;
     private final RfqRepository repo;
     private final ReferenceRepository reference;
     private final QuoteOrchestrator orchestrator;
     private final BidCollector bids;
-    private final EmailWriter writer;
     private final RfqEvents events;
 
     public RfqHandler(SessionService sessions, RfqRepository repo, ReferenceRepository reference,
-                      QuoteOrchestrator orchestrator, BidCollector bids, EmailWriter writer, RfqEvents events) {
+                      QuoteOrchestrator orchestrator, BidCollector bids, RfqEvents events) {
         this.sessions = sessions;
         this.repo = repo;
         this.reference = reference;
         this.orchestrator = orchestrator;
         this.bids = bids;
-        this.writer = writer;
         this.events = events;
     }
 
@@ -85,7 +80,7 @@ public class RfqHandler implements MailHandler {
             return;
         }
         Extraction.Rfq r = x.rfq();
-        String destination = iata(r.destination());
+        String destination = resolveDestination(r.destination());
         String origin = resolveOrigin(r);
         String mode = QuoteDecider.FASTEST.equalsIgnoreCase(r.mode()) ? QuoteDecider.FASTEST : QuoteDecider.CHEAPEST;
         // A pickup needs a postcode: it picks the trucker zone. Without one the LLM's "door pickup" is a misread
@@ -95,8 +90,15 @@ public class RfqHandler implements MailHandler {
             events.system(sessionId, mail.id(), "rfq.door_pickup_ignored",
                     "Door pickup read from the mail but no postcode given: pricing airport to airport", payload());
         }
-        RfqRecord rfq = new RfqRecord(sessionId, mail.id(), r.originZip(), origin, destination, r.weightKg(), r.volumeCbm(),
-                r.weightKg() == null ? null : new Shipment(origin, destination, r.weightKg(), r.volumeCbm()).chargeableKg(),
+        // No gross weight but a volume: the volume weight is what gets billed anyway (1 cbm = 167 kg).
+        BigDecimal weight = r.weightKg();
+        if ((weight == null || weight.signum() <= 0) && r.volumeCbm() != null && r.volumeCbm().signum() > 0) {
+            weight = r.volumeCbm().multiply(Shipment.KG_PER_CBM);
+            events.system(sessionId, mail.id(), "rfq.weight_from_volume",
+                    "No weight given: using the volume weight " + weight.stripTrailingZeros().toPlainString() + " kg", payload());
+        }
+        RfqRecord rfq = new RfqRecord(sessionId, mail.id(), r.originZip(), origin, destination, weight, r.volumeCbm(),
+                weight == null ? null : new Shipment(origin, destination, weight, r.volumeCbm()).chargeableKg(),
                 r.pieces(), mode, doorPickup, parseDate(r.readyDate()), r.commodity(),
                 x.language(), x.senderName(), null);
         if (!repo.insertRfq(rfq, x)) {
@@ -112,9 +114,9 @@ public class RfqHandler implements MailHandler {
 
         List<String> missing = missingEssentials(rfq);
         if (!missing.isEmpty()) {
-            // A question is not a quote, and only the first reply counts: a human decides what to send.
-            draftHoldingReply(rfq, mail, missing);
-            sessions.flagNeedsHuman(sessionId, "RFQ is missing " + String.join(", ", missing));
+            // Nothing can be priced. A question is not a quote (only the first reply counts), so nothing is sent;
+            // the flag lets a human step in if they want to.
+            sessions.flagNeedsHuman(sessionId, "RFQ is missing " + String.join(", ", missing) + ": cannot price it");
             return;
         }
         sessions.setStatus(sessionId, SessionStatus.PRICING);
@@ -127,8 +129,13 @@ public class RfqHandler implements MailHandler {
         boolean quoted = session.quotedAt() != null;
         events.system(session.id(), mail.id(), "rfq.follow_up", "Customer wrote again" + (quoted ? " after our quote" : ""),
                 payload("summary", summary));
-        // Never a second automatic quote in the same thread; a person reads it.
-        sessions.flagNeedsHuman(session.id(), (quoted ? "Follow-up after quote: " : "Follow-up before quote: ") + summary);
+        if (!quoted) return; // the quote that is on its way answers it
+        // Answered automatically with the facts of the quote we sent; never a second price (claimQuote stays closed).
+        Optional<RfqRecord> rfq = repo.findRfq(session.id());
+        QuoteSender.Outcome outcome = rfq.isEmpty() ? QuoteSender.Outcome.FAILED : orchestrator.answerFollowUp(rfq.get(), mail);
+        if (outcome == QuoteSender.Outcome.FAILED) {
+            sessions.flagNeedsHuman(session.id(), "Follow-up after quote could not be answered automatically: " + summary);
+        }
     }
 
     private String resolveOrigin(Extraction.Rfq r) {
@@ -150,22 +157,6 @@ public class RfqHandler implements MailHandler {
         return missing;
     }
 
-    private void draftHoldingReply(RfqRecord rfq, StoredMail mail, List<String> missing) {
-        String body;
-        try {
-            body = writer.write(new MailIntent(rfq.sessionId(), Purpose.HOLDING_REPLY, List.of(mail),
-                    payload("missing", missing), List.of(), rfq.language(), rfq.customerName(),
-                    "Ask only for the missing details.")).body();
-        } catch (RuntimeException e) {
-            log.warn("Holding reply writer failed for session {}", rfq.sessionId(), e);
-            body = "Hello,\n\nthanks for your request. Could you tell us the " + String.join(" and ", missing)
-                    + " of the shipment? Then we send you a price right away.\n\nBest regards,\nAEIOU Air Freight desk";
-        }
-        OutgoingMail reply = OutgoingMail.reply(mail, body);
-        repo.saveDraft(new Draft(rfq.sessionId(), "other", reply.to(), reply.subject(), body, reply.inReplyToExt(),
-                payload("kind", "holding_reply", "missing", missing)));
-    }
-
     private static String summary(RoutedMail routed) {
         StoredMail m = routed.mail();
         String body = m.body() == null ? "" : m.body().replaceAll("\\s+", " ").trim();
@@ -178,6 +169,16 @@ public class RfqHandler implements MailHandler {
         if (zip == null) return null;
         String digits = zip.replaceAll("\\D", "");
         return digits.length() >= 2 ? digits.substring(0, 2) : null;
+    }
+
+    /** IATA code as given, a code in brackets ("Kuala Lumpur (KUL)"), or the airport of a named city. */
+    private String resolveDestination(String given) {
+        String code = iata(given);
+        if (code != null || given == null || given.isBlank()) return code;
+        java.util.regex.Matcher inBrackets = java.util.regex.Pattern.compile("\\(([A-Za-z]{3})\\)").matcher(given);
+        if (inBrackets.find()) return inBrackets.group(1).toUpperCase();
+        String city = given.replaceAll("\\(.*\\)|,.*$", "").trim();
+        return reference.airportByCity(city).orElse(null);
     }
 
     private static String iata(String code) {

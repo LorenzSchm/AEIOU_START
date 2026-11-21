@@ -27,6 +27,7 @@ public record Extraction(
             String commodity,
             String notes) {}
 
+    /** {@code rateId}: the carrier's own "R-..." reference; it books through the portal like a portal rate id. */
     public record Bid(
             BigDecimal price,
             String currency,
@@ -34,7 +35,14 @@ public record Extraction(
             String validUntil,
             String airlineOrCompany,
             Boolean declined,
-            String notes) {}
+            String notes,
+            String rateId) {
+
+        public Bid(BigDecimal price, String currency, Integer transitDays, String validUntil, String airlineOrCompany,
+                   Boolean declined, String notes) {
+            this(price, currency, transitDays, validUntil, airlineOrCompany, declined, notes, null);
+        }
+    }
 
     public record Tracking(String reference, String question) {}
 }

@@ -13,7 +13,7 @@ class RouteDecisionTest {
 
     @Test
     void confidentLlmTypeIsDispatchedWithoutHuman() {
-        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.NEW_RFQ, 0.93), null, null, 0.75, 0.5);
+        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.NEW_RFQ, 0.93), null, null, 0.75);
 
         assertThat(d.type()).isEqualTo(MailType.NEW_RFQ);
         assertThat(d.stage()).isEqualTo(2);
@@ -23,23 +23,23 @@ class RouteDecisionTest {
 
     @Test
     void lowConfidenceFlagsAHumanButStillDispatches() {
-        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.NEW_RFQ, 0.6), null, null, 0.75, 0.5);
+        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.NEW_RFQ, 0.6), null, null, 0.75);
 
         assertThat(d.needsHuman()).isTrue();
         assertThat(d.dispatch()).isTrue();
     }
 
     @Test
-    void veryLowConfidenceIsNotDispatched() {
-        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.NEW_RFQ, 0.3), null, null, 0.75, 0.5);
+    void veryLowConfidenceIsStillDispatchedButFlagged() {
+        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.NEW_RFQ, 0.3), null, null, 0.75);
 
-        assertThat(d.dispatch()).isFalse();
+        assertThat(d.dispatch()).isTrue();
         assertThat(d.needsHuman()).isTrue();
     }
 
     @Test
     void stageOneFactsWinOverAContradictingLlm() {
-        RouteDecision d = RouteDecision.decide(BID, extraction(MailType.OTHER, 0.9), null, "RFQ", 0.75, 0.5);
+        RouteDecision d = RouteDecision.decide(BID, extraction(MailType.OTHER, 0.9), null, "RFQ", 0.75);
 
         assertThat(d.type()).isEqualTo(MailType.CARRIER_BID);
         assertThat(d.stage()).isEqualTo(1);
@@ -49,7 +49,7 @@ class RouteDecisionTest {
 
     @Test
     void failedLlmCallStillDispatchesAStageOneType() {
-        RouteDecision d = RouteDecision.decide(BID, null, "HTTP 502", "RFQ", 0.75, 0.5);
+        RouteDecision d = RouteDecision.decide(BID, null, "HTTP 502", "RFQ", 0.75);
 
         assertThat(d.dispatch()).isTrue();
         assertThat(d.problems()).singleElement().asString().contains("HTTP 502");
@@ -57,7 +57,7 @@ class RouteDecisionTest {
 
     @Test
     void failedLlmCallWithoutStageOneTypeGoesToAHuman() {
-        RouteDecision d = RouteDecision.decide(UNDECIDED, null, "timeout", null, 0.75, 0.5);
+        RouteDecision d = RouteDecision.decide(UNDECIDED, null, "timeout", null, 0.75);
 
         assertThat(d.type()).isEqualTo(MailType.OTHER);
         assertThat(d.dispatch()).isFalse();
@@ -66,7 +66,7 @@ class RouteDecisionTest {
 
     @Test
     void acceptanceOutsideAKnownThreadIsSuspicious() {
-        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.ACCEPTANCE, 0.9), null, null, 0.75, 0.5);
+        RouteDecision d = RouteDecision.decide(UNDECIDED, extraction(MailType.ACCEPTANCE, 0.9), null, null, 0.75);
 
         assertThat(d.needsHuman()).isTrue();
         assertThat(d.dispatch()).isTrue();

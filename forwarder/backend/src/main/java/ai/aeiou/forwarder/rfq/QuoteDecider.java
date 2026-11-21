@@ -18,7 +18,8 @@ import java.util.Optional;
  *   <li>Carrier bids are reduced to the single most balanced bid ({@link #balanceScore}); the challenge says
  *       "among carrier bids, the right one is the most balanced: price and speed weighted 50/50".</li>
  *   <li>Door pickup: every remaining air option is combined with the cheapest trucker (source {@code combined}).
- *       Without a trucker price there is nothing to quote.</li>
+ *       Without a trucker price the best air option is quoted anyway (an answer beats none) and the decision
+ *       carries an attention note.</li>
  *   <li>The customer's mode decides: {@code cheapest} = lowest EUR total (tie: faster),
  *       {@code fastest} = fewest transit days (tie: cheaper).</li>
  * </ol>
@@ -68,13 +69,12 @@ public final class QuoteDecider {
         mostBalancedBid(bids, verdicts, reasoning).ifPresent(air::add);
 
         List<Candidate> pool = air;
-        if (doorPickup) {
-            Optional<Candidate> truck = trucks.stream().min(byPrice());
-            if (truck.isEmpty()) {
-                air.forEach(c -> verdicts.put(c, Verdict.reject("door pickup requested but no trucker price")));
-                reasoning.add("door pickup requested but no trucker price: nothing to quote");
-                return new Decision(null, toEvaluated(order, verdicts), String.join("; ", reasoning));
-            }
+        String attention = null;
+        Optional<Candidate> truck = doorPickup ? trucks.stream().min(byPrice()) : Optional.empty();
+        if (doorPickup && truck.isEmpty()) {
+            attention = "door pickup requested but no trucker price: quoted airport to airport";
+            reasoning.add(attention);
+        } else if (doorPickup) {
             Candidate t = truck.get();
             trucks.stream().filter(o -> o != t)
                     .forEach(o -> verdicts.put(o, Verdict.reject("pricier trucker than " + t.label())));
@@ -89,7 +89,7 @@ public final class QuoteDecider {
 
         if (pool.isEmpty()) {
             reasoning.add("no usable candidate");
-            return new Decision(null, toEvaluated(order, verdicts), String.join("; ", reasoning));
+            return new Decision(null, toEvaluated(order, verdicts), String.join("; ", reasoning), "no usable price from any source");
         }
 
         Comparator<Candidate> ranking = FASTEST.equals(effectiveMode)
@@ -104,7 +104,7 @@ public final class QuoteDecider {
                     : "pricier than " + winner.label() + " (EUR " + Money.amount(c.totalEur()) + " vs " + Money.amount(winner.totalEur()) + ")"));
         }
         reasoning.add("chosen " + winner.label() + " " + Money.format(winner.total(), winner.currency()) + ", " + days(winner));
-        return new Decision(winner, toEvaluated(order, verdicts), String.join("; ", reasoning));
+        return new Decision(winner, toEvaluated(order, verdicts), String.join("; ", reasoning), attention);
     }
 
     /** The bid with the best {@link #balanceScore}; all other bids are rejected with their score. */
@@ -185,8 +185,11 @@ public final class QuoteDecider {
     /** One candidate with its outcome. Combined candidates created here have a null id. */
     public record Evaluated(Candidate candidate, boolean chosen, String rejectReason) {}
 
-    /** {@code chosen} is null when there is nothing we can quote. {@code evaluated} covers every input candidate. */
-    public record Decision(Candidate chosen, List<Evaluated> evaluated, String reasoning) {
+    /**
+     * {@code chosen} is null only when no source gave a usable price. {@code evaluated} covers every input candidate.
+     * {@code attention} is set when the quote went out on a fallback a human may want to look at (never blocks it).
+     */
+    public record Decision(Candidate chosen, List<Evaluated> evaluated, String reasoning, String attention) {
 
         public boolean hasQuote() {
             return chosen != null;

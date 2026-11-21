@@ -44,10 +44,12 @@ import org.springframework.stereotype.Component;
 /**
  * The customer accepted our quote: book the quoted option (ARCHITECTURE.md §4.1).
  * <ul>
- *   <li>Portal candidate: book its rate ID with {@code team_reference = session.public_ref}. An expired (410) or unknown
- *       (404) rate is re-quoted for the same airline, lane and weight and booked if the price moved by at most 1%.</li>
- *   <li>Portal unavailable (503 / unreachable) or a sheet / bid / rate-desk candidate: book by email with the airline.</li>
- *   <li>409 or anything unexpected: a human takes over.</li>
+ *   <li>Portal (or carrier-bid R-...) rate ID: book it with {@code team_reference = session.public_ref}. An expired
+ *       (410), unknown (404) or taken (409) rate is re-quoted for the same airline, lane and weight and booked; a
+ *       price that moved by more than 1% is booked too and flagged for attention.</li>
+ *   <li>Portal unavailable (503 / unreachable), or a candidate without a rate id (sheet, bid without R-...): book by
+ *       email with the airline.</li>
+ *   <li>Anything unexpected: booked by email with the airline and flagged. Nothing waits for a person.</li>
  * </ul>
  */
 @Component
@@ -55,7 +57,8 @@ public class AcceptanceHandler implements MailHandler {
 
     private static final Logger log = LoggerFactory.getLogger(AcceptanceHandler.class);
     private static final BigDecimal MAX_PRICE_DRIFT = new BigDecimal("0.01");
-    private static final Set<String> PORTAL_SOURCES = Set.of("portal", "combined");
+    /** Sources whose rate id the portal books; carrier bids and rate-desk answers carry the same R-... ids. */
+    private static final Set<String> PORTAL_SOURCES = Set.of("portal", "combined", "bid", "ratedesk");
 
     private final BookingPortal portal;
     private final BookingRepository repo;
@@ -142,7 +145,8 @@ public class AcceptanceHandler implements MailHandler {
         }
 
         BookingResult result = book(ctx, rateId);
-        if ((result.status() == 410 || result.status() == 404) && !refreshed) {
+        // 410 expired, 404 unknown, 409 taken: a fresh rate for the same airline and lane is bookable.
+        if ((result.status() == 410 || result.status() == 404 || result.status() == 409) && !refreshed) {
             Optional<Rate> fresh = refreshRate(ctx, "portal answered " + result.status());
             if (fresh.isEmpty()) return;
             rateId = fresh.get().rateId();
@@ -152,12 +156,13 @@ public class AcceptanceHandler implements MailHandler {
 
         if (result.booked()) {
             onBooked(ctx, result.booking(), transitDays);
-        } else if (result.status() == 409) {
-            sessions.flagNeedsHuman(ctx.session().id(), "Portal 409: rate " + rateId + " is already booked under another reference");
         } else if (result.status() == 503 || result.status() >= 500 || result.status() == BookingPortal.UNREACHABLE) {
             bookByEmail(ctx, "portal booking unavailable (" + result.status() + ")");
         } else {
-            sessions.flagNeedsHuman(ctx.session().id(), "Portal booking failed with " + result.status() + ": " + result.message());
+            // No dead end: the airline can always be booked by email.
+            sessions.flagNeedsHuman(ctx.session().id(), "Portal booking failed with " + result.status() + ": " + result.message()
+                    + "; booking by email instead");
+            bookByEmail(ctx, "portal booking failed (" + result.status() + ")");
         }
     }
 
@@ -171,7 +176,10 @@ public class AcceptanceHandler implements MailHandler {
         return result;
     }
 
-    /** Re-quotes the same airline, lane and weight. Only a price within 1% of the quoted one may be booked. */
+    /**
+     * Re-quotes the same airline, lane and weight. A price that moved by more than 1% is still booked (the customer
+     * accepted this shipment, and a booking beats none) and flagged for attention.
+     */
     private Optional<Rate> refreshRate(Context ctx, String why) {
         ChosenCandidate c = ctx.candidate();
         RfqInfo rfq = ctx.rfq();
@@ -182,19 +190,17 @@ public class AcceptanceHandler implements MailHandler {
                 result.ok() ? Payloads.of("rateId", result.rate().rateId(), "total", result.rate().total(), "why", why)
                         : Payloads.of("status", result.status(), "why", why));
         if (!result.ok()) {
-            if (result.status() == 503 || result.status() == BookingPortal.UNREACHABLE) {
-                bookByEmail(ctx, "rate expired and the portal cannot re-quote (" + result.status() + ")");
-            } else {
-                sessions.flagNeedsHuman(ctx.session().id(), "Rate expired and re-quote failed (" + result.status() + ")");
+            if (result.status() != 503 && result.status() != BookingPortal.UNREACHABLE) {
+                sessions.flagNeedsHuman(ctx.session().id(), "Re-quote failed (" + result.status() + "); booking by email instead");
             }
+            bookByEmail(ctx, "the portal cannot re-quote (" + result.status() + ")");
             return Optional.empty();
         }
         Rate rate = result.rate();
         if (!withinDrift(c, rate)) {
-            sessions.flagNeedsHuman(ctx.session().id(), "Rate expired; new " + c.airline() + " price "
-                    + Money.format(rate.total(), rate.currency()) + " differs from the quoted "
+            sessions.flagNeedsHuman(ctx.session().id(), "Booked a fresh " + c.airline() + " rate "
+                    + Money.format(rate.total(), rate.currency()) + " that differs from the quoted "
                     + Money.format(c.total(), c.currency()) + " by more than 1%");
-            return Optional.empty();
         }
         return Optional.of(rate);
     }

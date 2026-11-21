@@ -11,8 +11,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
- * The last step before a written mail leaves: it is sent, or, when a human has to look first (session needs a human,
- * session autopilot off, or the global {@code autopilot} setting off), stored as the session's pending {@code draft}.
+ * The last step before a written mail leaves: it is sent, or, when autopilot is off (globally, or a human took the
+ * session over), stored as the session's pending {@code draft}. A needs-human flag never holds a mail back.
  */
 @Component
 public class Outbox {
@@ -32,7 +32,8 @@ public class Outbox {
     }
 
     public boolean mayAutoSend(SessionView session) {
-        return !session.needsHuman() && session.autopilot() && settings.getBool("autopilot", true);
+        // needs-human is an attention marker only; it never holds a mail back
+        return session.autopilot() && settings.getBool("autopilot", false);
     }
 
     /** Sends when autopilot allows it, otherwise drafts. */
@@ -41,7 +42,7 @@ public class Outbox {
             mailGateway.send(session.id(), mail);
             return Delivery.SENT;
         }
-        draft(session.id(), mail, purpose, "autopilot off or session needs a human");
+        draft(session.id(), mail, purpose, "autopilot off or a human took the session over");
         return Delivery.DRAFTED;
     }
 

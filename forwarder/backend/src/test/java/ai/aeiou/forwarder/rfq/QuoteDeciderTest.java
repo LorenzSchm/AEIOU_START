@@ -111,13 +111,14 @@ class QuoteDeciderTest {
     }
 
     @Test
-    void doorPickupWithoutTruckerPriceHasNothingToQuote() {
+    void doorPickupWithoutTruckerPriceQuotesTheBestAirOptionWithAttention() {
         Candidate air = candidate(CandidateSource.sheet, "Helix", "1000", "EUR", "1000", 4);
+        Candidate pricier = candidate(CandidateSource.sheet, "Vega", "1200", "EUR", "1200", 2);
 
-        Decision d = decider.decide("cheapest", true, List.of(air));
+        Decision d = decider.decide("cheapest", true, List.of(air, pricier));
 
-        assertThat(d.hasQuote()).isFalse();
-        assertThat(reason(d, air)).contains("no trucker price");
+        assertThat(d.chosen()).isSameAs(air);
+        assertThat(d.attention()).contains("no trucker price");
     }
 
     @Test

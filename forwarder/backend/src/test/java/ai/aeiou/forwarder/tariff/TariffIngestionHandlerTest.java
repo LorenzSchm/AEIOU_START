@@ -89,13 +89,13 @@ class TariffIngestionHandlerTest {
     }
 
     @Test
-    void rateJumpOver50PercentIsHeldForReview() {
+    void rateJumpOver50PercentGoesLiveAndIsFlagged() {
         String text = new String(december(KitFiles.source(YELLOWTAIL_FILE).content()), StandardCharsets.UTF_8)
                 .replace("EUR 4.62  EUR 4.06", "EUR 9.62  EUR 4.06");
         handler.handle(mailWith(YELLOWTAIL_FILE, text.getBytes(StandardCharsets.UTF_8)));
 
-        verify(admin).store(any(), anyString(), eq("mail"), eq(99L), anyString(), eq(TariffStatus.pending_review));
-        verify(events).append(eq(SESSION), eq(99L), eq("tariff.rejected"), eq(Actor.system), contains("50%"), any());
+        verify(admin).store(any(), anyString(), eq("mail"), eq(99L), anyString(), eq(TariffStatus.active));
+        verify(events).append(eq(SESSION), eq(99L), eq("tariff.ingested"), eq(Actor.system), contains("50%"), any());
         verify(sessions).flagNeedsHuman(eq(SESSION), contains("HAM-BOG 4.62 -> 9.62"));
     }
 

@@ -36,7 +36,6 @@ public class Router {
     /** Customers expect a quote within 6 minutes of their mail (given). */
     static final Duration QUOTE_WINDOW = Duration.ofMinutes(6);
     static final double DEFAULT_CONFIDENCE_THRESHOLD = 0.75;
-    static final double DEFAULT_MIN_DISPATCH_CONFIDENCE = 0.5;
 
     private final RouterRepository repo;
     private final MailRepository mails;
@@ -74,21 +73,29 @@ public class Router {
                 Map.of("externalId", mail.externalId(), "from", mail.fromAddr(), "subject", mail.subject(),
                         "attachments", mail.attachments().size()));
 
-        Extraction extraction = null;
+        Extraction extraction = parsedBid(s1, placed);
         String llmError = null;
-        if (s1.needsStage2()) {
-            try {
-                extraction = stage2.classify(placed, sessionId, s1.hints());
-            } catch (RuntimeException e) {
-                log.warn("Stage 2 failed for mail {}", mail.id(), e);
-                llmError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        if (extraction == null && s1.needsStage2()) {
+            // One retry: a lost mail costs a whole request, a second call costs a fraction of a cent.
+            for (int attempt = 1; attempt <= 2 && extraction == null; attempt++) {
+                try {
+                    extraction = stage2.classify(placed, sessionId, s1.hints());
+                    llmError = null;
+                } catch (RuntimeException e) {
+                    log.warn("Stage 2 failed for mail {} (attempt {})", mail.id(), attempt, e);
+                    llmError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                }
             }
+        }
+        if (extraction == null && s1.type() == null) {
+            // LLM unavailable and no hard fact: route by keywords so a request still gets priced.
+            MailType guess = KeywordFallback.guess(placed.subject(), placed.body());
+            extraction = new Extraction(guess, 0.3, "keyword fallback, LLM unavailable", null, null, null, null, null);
         }
 
         RouteDecision decision = RouteDecision.decide(s1, extraction, llmError,
                 newSession ? null : facts.threadSessionType(),
-                settings.getDouble("routerConfidenceThreshold", DEFAULT_CONFIDENCE_THRESHOLD),
-                settings.getDouble("routerMinDispatchConfidence", DEFAULT_MIN_DISPATCH_CONFIDENCE));
+                settings.getDouble("routerConfidenceThreshold", DEFAULT_CONFIDENCE_THRESHOLD));
 
         if (newSession && !sessionType(decision.type()).equals(initialType)) {
             OffsetDateTime deadline = decision.type() == MailType.NEW_RFQ ? mail.sentAt().plus(QUOTE_WINDOW) : null;
@@ -104,6 +111,14 @@ public class Router {
                 sessionId, extraction);
         if (decision.dispatch()) dispatcher.dispatch(routed);
         return routed;
+    }
+
+    /** Carrier and rate-desk answers are read by pattern; the LLM is only asked when that is ambiguous. */
+    private Extraction parsedBid(Stage1Classifier.Result s1, StoredMail mail) {
+        if (s1.type() != MailType.CARRIER_BID && s1.type() != MailType.RATEDESK_REPLY) return null;
+        return BidMailParser.parse(mail.subject(), mail.body())
+                .map(bid -> new Extraction(s1.type(), 1.0, "read by pattern, no LLM call", null, null, null, bid, null))
+                .orElse(null);
     }
 
     /**

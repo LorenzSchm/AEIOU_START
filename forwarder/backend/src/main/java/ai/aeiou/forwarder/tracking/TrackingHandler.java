@@ -173,7 +173,8 @@ public class TrackingHandler implements MailHandler {
         WrittenMail written = writer.write(new MailIntent(session.id(), Purpose.HOLDING_REPLY, List.of(mail),
                 Map.of(Facts.NEXT_UPDATE, "shortly"), List.of(), language, name,
                 "Say you are checking the shipment status and will come back shortly. Ask for the booking reference if they gave none."));
-        outbox.draft(session.id(), reply(mail, written), "tracking_answer", "no booking matches the tracking question");
+        // Answered automatically (honest holding answer); the flag lets a human follow up if they want to.
+        outbox.deliver(session, reply(mail, written), "tracking_answer");
         events.append(session.id(), mail.id(), "tracking.not_found", Actor.system,
                 "No booking matches the tracking question", Payloads.of("subject", mail.subject()));
     }

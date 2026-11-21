@@ -11,8 +11,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Plausibility checks before a received tariff goes live (ARCHITECTURE.md §4.3). A tariff that fails any check
- * is stored as pending_review for a human; it is never activated silently.
+ * Plausibility checks before a received tariff goes live (ARCHITECTURE.md §4.3).
+ * <ul>
+ *   <li>{@code problems}: the sheet is structurally broken (no lanes, bad IATA pairs, missing or absurd numbers,
+ *       breaks not ascending, expired). It is held as pending_review.</li>
+ *   <li>{@code warnings}: big moves against the version in force (rates ±50%, lanes dropped, currency changed).
+ *       The setup changes about once an hour, so these may be legitimate: the sheet goes live and is flagged.</li>
+ * </ul>
  */
 public final class TariffSanityCheck {
 
@@ -25,7 +30,8 @@ public final class TariffSanityCheck {
 
     private TariffSanityCheck() {}
 
-    public record Result(List<String> problems, Map<String, Object> diff) {
+    public record Result(List<String> problems, List<String> warnings, Map<String, Object> diff) {
+        /** No structural problem: the sheet may go live (warnings only flag it for attention). */
         public boolean passed() {
             return problems.isEmpty();
         }
@@ -44,10 +50,11 @@ public final class TariffSanityCheck {
         }
         Map<String, Object> diff = new LinkedHashMap<>();
         diff.put("lanes", candidate.lanes().size());
+        List<String> warnings = new ArrayList<>();
         if (current != null) {
-            compare(candidate, current, currentLanes, problems, diff);
+            compare(candidate, current, currentLanes, warnings, diff);
         }
-        return new Result(List.copyOf(problems), diff);
+        return new Result(List.copyOf(problems), List.copyOf(warnings), diff);
     }
 
     /** Checks that need no previous version: every number present, positive and in a sane range, breaks ascending. */

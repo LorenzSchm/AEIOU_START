@@ -32,7 +32,8 @@ import org.springframework.stereotype.Component;
 /**
  * Handles airlines' monthly tariff mails (ARCHITECTURE.md §4.3): parse each attachment deterministically,
  * fall back to one LLM extraction if no parser fits, sanity-check against the version in force, then activate
- * or park it as pending_review for a human. Images are never guessed at: they go straight to a human.
+ * it (big price moves only flag it), or park a structurally broken sheet as pending_review. Images are never guessed
+ * at: they are flagged for a human.
  */
 @Component
 public class TariffIngestionHandler implements MailHandler {
@@ -116,6 +117,7 @@ public class TariffIngestionHandler implements MailHandler {
             problems.add("extracted by the LLM; auto-activation is off");
         }
 
+        // Only a structurally broken sheet waits for a human; big price moves go live and are flagged.
         TariffStatus status = problems.isEmpty() ? TariffStatus.active : TariffStatus.pending_review;
         String version = TariffAdminService.versionOf(tariff) + "-mail" + mail.id();
         StoredTariff stored = admin.store(tariff, version, "mail", mail.id(), source.filename(), status);
@@ -124,9 +126,15 @@ public class TariffIngestionHandler implements MailHandler {
         payload.put("method", extracted.byLlm() ? "llm" : "parser");
         payload.put("diff", check.diff());
         payload.put("problems", problems);
+        payload.put("warnings", check.warnings());
         if (status == TariffStatus.active) {
             events.append(sessionId, mail.id(), "tariff.ingested", extracted.byLlm() ? Actor.llm : Actor.system,
-                    "Tariff " + stored.airlineName() + " " + stored.version() + " active (" + stored.laneCount() + " lanes)", payload);
+                    "Tariff " + stored.airlineName() + " " + stored.version() + " active (" + stored.laneCount() + " lanes)"
+                            + (check.warnings().isEmpty() ? "" : ", with warnings: " + String.join("; ", check.warnings())), payload);
+            if (!check.warnings().isEmpty() && sessionId != null) {
+                sessions.flagNeedsHuman(sessionId, "Tariff " + stored.airlineName() + " went live with big changes: "
+                        + String.join("; ", check.warnings()));
+            }
             return Optional.empty();
         }
         events.append(sessionId, mail.id(), "tariff.rejected", Actor.system,
