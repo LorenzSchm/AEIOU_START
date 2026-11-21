@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -113,7 +114,7 @@ public final class ChangeDetector {
                     "First mail of kind '" + kind + "' from " + m.sender() + ", stage '" + stage + "'.")));
         }
         if (m.sender() != null && !m.sender().isBlank()) {
-            out.add(new Candidate(at, "sender:" + m.sender().toLowerCase(), new Alert(Topic.NEW_SENDER, at,
+            out.add(new Candidate(at, "sender:" + m.sender().toLowerCase(Locale.ROOT), new Alert(Topic.NEW_SENDER, at,
                     "New sender: " + m.sender() + rnd, round, m.id(), m.subject(), "-",
                     "First mail from " + m.sender() + " (kind '" + kind + "', stage '" + stage + "').")));
         }
@@ -122,10 +123,10 @@ public final class ChangeDetector {
             String reader = Readers.suggest(a.extension(), a.contentType());
             out.add(new Candidate(at, "attachment:" + type, new Alert(Topic.ATTACHMENT_TYPE, at,
                     "New attachment type: " + type + rnd, round, m.id(), m.subject(), reader,
-                    "File '" + a.filename() + "' (" + a.contentType() + ") in a " + kind + " mail from "
+                    "File '" + a.filename() + "' (" + contentTypeOf(a) + ") in a " + kind + " mail from "
                             + m.sender() + ", stage '" + stage + "'.")));
         }
-        if (stage.toLowerCase().contains("unreadable")) {
+        if (stage.toLowerCase(Locale.ROOT).contains("unreadable")) {
             out.add(unreadable(m, at, round, rnd, kind, stage));
         }
         if (stage.equalsIgnoreCase("expired")) {
@@ -152,8 +153,8 @@ public final class ChangeDetector {
     private static Candidate unreadable(MailRow m, Instant at, Integer round, String rnd, String kind, String stage) {
         List<String> types = m.attachments().isEmpty()
                 ? List.of("body text")
-                : m.attachments().stream().map(a -> a.extension().isEmpty() ? a.contentType() : a.extension()).toList();
-        String sender = m.sender() == null ? "?" : m.sender().toLowerCase();
+                : m.attachments().stream().map(a -> a.extension().isEmpty() ? contentTypeOf(a) : a.extension()).toList();
+        String sender = m.sender() == null ? "?" : m.sender().toLowerCase(Locale.ROOT);
         List<String> keys = new ArrayList<>();
         types.forEach(t -> keys.add("unreadable-type:" + t));
         keys.add("unreadable-sender:" + sender);
@@ -192,9 +193,14 @@ public final class ChangeDetector {
         return ext + " " + (a.contentType() == null ? "(no content type)" : a.contentType());
     }
 
+    /** The attachment's content type, "(unknown)" when the mail gave none. */
+    static String contentTypeOf(Attachment a) {
+        return a.contentType() == null || a.contentType().isBlank() ? "(unknown)" : a.contentType();
+    }
+
     private static String files(MailRow m) {
         if (m.attachments().isEmpty()) return "none";
-        return String.join(", ", m.attachments().stream().map(a -> a.filename() + " (" + a.contentType() + ")").toList());
+        return String.join(", ", m.attachments().stream().map(a -> a.filename() + " (" + contentTypeOf(a) + ")").toList());
     }
 
     private static String readerFor(MailRow m) {

@@ -12,6 +12,7 @@ import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 
 import ai.aeiou.edgelab.FormatReader;
+import ai.aeiou.edgelab.ReadSession;
 import ai.aeiou.edgelab.Reading;
 import ai.aeiou.edgelab.office.OfficeReader;
 
@@ -61,6 +62,7 @@ public final class ScanAwareOfficeReader implements FormatReader {
         double confidenceSum = 0;
         int missing = 0;
         int sent = 0;
+        boolean stopped = false;
 
         try (PDDocument doc = Loader.loadPDF(bytes)) {
             PDFRenderer renderer = new PDFRenderer(doc);
@@ -70,7 +72,21 @@ public final class ScanAwareOfficeReader implements FormatReader {
                     confidenceSum += TEXT_PAGE_CONFIDENCE;
                     continue;
                 }
-                if (sent >= MAX_SCANNED_PAGES || page.number() > doc.getNumberOfPages()) {
+                if (stopped || ReadSession.stopRequested()) {
+                    if (!stopped) pageNotes.add(ReadSession.STOPPED_NOTE);
+                    stopped = true;
+                    pageNotes.add("page " + page.number() + " looks scanned; not read (time budget used up)");
+                    if (!page.text().isBlank()) texts.add(page.text().strip());
+                    missing++;
+                    continue;
+                }
+                if (page.number() < 1 || page.number() > doc.getNumberOfPages()) {
+                    pageNotes.add("page " + page.number() + " looks scanned; not read (page could not be"
+                            + " opened for rendering, the PDF has " + doc.getNumberOfPages() + " pages)");
+                    missing++;
+                    continue;
+                }
+                if (sent >= MAX_SCANNED_PAGES) {
                     pageNotes.add("page " + page.number() + " looks scanned; not read (limit "
                             + MAX_SCANNED_PAGES + " scanned pages per file)");
                     missing++;

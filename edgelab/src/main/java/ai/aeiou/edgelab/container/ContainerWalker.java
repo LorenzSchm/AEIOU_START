@@ -10,6 +10,7 @@ import ai.aeiou.edgelab.EdgeReader;
 import ai.aeiou.edgelab.FormatReader;
 import ai.aeiou.edgelab.ReadSession;
 import ai.aeiou.edgelab.Reading;
+import ai.aeiou.edgelab.Router;
 import ai.aeiou.edgelab.office.OfficeReader;
 
 /**
@@ -53,11 +54,13 @@ public final class ContainerWalker implements FormatReader {
 
     @Override
     public Reading read(String filename, byte[] bytes, String detectedType) {
-        if (ReadSession.current() == null) return new EdgeReader().read(filename, bytes);
-        long maxBytes = EdgeReader.DEFAULT_MAX_BYTES;
-        List<Embedded.Child> children;
+        ReadSession session = ReadSession.current();
+        // Called directly, outside the entry point: go through it once so a session (budget, limits) exists,
+        // with this walker in the container slot.
+        if (session == null) return outsideSession(Router.standard().withContainer(this), filename, bytes);
+        Embedded.Collected collected;
         try {
-            children = Embedded.collect(filename, bytes, detectedType, maxBytes);
+            collected = Embedded.collect(filename, bytes, detectedType, session.maxBytes());
         } catch (EncryptedDocumentException e) {
             return Reading.unreadable(detectedType, (isMail(detectedType) ? "mail" : "archive")
                     + " is password protected");
@@ -65,6 +68,8 @@ public final class ContainerWalker implements FormatReader {
             return Reading.unreadable(detectedType, "could not open " + kind(detectedType) + ": "
                     + e.getClass().getSimpleName() + (e.getMessage() != null ? ": " + firstLine(e.getMessage()) : ""));
         }
+        List<Embedded.Child> children = collected.children();
+        noteSkipped(session, collected);
         Reading body = null;
         if (isMail(detectedType)) {
             body = withoutEmbeddedNote(mailBody.read(filename, bytes, detectedType));
@@ -72,7 +77,9 @@ public final class ContainerWalker implements FormatReader {
             children = children.stream().filter(c -> !c.mailBodyText()).toList();
             if (children.isEmpty()) return body;
         } else if (children.isEmpty()) {
-            return Reading.unreadable(detectedType, "archive is empty or broken");
+            return Reading.unreadable(detectedType, collected.incomplete()
+                    ? "archive not read: " + String.join("; ", collected.notes())
+                    : "archive is empty or broken");
         }
         return walk(detectedType, body, children);
     }
@@ -108,7 +115,7 @@ public final class ContainerWalker implements FormatReader {
                 continue;
             }
             if (c.bytes() == null) {
-                notes.add(p + ": not read, too large (" + c.size() + " bytes)");
+                notes.add(p + ": not read, too large (over " + s.maxBytes() + " bytes)");
                 partial = true;
                 continue;
             }
@@ -135,6 +142,19 @@ public final class ContainerWalker implements FormatReader {
         for (String n : notes) s.addNote(top ? n : here + ": " + n);
         if (partial) s.markIncomplete();
         return top ? s.result(detectedType) : s.summarySince(sectionsBefore, partsBefore, detectedType, partial);
+    }
+
+    /** Entries the collector skipped (limits, budget) are listed and make the read partial. */
+    static void noteSkipped(ReadSession s, Embedded.Collected collected) {
+        if (!collected.incomplete()) return;
+        String here = s.currentPath();
+        for (String n : collected.notes()) s.addNote(here.isEmpty() ? n : here + ": " + n);
+        s.markIncomplete();
+    }
+
+    /** One read through a fresh entry point with {@code router}; it opens the session. */
+    static Reading outsideSession(Router router, String filename, byte[] bytes) {
+        return new EdgeReader(router, EdgeReader.DEFAULT_MAX_BYTES).read(filename, bytes);
     }
 
     private static void addNamesNote(List<String> notes, List<String> names, String what) {
