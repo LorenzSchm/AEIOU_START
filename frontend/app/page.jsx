@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Icon from "./components/ui/Icon";
 import Overview from "./components/overview/Overview";
 import Queue from "./components/queue/Queue";
 import CaseSheet from "./components/case/CaseSheet";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
-import { useDispatchData, useNow } from "./lib/api";
+import { useDispatchData } from "./lib/api";
 import { clock, needsAttention } from "./lib/format";
 import { spring } from "./lib/motion";
 
@@ -41,7 +41,7 @@ function modeLabel(status) {
  * individually. Animating the panels themselves (not a wrapper) keeps backdrop-filter working:
  * an ancestor with opacity < 1 would turn the blur off until the animation ends.
  */
-function KeptView({ active, children }) {
+function KeptView({ name, active, children }) {
   const ref = useRef(null);
   const first = useRef(true);
   useLayoutEffect(() => {
@@ -60,15 +60,39 @@ function KeptView({ active, children }) {
     );
   }, [active]);
   return (
-    <div ref={ref} className="view" hidden={!active}>
+    // Hidden views stay laid out (visibility, not display:none) so the globe can size itself and
+    // build its land layer in the background before the first visit.
+    <div ref={ref} className="view" data-view={name} data-hidden={active ? undefined : ""} aria-hidden={!active || undefined} inert={!active || undefined}>
       {children}
     </div>
   );
 }
 
+/**
+ * Primary navigation, memoised: the 2 s status poll re-renders the sidebar footer, and an
+ * un-memoised layoutId pill would make Motion re-measure its projection tree on every poll.
+ */
+const NavList = memo(function NavList({ view, attention, onView }) {
+  return (
+    <ul>
+      {NAV.map((n) => (
+        <li key={n.id}>
+          <button className={"nav-item" + (view === n.id ? " active" : "")}
+                  aria-current={view === n.id ? "page" : undefined}
+                  onClick={() => onView(n.id)}>
+            {view === n.id && <motion.span layoutId="nav-pill" className="nav-pill" transition={spring} />}
+            <Icon name={n.icon} />
+            <span>{n.label}</span>
+            {n.id === "queue" && attention > 0 && <b className="nav-badge" aria-label={attention + " need attention"}>{attention}</b>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+});
+
 export default function Page() {
   const { data, error, refresh } = useDispatchData();
-  const now = useNow();
   const [nav, setNav] = useState({ view: "overview", caseId: null, scope: "attention" });
 
   useEffect(() => {
@@ -120,6 +144,19 @@ export default function Page() {
   // Views stay mounted after their first visit: switching back is instant (no globe rebuild).
   const seen = useRef(new Set());
   seen.current.add(nav.view);
+  // Pre-build the Overview (and its WebGL globe) in the background once the app is idle, so the
+  // first switch to Overview is instant instead of freezing ~1.5 s on the globe's land layer.
+  const [, preloaded] = useState(false);
+  useEffect(() => {
+    if (!data || seen.current.has("overview")) return;
+    const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 1200));
+    const cancel = window.cancelIdleCallback ?? clearTimeout;
+    const id = idle(() => {
+      seen.current.add("overview");
+      preloaded(true);
+    }, { timeout: 3000 });
+    return () => cancel(id);
+  }, [data]);
 
   const messages = data?.messages || [];
   const current = messages.find((m) => m.id === nav.caseId);
@@ -128,6 +165,10 @@ export default function Page() {
   const webhookMode = data?.status?.webhook_enabled;
   const lastDelivery = webhookMode ? data.status.last_webhook : data?.status?.last_poll;
   const closeCase = useCallback(() => guardedGo({ caseId: null }), [guardedGo]);
+  // Stable callbacks so memoised views (Queue, Overview, rows) don't re-render on every parent render.
+  const openCase = useCallback((id, opts) => guardedGo({ caseId: id }, opts), [guardedGo]);
+  const setScope = useCallback((scope) => go({ scope }), [go]);
+  const setView = useCallback((view) => go({ view }), [go]);
 
   return (
     <div className="app">
@@ -137,20 +178,7 @@ export default function Page() {
           <span className="brand-mark" aria-hidden="true" />
           <span>AEIOU<small>Dispatch</small></span>
         </div>
-        <ul>
-          {NAV.map((n) => (
-            <li key={n.id}>
-              <button className={"nav-item" + (nav.view === n.id ? " active" : "")}
-                      aria-current={nav.view === n.id ? "page" : undefined}
-                      onClick={() => go({ view: n.id })}>
-                {nav.view === n.id && <motion.span layoutId="nav-pill" className="nav-pill" transition={spring} />}
-                <Icon name={n.icon} />
-                <span>{n.label}</span>
-                {n.id === "queue" && attention > 0 && <b className="nav-badge" aria-label={attention + " need attention"}>{attention}</b>}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <NavList view={nav.view} attention={attention} onView={setView} />
         <div className="sidebar-foot">
           <span className={"signal" + (bad ? " bad" : data ? " ok" : "")}>
             <i aria-hidden="true" />
@@ -189,15 +217,14 @@ export default function Page() {
         ) : (
           <>
             {seen.current.has("overview") && (
-              <KeptView active={nav.view === "overview"}>
-                <Overview messages={messages} now={now} active={nav.view === "overview"}
-                          onOpen={(id) => guardedGo({ caseId: id })} />
+              <KeptView name="overview" active={nav.view === "overview"}>
+                <Overview messages={messages} active={nav.view === "overview"} onOpen={openCase} />
               </KeptView>
             )}
             {seen.current.has("queue") && (
-              <KeptView active={nav.view === "queue"}>
-                <Queue messages={messages} now={now} selectedId={nav.caseId} scope={nav.scope} active={nav.view === "queue"}
-                       setScope={(scope) => go({ scope })} onSelect={(id, opts) => guardedGo({ caseId: id }, opts)} />
+              <KeptView name="queue" active={nav.view === "queue"}>
+                <Queue messages={messages} selectedId={nav.caseId} scope={nav.scope} active={nav.view === "queue"}
+                       setScope={setScope} onSelect={openCase} />
               </KeptView>
             )}
           </>
@@ -213,7 +240,7 @@ export default function Page() {
       <AnimatePresence>
         {current && (
           <CaseSheet key="case-sheet" m={current} messages={messages} directory={data.directory}
-                     refresh={refresh} onClose={closeCase} now={now} onDirtyChange={onDirtyChange} />
+                     refresh={refresh} onClose={closeCase} onDirtyChange={onDirtyChange} />
         )}
       </AnimatePresence>
       <ConfirmDialog

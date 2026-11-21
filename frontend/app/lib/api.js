@@ -32,6 +32,28 @@ export async function api(path, data) {
   return r.json();
 }
 
+/**
+ * Structural sharing (like React Query): keep the previous object for every message whose content
+ * didn't change, and the previous array when nothing changed at all. Memoised views then skip
+ * re-rendering on polls that bring no news, instead of re-rendering ~400 rows every 2 s.
+ */
+function shareMessages(prev, next) {
+  if (!prev) return next;
+  const byId = new Map(prev.map((m) => [m.id, m]));
+  let same = prev.length === next.length;
+  const out = next.map((m, i) => {
+    const old = byId.get(m.id);
+    if (old && JSON.stringify(old) === JSON.stringify(m)) {
+      if (prev[i] !== old) same = false;
+      return old;
+    }
+    same = false;
+    return m;
+  });
+  return same ? prev : out;
+}
+const shareValue = (prev, next) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
+
 /** Polls status, messages and directory every 2 s. */
 export function useDispatchData() {
   const [data, setData] = useState(null);
@@ -44,7 +66,14 @@ export function useDispatchData() {
       cache.current ? Promise.resolve(cache.current) : api("/directory"),
     ]);
     cache.current = directory;
-    setData({ status, messages, directory });
+    setData((old) => {
+      const next = {
+        status: shareValue(old?.status, status),
+        messages: shareMessages(old?.messages, messages),
+        directory,
+      };
+      return old && next.status === old.status && next.messages === old.messages && next.directory === old.directory ? old : next;
+    });
     setError("");
   }, []);
   useEffect(() => {

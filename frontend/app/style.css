@@ -139,10 +139,11 @@ fieldset:disabled { opacity: 0.6; }
 .view-queue.has-case .queue { margin-right: min(560px, 46vw); transition: margin-right 340ms cubic-bezier(0.32, 0.72, 0, 1); }
 .queue-head { display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; padding: var(--s-3); border-bottom: 1px solid var(--hairline); }
 .queue-list { list-style: none; margin: 0; padding: var(--s-2); overflow: auto; display: grid; gap: 2px; align-content: start; }
-.row { position: relative; width: 100%; display: flex; gap: var(--s-3); align-items: center; padding: 10px 12px; border: 0; border-radius: var(--r-md); background: none; text-align: left; transition: background var(--dur-1); }
+/* Selection is a plain CSS state (Mail-style), not a Motion shared-layout element: it always matches
+   the row's real size, even while the queue narrows for the case panel. */
+.row { position: relative; width: 100%; display: flex; gap: var(--s-3); align-items: center; padding: 10px 12px; border: 0; border-radius: var(--r-md); background: transparent; text-align: left; transition: background-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out); }
 .row:hover { background: rgba(255, 255, 255, 0.45); }
-.row > *:not(.row-highlight) { position: relative; }
-.row-highlight { position: absolute; inset: 0; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.85); box-shadow: var(--shadow-1); }
+.row.active { background: rgba(255, 255, 255, 0.85); box-shadow: var(--shadow-1); }
 .row-icon { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(15, 23, 42, 0.06); color: var(--ink-2); }
 .row-main { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -426,3 +427,17 @@ fieldset:disabled { opacity: 0.6; }
 .tile-label, .tile-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile { min-width: 0; }
 .tile-label svg { flex: none; }
+
+/* New queue rows fade in (CSS only; runs once per mounted row, no layout measuring). */
+.queue-list > li { animation: row-in 260ms var(--ease-out) both; }
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* Kept-alive views: hidden ones stay laid out (so the globe can pre-build) but are invisible,
+   inert and out of the flow. */
+.content { position: relative; }
+.view[data-hidden] { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; overflow: hidden; height: 100%; contain: layout paint; }
+
+/* Rendering budget: skip layout/paint for queue rows outside the viewport, and for the hidden
+   queue view entirely (the hidden overview must stay laid out so its globe can pre-build). */
+.queue-list > li { content-visibility: auto; contain-intrinsic-size: auto 86px; }
+.view[data-hidden][data-view="queue"] { content-visibility: hidden; }

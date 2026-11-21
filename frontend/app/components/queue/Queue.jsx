@@ -1,17 +1,42 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../ui/Icon";
 import { Chip, CountdownRing, RouteBadge, Segmented } from "../ui/primitives";
 import ProcessStrip from "../case/ProcessStrip";
 import { BoardChip } from "../case/BoardScore";
 import { deriveProcess } from "../../lib/process";
 import { clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
-import { spring } from "../../lib/motion";
+import { inWindow, useNow } from "../../lib/clock";
 
-export default function Queue({ messages, selectedId, onSelect, now, scope, setScope, active = true }) {
+const threadKey = (m) => m.thread_id ?? (m.root != null && m.root !== m.id ? m.root : m.id);
+
+/**
+ * Messages grouped per thread, reusing the previous array for every thread whose messages are the
+ * same objects as last time (polls hand us structurally-shared data, see useDispatchData). Rows only
+ * re-render when their own thread changed.
+ */
+function useThreads(messages) {
+  const prev = useRef(new Map());
+  return useMemo(() => {
+    const next = new Map();
+    for (const m of messages) {
+      const k = threadKey(m);
+      if (!next.has(k)) next.set(k, []);
+      next.get(k).push(m);
+    }
+    for (const [k, list] of next) {
+      const old = prev.current.get(k);
+      if (old && old.length === list.length && old.every((m, i) => m === list[i])) next.set(k, old);
+    }
+    prev.current = next;
+    return next;
+  }, [messages]);
+}
+
+function Queue({ messages, selectedId, onSelect, scope, setScope, active = true }) {
   const [filter, setFilter] = useState("");
+  const threads = useThreads(messages);
   const top = useMemo(() => messages.filter((m) => !m.root || m.root === m.id), [messages]);
   const exceptions = top.filter(needsAttention);
   const requests = top.filter((m) => m.kind === "request");
@@ -65,14 +90,13 @@ export default function Queue({ messages, selectedId, onSelect, now, scope, setS
         </label>
       </div>
       <ul className="queue-list">
-        <AnimatePresence initial={false}>
-          {list.map((m) => (
-            <motion.li key={m.id} layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                       exit={{ opacity: 0, transition: { duration: 0.12 } }} transition={spring}>
-              <Row m={m} messages={messages} now={now} active={m.id === selectedId} onSelect={onSelect} />
-            </motion.li>
-          ))}
-        </AnimatePresence>
+        {/* Plain list items: per-row Motion layout tracking measured all ~400 rows on every render.
+            New rows still fade in via CSS (.queue-list > li). */}
+        {list.map((m) => (
+          <li key={m.id}>
+            <Row m={m} thread={threads.get(threadKey(m))} active={m.id === selectedId} onSelect={onSelect} />
+          </li>
+        ))}
       </ul>
       {!list.length && (
         <div className="empty-state">
@@ -85,16 +109,19 @@ export default function Queue({ messages, selectedId, onSelect, now, scope, setS
   );
 }
 
-function Row({ m, messages, now, active, onSelect }) {
+export default memo(Queue);
+
+const Row = memo(function Row({ m, thread, active, onSelect }) {
+  // Only rows still inside their quote window tick (their status can flip to "Expired").
+  const now = useNow(inWindow(m));
   const status = statusOf(m, now);
   const request = m.kind === "request";
-  const process = useMemo(() => (request ? deriveProcess(m, messages) : null), [m, messages, request]);
+  const process = useMemo(() => (request ? deriveProcess(m, thread) : null), [m, thread, request]);
   return (
     <button className={"row" + (active ? " active" : "")} data-id={m.id} aria-current={active || undefined} onClick={() => onSelect(m.id)}>
-      {active && <motion.span layoutId="row-highlight" className="row-highlight" transition={spring} />}
       <span className="row-lead">
         {request && m.received ? (
-          <CountdownRing received={m.received} now={now} size={30} done={Boolean(m.delivery)} />
+          <CountdownRing received={m.received} size={30} done={Boolean(m.delivery)} />
         ) : (
           <span className="row-icon"><Icon name={m.kind === "tracking" ? "pin" : "mail"} size={15} /></span>
         )}
@@ -119,4 +146,4 @@ function Row({ m, messages, now, active, onSelect }) {
       </span>
     </button>
   );
-}
+});

@@ -9,6 +9,7 @@ import { Chip, CountdownRing, RouteBadge, Section } from "../ui/primitives";
 import OfferBars from "./OfferBars";
 import BoardScore from "./BoardScore";
 import Select from "../ui/Select";
+import { inWindow, useNow } from "../../lib/clock";
 import Timeline from "./Timeline";
 import { deriveProcess } from "../../lib/process";
 import { api } from "../../lib/api";
@@ -46,7 +47,9 @@ export default function CaseSheet(props) {
   );
 }
 
-function CaseContent({ m, messages, directory, refresh, onClose, now, intro, onDirtyChange }) {
+function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyChange }) {
+  // The open case ticks only while its quote window is running.
+  const now = useNow(inWindow(m));
   const [fields, setFields] = useState(m.fields || {});
   const [dirty, setDirty] = useState(false);
   // Report unsaved edits upward so navigation can ask before discarding them.
@@ -153,7 +156,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, now, intro, onD
           </div>
         </div>
         <div className="sheet-status">
-          {request && m.received && <CountdownRing received={m.received} now={now} size={52} done={Boolean(m.delivery)} />}
+          {request && m.received && <CountdownRing received={m.received} size={52} done={Boolean(m.delivery)} />}
           <Chip tone={status.tone}>{status.label}</Chip>
         </div>
         <button ref={closeRef} className="icon-btn" aria-label="Close case" onClick={onClose}>

@@ -137,6 +137,24 @@ export function mockData() {
     proposal: null, booking: null, outgoing: [], delivery: null, reply_delivery: null, bid_requests: {},
   });
   messages.push(...liveCase());
+  // Optional load test: NEXT_PUBLIC_MOCK_SCALE=N repeats every thread N times with fresh ids,
+  // to profile the desk at real mailbox size (~400 messages).
+  const scale = Number(process.env.NEXT_PUBLIC_MOCK_SCALE || 1);
+  if (scale > 1) {
+    const base = [...messages];
+    for (let k = 1; k < scale; k++) {
+      const off = k * 10_000;
+      for (const m of base) {
+        messages.push({
+          ...m,
+          id: m.id + off,
+          root: m.root == null ? null : m.root + off,
+          thread_id: (m.thread_id ?? m.id) + off,
+          outgoing: (m.outgoing || []).map((o) => ({ ...o, action: o.action + ":" + k, message_id: o.message_id + off })),
+        });
+      }
+    }
+  }
   messages.sort((a, b) => b.id - a.id);
   return {
     status: { last_poll: new Date().toISOString(), tariffs: 158, auto_send: true, start_at: "2026-11-21T15:00:00Z", error: null },
