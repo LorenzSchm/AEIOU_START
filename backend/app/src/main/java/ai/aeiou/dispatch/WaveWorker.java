@@ -245,7 +245,7 @@ class WaveWorker {
   }
 
   private CustomerClarifications.Details details(long id, Map<String, Object> mail) {
-    return clarifications.details(id, documents.withAttachedRequest(mail));
+    return clarifications.details(id, documents.withAttachedRequest(mail), documents::withAttachedRequest);
   }
 
   private Shipment checkPacking(long id, Map<String, Object> mail, CustomerClarifications.Details details) {
@@ -270,6 +270,7 @@ class WaveWorker {
     var decision = documents.inspect(details.message(), replies,
         details.pickupReply() == null ? null : details.zone(), details.deliveryAirport());
     if (!decision.holdsQuote()) return decision.shipment();
+    if (decision.action() == null) throw new RetryLater(decision.reason());
     if (automatic
         && !Ledger.str(mail, "sender").isBlank()
         && !Ledger.instant(mail.get("received")).isBefore(start)
@@ -375,8 +376,9 @@ class WaveWorker {
     }
     var deadline = ageLimit(m);
     if (!clock.instant().isBefore(deadline.minusSeconds(4))) {
-      ledger.stage(
-          id, "expired", "Quote window closed before a reliable all-in price was available.");
+      var reason = ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=?", String.class, id);
+      ledger.stage(id, "expired", reason == null
+          ? "Quote window closed before a verified quote was sent." : "Quote window closed. " + reason);
       return;
     }
     String delivery = ledger.delivery("quote:" + id);
@@ -791,14 +793,14 @@ class WaveWorker {
         SELECT r.*, t.leg FROM tender t JOIN mail r
           ON r.id=t.reply_id AND r.sender=t.email AND r.root=t.request_id
         WHERE t.request_id=? AND t.euros IS NULL AND r.kind='carrier'
-          AND json_array_length(r.attachments)=1
+          AND json_array_length(r.attachments)>0
         """, id)) {
       boolean truck = "trucker".equals(reply.get("leg"));
       var text = documents.attachedOffer(reply, truck);
       if (text != null)
         ledger.recoverAttachedBid(id, Ledger.id(reply.get("id")), Ledger.str(reply, "sender"),
             text, truck, catalog, clock.instant());
-      else awaitingVoice |= documents.awaitingVoice(reply);
+      else awaitingVoice |= documents.awaitingVoice(reply) || documents.awaitingScan(reply);
     }
     return awaitingVoice;
   }
@@ -860,6 +862,7 @@ class WaveWorker {
       }
       if (t.get("days") == null) {
         if (!c.truck()) continue;
+        missingTruckTransit.add(c.name());
         if (fastest) {
           if (cachedPortal && s.pickupEur() == null && t.get("parse_state") == null) {
             var evidence = MailParser.roadTransitEvidence(body);
@@ -869,7 +872,6 @@ class WaveWorker {
           }
           continue;
         }
-        missingTruckTransit.add(c.name());
       }
       (c.truck() ? trucks : airBids).add(offer);
     }

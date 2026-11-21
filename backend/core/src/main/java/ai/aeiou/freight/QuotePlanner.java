@@ -40,9 +40,10 @@ public final class QuotePlanner {
       } else if (truck == null) {
         offers.clear();
         notes.add(
-            "Waiting for a confirmed pickup total"
-                + ("fastest".equals(s.preference()) ? " and transit time" : "")
-                + ".");
+            "fastest".equals(s.preference()) && !missingTruckTransit.isEmpty()
+                ? "Pickup prices received. Waiting for confirmed pickup-to-airport transit time."
+                : "Waiting for a confirmed pickup total"
+                    + ("fastest".equals(s.preference()) ? " and transit time" : "") + ".");
       } else {
         priced = s.withPickup(truck.totalEur(), truck.days());
         trucker = truck.airline();

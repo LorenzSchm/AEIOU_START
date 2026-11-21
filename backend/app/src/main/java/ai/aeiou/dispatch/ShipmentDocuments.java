@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.regex.Pattern;
@@ -18,7 +19,14 @@ final class ShipmentDocuments {
       "(?iu)\\bIt\\s+has\\s+a\\s+base\\s+charge\\s+of\\s+[0-9]+[.,][0-9]{2}\\s+EUR"
           + "\\s+and\\s+a\\s+weight\\s+charge\\s+of\\s+[0-9]+[.,][0-9]{2}\\s+EUR\\.");
   private static final Pattern OFFER_TOTAL = Pattern.compile(
-      "(?im)^\\h*Total(?:\\h+|\\h*\\R(?:\\h*\\R){0,3}\\h*)([0-9]+[.,][0-9]{2})\\h*$");
+      "(?im)^\\h*Total(?:\\h+|\\h*[;,]\\h*|\\h*\\R(?:\\h*\\R){0,3}\\h*)([0-9]+[.,][0-9]{2})\\h*$");
+  private static final Pattern RFQ_HEADING = Pattern.compile(
+      "(?iu)^(?:RFQ|Request for (?:an? )?(?:air freight )?(?:quotation|quote)|Air[- ]?freight"
+          + " (?:quote|quotation)(?: request)?|Frachtanfrage|Anfrage (?:zur|für) Luftfracht)"
+          + "(?:\\h.*|[:#-].*)?$");
+  private static final Pattern RFQ_LANGUAGE = Pattern.compile(
+      "(?iu)\\b(?:please quote|could you (?:please )?quote|please (?:send|provide) (?:me |us )?"
+          + "(?:a |an |your )?(?:quote|quotation))\\b");
   private static final Pattern OPEN_OFFER_TERMS = Pattern.compile(
       "(?iu)\\b(?:not part of this offer|not part of the total|not included|subject to|fees apply|charged separately|provisional)\\b");
   private static final Pattern SPOKEN_KILOS = Pattern.compile(
@@ -65,6 +73,7 @@ final class ShipmentDocuments {
   private final Catalog catalog;
   private final Clock clock;
   private final Executor voiceExecutor;
+  private final Map<Attachment, CompletableFuture<PackingSafety.Document>> scans = new HashMap<>();
   private final Map<Attachment, PackingSafety.Document> extracted =
       new LinkedHashMap<>(64, 0.75f, true) {
         @Override
@@ -82,41 +91,96 @@ final class ShipmentDocuments {
   }
 
   private List<PackingSafety.Document> read(Map<String, Object> message) {
+    scans.entrySet().removeIf(scan -> {
+      if (!scan.getValue().isDone()) return false;
+      extracted.put(scan.getKey(), scan.getValue().join());
+      return true;
+    });
     var documents = new ArrayList<PackingSafety.Document>();
-    for (Object raw : ledger.read(message.get("attachments"), List.class)) {
-      var file = (Map<?, ?>) raw;
-      var key = new Attachment(Ledger.id(message.get("id")), Ledger.id(file.get("id")));
+    var files = attachments(message);
+    if (files.size() > 10) return Collections.singletonList(null);
+    long voices = files.stream().filter(ShipmentDocuments::isVoice).count();
+    for (var file : files) {
+      long attachmentId = attachmentId(file);
+      if (isVoice(file) && voices == 1 && attachmentId > 0) continue;
+      var key = new Attachment(Ledger.id(message.get("id")), attachmentId);
+      String extension = PackingSafety.extension(Ledger.str(file, "filename"),
+          Ledger.str(file, "content_type"));
+      if (extension == null || key.attachmentId() <= 0
+          || file.get("size") instanceof Number size && size.longValue() > PackingSafety.MAX_BYTES) {
+        documents.add(null);
+        continue;
+      }
       try {
-        var doc = extracted.get(key);
-        if (doc == null) {
-          doc =
-              new PackingSafety.Document(
-                  PackingSafety.extract(
-                      Objects.toString(file.get("filename"), ""),
-                      upstream.bytes(key.messageId(), key.attachmentId())));
-          extracted.put(key, doc);
+        if (!extracted.containsKey(key)) {
+          var scan = scans.get(key);
+          if (scan == null) {
+            var bytes = upstream.bytes(key.messageId(), key.attachmentId());
+            try {
+              extracted.put(key, new PackingSafety.Document(PackingSafety.extract("." + extension, bytes)));
+            } catch (PackingSafety.NeedsOcr ex) {
+              scans.put(key, CompletableFuture.supplyAsync(() -> {
+                try {
+                  return new PackingSafety.Document(PackingSafety.extract("." + extension, bytes, true));
+                } catch (IOException | XMLStreamException | RuntimeException unreadable) {
+                  return null;
+                }
+              }, voiceExecutor));
+            }
+          }
         }
-        documents.add(doc);
-      } catch (IOException | XMLStreamException | RestClientException ex) {
+        documents.add(extracted.get(key));
+      } catch (IOException | XMLStreamException ex) {
+        extracted.put(key, null);
+        documents.add(null);
+      } catch (RestClientException | RejectedExecutionException ex) {
         documents.add(null);
       }
     }
     return documents;
   }
 
+  private List<Map<?, ?>> attachments(Map<String, Object> message) {
+    var raw = ledger.read(message.get("attachments"), List.class);
+    if (raw == null) return List.of();
+    var files = new ArrayList<Map<?, ?>>();
+    for (Object item : raw) {
+      if (!(item instanceof Map<?, ?> file)) continue;
+      String filename = Ledger.str(file, "filename");
+      String mime = Ledger.str(file, "content_type");
+      boolean image = mime.startsWith("image/") || filename.matches("(?i).*\\.(?:png|jpe?g|gif|tiff?)");
+      if (image && (Boolean.TRUE.equals(file.get("is_inline"))
+          || Ledger.str(file, "content_disposition").matches("(?i)^inline(?:;.*)?$")
+          || filename.matches("(?i)(?:logo|signature)[-_\\w]*\\.(?:png|jpe?g|gif)"))) continue;
+      files.add(file);
+    }
+    return files;
+  }
+
+  private static long attachmentId(Map<?, ?> file) {
+    try {
+      return Long.parseLong(Ledger.str(file, "id"));
+    } catch (NumberFormatException ex) {
+      return 0;
+    }
+  }
+
+  boolean awaitingScan(Map<String, Object> message) {
+    long id = Ledger.id(message.get("id"));
+    return scans.keySet().stream().anyMatch(scan -> scan.messageId() == id);
+  }
+
   Map<String, Object> withAttachedRequest(Map<String, Object> original) {
-    if (hasAttachment(original, "voice-message.mp3")) {
+    String request = requestText(read(original));
+    var message = request == null ? original : withRequestText(original, request);
+    if (voiceAttachment(original) != null) {
       String transcript = voiceTranscript(original);
-      if (transcript.isBlank()) return original;
-      var message = withRequestText(original, SPOKEN_KILOS.matcher(transcript)
+      if (transcript.isBlank()) return message;
+      message = withRequestText(message, SPOKEN_KILOS.matcher(transcript)
           .replaceAll(match -> match.group(1).replace(",", "") + " kg"));
       message.put("voice_transcript", transcript);
-      return message;
     }
-    if (!hasRequestAttachment(original)) return original;
-    var text = requestText(read(original));
-    if (text == null) return original;
-    return withRequestText(original, text);
+    return message;
   }
 
   private String voiceTranscript(Map<String, Object> message) {
@@ -142,8 +206,8 @@ final class ShipmentDocuments {
         """, action, now + 90, now, id);
     if (claimed == 0) return recordedVoice(id);
     try {
-      var file = (Map<?, ?>) ledger.read(message.get("attachments"), List.class).getFirst();
-      long attachment = Ledger.id(file.get("id"));
+      var file = voiceAttachment(message);
+      long attachment = attachmentId(file);
       voiceExecutor.execute(() -> {
         try {
           var text = upstream.transcribe(upstream.bytes(id, attachment));
@@ -164,7 +228,7 @@ final class ShipmentDocuments {
   }
 
   boolean awaitingVoice(Map<String, Object> message) {
-    if (!hasAttachment(message, "voice-message.mp3")
+    if (voiceAttachment(message) == null
         || !Ledger.str(message, "voice_transcript").isBlank()) return false;
     long id = Ledger.id(message.get("id"));
     // A positive claim also covers a transcript committed after this read of the message.
@@ -173,55 +237,69 @@ final class ShipmentDocuments {
     return attempts.isEmpty() || attempts.getFirst() > 0;
   }
 
-  private boolean hasRequestAttachment(Map<String, Object> message) {
-    return hasAttachment(message, "quotation-request.pdf", "quotation-request.docx", "quotation-request.txt");
+  private static boolean isVoice(Map<?, ?> file) {
+    return Ledger.str(file, "filename").toLowerCase(Locale.ROOT).endsWith(".mp3")
+        || Ledger.str(file, "content_type").matches("(?i)audio/(?:mpeg|mp3)(?:;.*)?");
   }
 
-  private boolean hasAttachment(Map<String, Object> message, String... names) {
-    var attachments = ledger.read(message.get("attachments"), List.class);
-    return attachments != null && attachments.size() == 1
-        && attachments.getFirst() instanceof Map<?, ?> file
-        && Set.of(names).contains(Ledger.str(file, "filename").toLowerCase(Locale.ROOT));
+  private Map<?, ?> voiceAttachment(Map<String, Object> message) {
+    var voices = attachments(message).stream().filter(ShipmentDocuments::isVoice).limit(2).toList();
+    return voices.size() == 1 && attachmentId(voices.getFirst()) > 0 ? voices.getFirst() : null;
   }
 
-  private static String requestText(List<PackingSafety.Document> files) {
-    if (files.size() != 1 || files.getFirst() == null) return null;
-    var file = files.getFirst();
-    var text = file.text().strip();
-    return file.type() == PackingSafety.DocumentType.UNKNOWN
-        && text.lines().findFirst().orElse("").strip().matches(
-            "(?i)(?:Request for quotation|Air freight quote(?: request)?(?:[ :].*)?)")
-        ? text : null;
+  private boolean isRequest(PackingSafety.Document file) {
+    if (file == null || file.type() != PackingSafety.DocumentType.UNKNOWN
+        || file.safetyDataSheet() || file.declaration()) return false;
+    String text = file.text();
+    if (text.lines().map(String::strip).filter(line -> !line.isEmpty()).limit(8)
+        .anyMatch(line -> RFQ_HEADING.matcher(line).matches())) return true;
+    if (!RFQ_LANGUAGE.matcher(text).find()) return false;
+    var shipment = MailParser.request("", text, false, catalog).shipment();
+    return shipment.destination() != null && (shipment.weightKg() != null || shipment.volumeCbm() != null);
+  }
+
+  private String requestText(List<PackingSafety.Document> files) {
+    var requests = files.stream().filter(this::isRequest)
+        .map(file -> file.text().strip()).distinct().limit(2).toList();
+    return requests.size() == 1 ? requests.getFirst() : null;
   }
 
   String attachedOffer(Map<String, Object> message, boolean truck) {
-    if (hasAttachment(message, "voice-message.mp3")) {
-      var transcript = voiceTranscript(message);
-      var received = Ledger.instant(message.get("received"));
-      if (transcript.isBlank() || received == null) return null;
-      int year = received.atZone(java.time.ZoneOffset.UTC).getYear();
-      var costs = SPOKEN_EUROS.matcher(transcript).replaceAll(match ->
-          String.format(Locale.ROOT, "%s.%02d EUR", match.group(1), Integer.parseInt(match.group(2))));
-      if (truck) costs = normalizeSpokenPickup(costs);
-      if (OPEN_OFFER_TERMS.matcher(truck ? MailParser.withoutPickupWaitingCharge(costs) : costs).find())
-        return null;
-      return SPOKEN_EXPIRY.matcher(costs).replaceAll(match ->
-          "Valid until " + match.group(1) + " " + match.group(2).substring(0, 3) + " "
-              + (match.group(3) == null ? year : match.group(3)) + " " + match.group(4) + " UTC");
+    var candidates = new LinkedHashSet<String>();
+    if (voiceAttachment(message) != null) {
+      var spoken = spokenOffer(message, truck);
+      if (spoken != null && MailParser.bid(spoken, truck).isPresent()) candidates.add(spoken);
     }
-    var attachments = ledger.read(message.get("attachments"), List.class);
-    if (attachments == null || attachments.size() != 1
-        || !(attachments.getFirst() instanceof Map<?, ?> file)
-        || !Ledger.str(file, "filename").toLowerCase(Locale.ROOT).matches(".*\\.(?:txt|pdf|docx)"))
+    for (var file : read(message)) {
+      if (file == null) continue;
+      var terms = normalizeOffer(file.text(), truck);
+      if (terms != null && MailParser.bid(terms, truck).isPresent()) candidates.add(terms.strip());
+    }
+    if (awaitingVoice(message) || awaitingScan(message)) return null;
+    return candidates.size() == 1 ? candidates.getFirst() : null;
+  }
+
+  private String spokenOffer(Map<String, Object> message, boolean truck) {
+    var transcript = voiceTranscript(message);
+    var received = Ledger.instant(message.get("received"));
+    if (transcript.isBlank() || received == null) return null;
+    int year = received.atZone(java.time.ZoneOffset.UTC).getYear();
+    var costs = SPOKEN_EUROS.matcher(transcript).replaceAll(match ->
+        String.format(Locale.ROOT, "%s.%02d EUR", match.group(1), Integer.parseInt(match.group(2))));
+    if (truck) costs = normalizeSpokenPickup(costs);
+    if (OPEN_OFFER_TERMS.matcher(truck ? MailParser.withoutPickupWaitingCharge(costs) : costs).find())
       return null;
-    var files = read(message);
-    if (files.size() != 1 || files.getFirst() == null) return null;
-    var text = files.getFirst().text();
+    return SPOKEN_EXPIRY.matcher(costs).replaceAll(match ->
+        "Valid until " + match.group(1) + " " + match.group(2).substring(0, 3) + " "
+            + (match.group(3) == null ? year : match.group(3)) + " " + match.group(4) + " UTC");
+  }
+
+  private static String normalizeOffer(String text, boolean truck) {
     if (OPEN_OFFER_TERMS.matcher(truck ? MailParser.withoutPickupWaitingCharge(text) : text).find())
       return null;
     if (FIRM_PICKUP_TOTAL.matcher(text).find())
       text = PICKUP_BREAKDOWN.matcher(text).replaceAll("");
-    if (text.contains("Amount (EUR)"))
+    if (text.toLowerCase(Locale.ROOT).contains("amount (eur)"))
       text = OFFER_TOTAL.matcher(text).replaceAll("Total EUR $1");
     return text;
   }
@@ -245,11 +323,9 @@ final class ShipmentDocuments {
 
   Decision inspect(Map<String, Object> original, List<Map<String, Object>> followUps,
       String confirmedPickupZone, String customerDeliveryAirport) {
-    boolean voiceRequest = hasAttachment(original, "voice-message.mp3")
+    boolean voiceRequest = voiceAttachment(original) != null
         && !Ledger.str(original, "voice_transcript").isBlank();
-    var latestPacking = voiceRequest
-        ? List.of(new PackingSafety.Document(Ledger.str(original, "voice_transcript"))) : read(original);
-    var originalPacking = latestPacking;
+    var latestPacking = read(original);
     var followUpDocuments = new ArrayList<PackingSafety.Document>();
     latestPacking.stream()
         .filter(Objects::nonNull)
@@ -260,25 +336,40 @@ final class ShipmentDocuments {
     var evidence = new LinkedHashSet<String>();
     boolean dg = addDangerous(latestPacking, dangerous, evidence);
     dg |= addDangerous(List.of(originalText), dangerous, evidence);
+    boolean scanning = awaitingScan(original);
     dg |= ledger.delivery("dg-docs:" + Ledger.id(original.get("id"))) != null;
     var emptyCorrection = new MailParser.PackingCorrection(Set.of(), Set.of(), Set.of());
     var correction = emptyCorrection;
     for (var message : followUps) {
       var body = new PackingSafety.Document(Ledger.str(message, "body"));
       dg |= addDangerous(List.of(body), dangerous, evidence);
+      if (voiceAttachment(message) != null) {
+        String transcript = voiceTranscript(message);
+        if (!transcript.isBlank())
+          dg |= addDangerous(List.of(new PackingSafety.Document(transcript)), dangerous, evidence);
+        scanning |= transcript.isBlank() && awaitingVoice(message);
+      }
       var attachments = read(message);
+      scanning |= awaitingScan(message);
       if (!attachments.isEmpty()) {
         dg |= addDangerous(attachments, dangerous, evidence);
         attachments.stream().filter(Objects::nonNull).forEach(followUpDocuments::add);
-        latestPacking = attachments;
-        correction = emptyCorrection;
+        if (!attachments.stream().allMatch(this::isRequest)
+            || latestPacking.stream().allMatch(this::isRequest)) {
+          latestPacking = attachments;
+          correction = emptyCorrection;
+        }
       }
       correction = correction.followedBy(
           MailParser.confirmedPackingCorrection(body.text()).orElse(emptyCorrection));
     }
     if (dg) return dangerousGoods(dangerous, followUpDocuments, evidence);
-    if (latestPacking == originalPacking && (voiceRequest
-        || (hasRequestAttachment(original) && requestText(latestPacking) != null))) {
+    if (scanning) return new Decision(null, "Reading shipment attachments.", null, null);
+    boolean requestOnly = !latestPacking.isEmpty() && latestPacking.stream().allMatch(this::isRequest);
+    if (requestOnly && requestText(latestPacking) == null)
+      return new Decision("packing-correction", "Waiting for one confirmed quotation request.",
+          "Could you confirm which of the attached quotation requests we should price?", null);
+    if (requestOnly || (latestPacking.isEmpty() && voiceRequest)) {
       var parsed = MailParser.request(Ledger.str(original, "subject"), Ledger.str(original, "body"),
           false, catalog, confirmedPickupZone, customerDeliveryAirport);
       return new Decision(null, null, null, parsed.issue() == null ? parsed.shipment() : null);
