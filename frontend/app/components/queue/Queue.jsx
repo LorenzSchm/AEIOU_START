@@ -1,14 +1,12 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
 import Icon from "../ui/Icon";
 import { Chip, CountdownRing, RouteBadge, Segmented } from "../ui/primitives";
 import ProcessStrip from "../case/ProcessStrip";
 import { BoardChip } from "../case/BoardScore";
 import { deriveProcess } from "../../lib/process";
 import { clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
-import { spring } from "../../lib/motion";
 import { inWindow, useNow } from "../../lib/clock";
 
 const threadKey = (m) => m.thread_id ?? (m.root != null && m.root !== m.id ? m.root : m.id);
@@ -121,7 +119,6 @@ const Row = memo(function Row({ m, thread, active, onSelect }) {
   const process = useMemo(() => (request ? deriveProcess(m, thread) : null), [m, thread, request]);
   return (
     <button className={"row" + (active ? " active" : "")} data-id={m.id} aria-current={active || undefined} onClick={() => onSelect(m.id)}>
-      {active && <motion.span layoutId="row-highlight" className="row-highlight" transition={spring} />}
       <span className="row-lead">
         {request && m.received ? (
           <CountdownRing received={m.received} size={30} done={Boolean(m.delivery)} />
