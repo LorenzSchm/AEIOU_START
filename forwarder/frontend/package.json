@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:mock": "NEXT_PUBLIC_MOCK=1 next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "gen:api": "orval --config orval.config.ts",
+    "gen:api:live": "node scripts/fetch-openapi.mjs && npm run gen:api"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.108.2",
