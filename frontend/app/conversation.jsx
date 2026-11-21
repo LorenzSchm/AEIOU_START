@@ -6,6 +6,8 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import EmailPreview from "./email-preview";
 import { disclosure, previewSwap, spring } from "./lib/motion";
 import Icon from "./components/ui/Icon";
+import VoiceMessage from "./components/case/VoiceMessage";
+import { isAudio } from "./lib/voice";
 
 const inboxLabels = {
   request: "Customer request",
@@ -48,6 +50,7 @@ function timeline(messages, selected) {
       subject: message.subject,
       body: message.body,
       attachments: message.attachments,
+      voice: { transcript: message.voice_transcript, fields: message.fields, kind: message.kind },
       time: message.received,
     });
     for (const item of message.outgoing || []) {
@@ -116,7 +119,7 @@ function EntryHead({ entry, showPreview }) {
         <span className="cv-line">
           <span className="cv-kind">{entry.label}</span>
           {issue && <span className="cv-issue">{issue}</span>}
-          {entry.attachments?.length > 0 && <span className="cv-clip">{entry.attachments.length} attachment{entry.attachments.length > 1 ? "s" : ""}</span>}
+          {entry.attachments?.length > 0 && <span className="cv-clip">{entry.attachments.some(isAudio) ? "Voice message" : entry.attachments.length + " attachment" + (entry.attachments.length > 1 ? "s" : "")}</span>}
         </span>
         <motion.span className="cv-preview" initial={false} animate={previewSwap(showPreview)} aria-hidden={!showPreview}>
           {preview(entry.body)}
@@ -134,9 +137,12 @@ function EntryContent({ entry }) {
       ) : (
         <div className="cv-text">{entry.body ?? "The original message text was not recorded."}</div>
       )}
-      {entry.attachments?.length > 0 && (
+      {entry.attachments?.filter(isAudio).map((file) => (
+        <VoiceMessage key={file.id} messageId={entry.id} file={file} {...entry.voice} />
+      ))}
+      {entry.attachments?.some((file) => !isAudio(file)) && (
         <div className="cv-files">
-          {entry.attachments.map((file) => (
+          {entry.attachments.filter((file) => !isAudio(file)).map((file) => (
             <a className="cv-file" key={file.id} download={file.filename}
                href={`/api/v1/messages/${entry.id}/attachments/${file.id}`}>
               {file.filename}

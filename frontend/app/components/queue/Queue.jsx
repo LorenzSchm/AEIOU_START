@@ -8,6 +8,8 @@ import { BoardChip } from "../case/BoardScore";
 import { deriveProcess } from "../../lib/process";
 import { clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
 import { inWindow, useNow } from "../../lib/clock";
+import { isVoiceMessage } from "../../lib/voice";
+import "../case/voice.css";
 
 const threadKey = (m) => m.thread_id ?? (m.root != null && m.root !== m.id ? m.root : m.id);
 
@@ -43,7 +45,7 @@ function Queue({ messages, selectedId, onSelect, scope, setScope, active = true 
   const base = scope === "attention" ? exceptions : scope === "requests" ? requests : messages;
   const q = filter.toLowerCase();
   const list = base.filter((m) =>
-    !q || (m.subject + " " + m.sender + " " + m.id + " " + (m.body || "") + " " + (m.fields?.origin || "") + " " + (m.fields?.destination || "")).toLowerCase().includes(q),
+    !q || (m.subject + " " + m.sender + " " + m.id + " " + (m.body || "") + " " + (m.voice_transcript || "") + " " + (m.fields?.origin || "") + " " + (m.fields?.destination || "")).toLowerCase().includes(q),
   );
   // ↑/↓ move through the visible list (Mail-style). Ignored while typing or when an overlay handled the key.
   useEffect(() => {
@@ -117,13 +119,16 @@ const Row = memo(function Row({ m, thread, active, onSelect }) {
   const status = statusOf(m, now);
   const request = m.kind === "request";
   const process = useMemo(() => (request ? deriveProcess(m, thread) : null), [m, thread, request]);
+  const voice = isVoiceMessage(m);
   return (
     <button className={"row" + (active ? " active" : "")} data-id={m.id} aria-current={active || undefined} onClick={() => onSelect(m.id)}>
       <span className="row-lead">
         {request && m.received ? (
           <CountdownRing received={m.received} size={30} done={Boolean(m.delivery)} />
         ) : (
-          <span className="row-icon"><Icon name={m.kind === "tracking" ? "pin" : "mail"} size={15} /></span>
+          <span className={"row-icon" + (voice ? " row-icon-voice" : "")}>
+            <Icon name={voice ? "mic" : m.kind === "tracking" ? "pin" : "mail"} size={15} title={voice ? "Voice message" : undefined} />
+          </span>
         )}
       </span>
       <span className="row-main">
@@ -134,6 +139,7 @@ const Row = memo(function Row({ m, thread, active, onSelect }) {
             <strong className="row-subject">{m.subject || "(No subject)"}</strong>
           )}
           <span className="row-chips">
+            {voice && request && <span className="row-voice"><Icon name="mic" size={12} title="Voice request" /></span>}
             <BoardChip result={m.board_result} />
             <Chip tone={status.tone}>{status.label}</Chip>
           </span>
