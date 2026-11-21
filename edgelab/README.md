@@ -37,8 +37,12 @@ crashes come back as `UNREADABLE` with a note.
 
 `Router` sends each detected type to one named slot: photo (`image/*`), voice (`audio/*`),
 video (`video/*`), container (zip, eml, msg, ...), plain text (`text/plain`), office
-(everything else, the Tika catch-all). Plain text and office are wired; the others answer
-"no ... reader yet". Each later reader replaces its own line in `Router.standard()`.
+(everything else, the Tika catch-all). A slot without a reader answers "no ... reader yet".
+Each reader has its own line in `Router.standard()`.
+
+Every top-level `read` has a **20 s budget** (`EdgeReader.DEFAULT_BUDGET`; tests pass their own
+with `new EdgeReader(router, maxBytes, budget)`), shared by all parts inside the file. At the
+limit the call returns what it has, status `PARTIAL`, note `timed out after 20 s`.
 
 ## Office reader (`ai.aeiou.edgelab.office`)
 
@@ -48,8 +52,34 @@ body of eml/msg mails. Table rows come out one per line, cells joined with ` | `
 English decimals (2.85). Attachments and embedded files are not opened here; a note lists
 them. A PDF page with almost no text gets the note `page N looks scanned`, and the Reading is
 `partial`; `OfficeReader.extract(...)` returns the pages so the photo reader can render them.
-eml/msg are routed to the container slot; until the container walker exists they only read
-when the office reader is called directly.
+eml/msg are routed to the container slot, which reads the body with the office reader.
+
+## Container walker (`ai.aeiou.edgelab.container`, ticket 07)
+
+Files inside files: zip, tar, gz, 7z, rar, eml and msg (attachments and forwarded mails), and
+pictures or objects embedded in Word, PowerPoint, Excel or OpenOffice files. Tika lists the
+files inside; each one goes back through `EdgeReader.read`, so a photo in a pptx reaches the
+photo reader and a zip in a mail is opened again.
+
+- Each part's text starts with a header naming its path inside the top file:
+  `=== part: docs.zip > packing-list.xlsx ===`. A mail's own body (or a slide's own text)
+  comes first, without header.
+- `parts` lists every part at every depth with its own status and confidence. Notes of a part
+  are prefixed with its path (`bad.zip: archive is empty or broken`).
+- Limits per top-level read: 3 levels deep, 20 files in total, the 20 s budget. What is left
+  out is listed in notes and makes the Reading `PARTIAL`.
+- Pictures under 2 KB and emf/wmf vector images are not sent to the gateway (icons, logos);
+  a note counts them.
+- An encrypted or broken archive is `UNREADABLE` with a note. Office files without embedded
+  files are read exactly as before.
+
+```bash
+./gradlew -q read --args="src/test/resources/container/shipment-docs.zip"
+./gradlew -q read --args="src/test/resources/container/fwd-rfq.eml"
+./gradlew -q read --args="src/test/resources/container/rfq-photo.pptx"   # photo part needs TEAM_API_KEY
+```
+
+Demo fixtures in `src/test/resources/container/` come from `ContainerFixtures.main` (test sources).
 
 ## Backend guard
 
