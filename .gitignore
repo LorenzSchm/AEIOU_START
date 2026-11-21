@@ -229,3 +229,6 @@ __marimo__/
 /frontend/.env.local
 /backend/.gradle/
 /backend/**/build/
+
+# frontend source modules (overrides the generic lib/ rule above)
+!frontend/app/lib/

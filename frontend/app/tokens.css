@@ -1,0 +1,63 @@
+/* Design tokens: light glass over clouds (Apple HIG-inspired). Every component uses these. */
+:root {
+  /* text */
+  --ink: #0b1220;
+  --ink-2: #334155;
+  --muted: #5b6475;          /* ≥4.5:1 on glass surfaces */
+  /* glass surfaces */
+  --glass: rgba(255, 255, 255, 0.58);
+  --glass-strong: rgba(255, 255, 255, 0.78);
+  --glass-weak: rgba(255, 255, 255, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-edge: rgba(15, 23, 42, 0.08);
+  --blur: saturate(180%) blur(24px);
+  --blur-strong: saturate(180%) blur(40px);
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --shadow-2: 0 2px 6px rgba(15, 23, 42, 0.08), 0 16px 48px rgba(15, 23, 42, 0.12);
+  --hairline: rgba(15, 23, 42, 0.1);
+  /* semantic colors (always paired with icon/text, never color alone) */
+  --accent: #ff6414;          /* AEIOU brand orange */
+  --accent-ink: #c2410c;
+  --accent-soft: rgba(255, 100, 20, 0.12);
+  --blue: #0a84ff;            /* system blue: in-flight / informational */
+  --blue-soft: rgba(10, 132, 255, 0.12);
+  --ok: #1f9d55;
+  --ok-ink: #157a46;
+  --ok-soft: rgba(31, 157, 85, 0.13);
+  --warn: #f59e0b;
+  --warn-ink: #a15c07;
+  --warn-soft: rgba(245, 158, 11, 0.15);
+  --bad: #e5484d;
+  --bad-ink: #b4232a;
+  --bad-soft: rgba(229, 72, 77, 0.13);
+  /* shape & spacing (4pt grid) */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 26px;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
+  /* motion (CSS fallbacks; Motion springs live in app/lib/motion.js) */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-1: 150ms; --dur-2: 240ms; --dur-3: 360ms;
+  /* z-index scale */
+  --z-base: 0; --z-raised: 10; --z-nav: 20; --z-sheet: 40; --z-toast: 100;
+  /* type */
+  --sans: var(--font-sans), -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI", sans-serif;
+  --mono: var(--font-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; }
+}
+
+/* Reusable glass primitive */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border-radius: var(--r-lg);
+}
+.glass-strong { background: var(--glass-strong); -webkit-backdrop-filter: var(--blur-strong); backdrop-filter: var(--blur-strong); }

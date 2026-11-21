@@ -1,0 +1,134 @@
+.cg-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  overflow: hidden;
+  border-radius: inherit;
+  isolation: isolate;
+}
+.cg-root > div:first-child { opacity: 0; transition: opacity var(--dur-3) var(--ease-out); }
+.cg-root--ready > div:first-child { opacity: 1; }
+.cg-root canvas { display: block; outline: none; }
+
+/* IATA labels (html layer): .cg-pin is a zero-size anchor positioned by globe.gl */
+.cg-pin { position: relative; width: 0; height: 0; pointer-events: none; transition: opacity var(--dur-2) var(--ease-out); }
+.cg-code {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(6px, -50%);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--ink-2);
+  padding: 2px 4px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 0 0 0.5px var(--hairline);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+.cg-code--origin { color: var(--accent-ink); }
+.cg-code--dim { opacity: 0.35; }
+.cg-root--compact .cg-code { font-size: 9.5px; padding: 1px 3px; }
+
+/* point tooltip (globe.gl injects pointLabel HTML into its own tooltip container) */
+.cg-pt-tip {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--blur);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 6px 9px;
+  box-shadow: var(--shadow-2);
+}
+.cg-pt-tip span { font-weight: 400; color: var(--muted); font-size: 11px; }
+/* globe.gl's default tooltip has a dark background; neutralise it */
+.cg-root .float-tooltip-kap {
+  background: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  max-width: none !important;
+}
+
+/* legend */
+.cg-legend {
+  position: absolute;
+  left: var(--s-4);
+  bottom: var(--s-4);
+  z-index: var(--z-raised);
+  padding: var(--s-3) var(--s-4) var(--s-3) var(--s-3);
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-2);
+  min-width: 156px;
+}
+.cg-legend__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-1);
+  color: var(--muted);
+  margin-bottom: var(--s-2);
+}
+.cg-legend__count { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cg-legend__chip {
+  margin-left: auto;
+  font: 600 10.5px/1 var(--mono);
+  color: var(--ink-2);
+  background: var(--glass-weak);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.cg-legend__chip:hover { background: var(--glass-strong); }
+.cg-legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.cg-legend li { display: flex; align-items: center; gap: var(--s-2); }
+.cg-legend__swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+.cg-legend__n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; padding-left: var(--s-3); }
+.cg-legend__sep { margin-top: 3px; padding-top: 6px; border-top: 1px solid var(--hairline); }
+.cg-legend__dot { width: 7px; height: 7px; border-radius: 50%; flex: none; margin: 0 3.5px; }
+.cg-legend__dot--origin { background: var(--accent); }
+
+/* empty state */
+.cg-empty {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-raised);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: center;
+  max-width: calc(100% - 2 * var(--s-5));
+  pointer-events: none;
+}
+
+@media (max-width: 520px) {
+  .cg-legend { left: var(--s-2); bottom: var(--s-2); min-width: 0; font-size: 11px; }
+}
+
+/* German hubs sit within ~400 km of each other: fan their labels out so they don't collide */
+.cg-code--ham { transform: translate(-50%, calc(-100% - 5px)); }
+.cg-code--dus { transform: translate(calc(-100% - 6px), -100%); }
+.cg-code--cgn { transform: translate(calc(-100% - 6px), 0); }
+.cg-code--fra { transform: translate(6px, -70%); }
+.cg-code--str { transform: translate(calc(-100% - 6px), 30%); }
+.cg-code--muc { transform: translate(6px, 20%); }
+/* overview: one hub label is enough */
+.cg-root--compact .cg-code--origin:not(.cg-code--fra) { display: none; }
+.cg-root--compact .cg-code--fra { transform: translate(6px, -50%); }
