@@ -286,7 +286,10 @@ class LiveWorkflowTest {
         inbound(
             202,
             "yellowtail-air-freight@hackloop.mail",
-            "BK-ABC12345\nDeparted from MUC at 2026-11-21T15:00:49Z",
+            "BK-ABC12345\n"
+                + "Departed from MUC at 2026-11-21T15:00:49Z\n"
+                + "Flight: YT123\n"
+                + "ETA: 2026-11-23T06:00Z",
             null));
     inbox.add(
         inbound(
@@ -302,9 +305,70 @@ class LiveWorkflowTest {
                         m.path("in_reply_to").asLong() == 203
                             && str(m, "body").contains("Departed from MUC")
                             && str(m, "body").contains("BK-ABC12345")));
+    var desk = "tracking@hackloop.mail";
+    var q =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            inbound(
+                204,
+                desk,
+                "What is the gross weight, airline booking price, flight number and ETA for"
+                    + " bk-abc12345?",
+                null);
+    q.put("subject", "Shipment details");
+    inbox.add(q);
+    inbox.add(inbound(205, desk, "Where is BK-ABC123450?", quote.get("id").asLong()));
+    var unrelated =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            inbound(206, desk, "Please quote a shipment.", null);
+    unrelated.put("subject", "General question");
+    inbox.add(unrelated);
+    waitFor(() -> sent.stream().anyMatch(m -> m.path("in_reply_to").asLong() == 204));
+    var answer =
+        sent.stream().filter(m -> m.path("in_reply_to").asLong() == 204).findFirst().orElseThrow();
+    assertEquals(desk, str(answer, "to"));
+    assertEquals("Re: Shipment details", str(answer, "subject"));
+    for (var fact :
+        List.of("100 kg", "300.00 EUR", "YT123", "2026-11-23T06:00Z", "Departed from MUC"))
+      assertTrue(str(answer, "body").contains(fact), fact);
+    intake.receivePush(q);
+    intake.routePending();
+    worker.tick();
+    assertEquals(1, sent.stream().filter(m -> m.path("in_reply_to").asLong() == 204).count());
+    assertFalse(
+        sent.stream().anyMatch(m -> Set.of(205L, 206L).contains(m.path("in_reply_to").asLong())));
+    assertEquals(1, store.db.queryForObject("select count(*) from shipment", Integer.class));
     assertEquals(1, bookings.get());
     assertEquals(1, gateway.get());
     assertEquals(List.of(), List.copyOf(violations));
+  }
+
+  @Test
+  @Order(4)
+  void expiredRfqConsumesNoGatewayCall() {
+    int before = gateway.get();
+    var old =
+        (com.fasterxml.jackson.databind.node.ObjectNode)
+            inbound(
+                500,
+                "late-buyer@hackloop.mail",
+                "Quote cheapest airport-to-airport MUC to LAX, 100 kg and 0.2 cbm.",
+                null);
+    old.put("subject", "Expired RFQ").put("sent_at", START.minusSeconds(400).toString());
+    inbox.add(old);
+    waitFor(
+        () ->
+            "CANCELLED"
+                .equals(
+                    store
+                        .db
+                        .queryForList(
+                            "select state from job where id='s_500:extract:1'", String.class)
+                        .stream()
+                        .findFirst()
+                        .orElse("")));
+    assertEquals("CLOSED", store.shipment("s_500").at("/session/phase").asText());
+    assertEquals(before, gateway.get());
+    assertFalse(sent.stream().anyMatch(m -> str(m, "to").equals("late-buyer@hackloop.mail")));
   }
 
   JsonNode solicitation(String to) {

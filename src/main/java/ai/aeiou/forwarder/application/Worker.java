@@ -162,6 +162,15 @@ public class Worker implements ApplicationRunner {
             java.sql.Timestamp.from(at));
     if (jobs.isEmpty()) return null;
     var j = jobs.getFirst();
+    if (j.action.equals("EXTRACT") || j.action.equals("PORTAL")) {
+      var shipment = flow.store.shipment(j.id);
+      if (!at.isBefore(deadline(shipment))
+          || !shipment.path("requestRevision").equals(j.payload.path("revision"))
+          || (j.action.equals("PORTAL") && shipment.has("quote"))) {
+        state(j, "CANCELLED", at);
+        return j;
+      }
+    }
     if (j.action.equals("SEND") || j.action.equals("BOOK")) {
       var d = flow.store.shipment(j.id);
       boolean quote = str(j.payload, "category").equals("QUOTE");

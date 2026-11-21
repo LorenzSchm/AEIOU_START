@@ -170,6 +170,47 @@ public class LiveIntake {
     return "";
   }
 
+  private static final String TRACKING_DESK = "tracking@hackloop.mail";
+  private static final Pattern TRACKING_REFERENCE =
+      Pattern.compile("(?i)(?<![\\w-])(?:BK-[\\w-]+|AE-[\\w-]+|AEIOU-[\\w-]+)(?![\\w-])");
+
+  private boolean deskTracking(ObjectNode mail, Set<String> threads, Instant at) {
+    if (threads.size() > 1) return false;
+    String text = str(mail, "subject") + "\n" + ShipmentFacts.fresh(str(mail, "bodyText"));
+    var refs =
+        TRACKING_REFERENCE
+            .matcher(text.toUpperCase(Locale.ROOT))
+            .results()
+            .map(java.util.regex.MatchResult::group)
+            .distinct()
+            .toList();
+    var lane = ShipmentFacts.extract(text);
+    boolean hasLane = lane.has("origin") && lane.has("destination");
+    if (refs.isEmpty() && threads.isEmpty() && !hasLane) return false;
+    ObjectNode match = null;
+    for (var data : flow.store.read("select data from shipment")) {
+      var d = (ObjectNode) data;
+      if (!d.has("booking") || (!threads.isEmpty() && !threads.contains(sid(d)))) continue;
+      if (hasLane
+          && (!str(lane, "origin").equals(str(session(d), "origin"))
+              || !str(lane, "destination").equals(str(session(d), "destination")))) continue;
+      var booking = d.get("booking");
+      if (!refs.stream()
+          .allMatch(
+              ref ->
+                  ref.equalsIgnoreCase(str(booking, "bookingReference"))
+                      || ref.equalsIgnoreCase(str(booking, "teamReference"))
+                      || ref.equalsIgnoreCase(str(session(d), "reference")))) continue;
+      if (match != null) return false;
+      match = d;
+    }
+    if (match == null) return false;
+    mail.put("category", "TRACKING");
+    flow.store.message(sid(match), mail);
+    flow.tracking(match, mail, at);
+    return true;
+  }
+
   private boolean route(JsonNode raw) {
     String upstream = str(raw, "id"),
         from = first(raw, "from", "from_address", "sender"),
@@ -197,6 +238,11 @@ public class LiveIntake {
         matches.add((String) row.get("shipment_id"));
         if (localParent == null) localParent = (String) row.get("id");
       }
+    if (TRACKING_DESK.equalsIgnoreCase(from)) {
+      var question = mail(id, "TRACKING", TRACKING_DESK, TEAM, subject, body, at, localParent);
+      question.put("upstreamId", upstream);
+      return deskTracking(question, matches, at);
+    }
     boolean carrier =
         flow.catalog.byEmail(from).isPresent() || from.equals("ratedesk@hackloop.mail");
     String fresh = ShipmentFacts.fresh(body),

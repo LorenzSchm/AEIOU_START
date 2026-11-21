@@ -557,6 +557,18 @@ public class Workflow {
       String parent,
       String body,
       Instant at) {
+    queueMail(d, key, category, to, parent, body, at, str(session(d), "subject"));
+  }
+
+  private void queueMail(
+      ObjectNode d,
+      String key,
+      String category,
+      String to,
+      String parent,
+      String body,
+      Instant at,
+      String subject) {
     if (to == null || !to.matches("[A-Za-z0-9._+-]+@hackloop\\.mail") || to.equals(TEAM)) return;
     var m =
         mail(
@@ -564,7 +576,7 @@ public class Workflow {
             category,
             TEAM,
             to,
-            "Re: " + str(session(d), "subject"),
+            subject.regionMatches(true, 0, "Re:", 0, 3) ? subject : "Re: " + subject,
             body,
             at,
             parent);
@@ -707,6 +719,26 @@ public class Workflow {
               + " )?(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2})?(?:Z|[+-]\\d{2}:\\d{2}))\\s*[.!]?\\s*$");
 
   public void carrierMilestones(ObjectNode d, ObjectNode m, String body, Instant observed) {
+    var fields =
+        java.util.regex.Pattern.compile(
+                "(?im)^(status|flight(?: number)?|etd|eta):[ \\t]*([^\\r\\n]{1,150})$")
+            .matcher(body);
+    while (fields.find()) {
+      var key = fields.group(1).toLowerCase(Locale.ROOT);
+      if (key.startsWith("flight")) key = "flight";
+      var report = d.withObject("/carrierReport");
+      if (!report.has(key)
+          || !Instant.parse(report.path(key).path("at").asText()).isAfter(observed))
+        report.set(
+            key,
+            obj(
+                "value",
+                fields.group(2).strip(),
+                "at",
+                observed.toString(),
+                "mailId",
+                str(m, "id")));
+    }
     var matches = MOVEMENT.matcher(body);
     while (matches.find()) {
       try {
@@ -746,33 +778,93 @@ public class Workflow {
         d.withArray("milestones")
             .valueStream()
             .max(
-                Comparator.comparing((JsonNode x) -> str(x, "effectiveAt"))
-                    .thenComparing(x -> str(x, "observedAt")))
+                Comparator.comparing((JsonNode x) -> Instant.parse(str(x, "effectiveAt")))
+                    .thenComparing(x -> Instant.parse(str(x, "observedAt"))))
             .orElseThrow();
-    String intro =
-        str(session(d), "language").equals("de")
-            ? "Letzter bestätigter Status: "
-            : "Latest recorded status: ";
+    String request =
+        (str(question, "subject") + " " + ShipmentFacts.fresh(str(question, "bodyText")))
+            .toLowerCase(Locale.ROOT);
+    boolean de =
+        "tracking@hackloop.mail".equals(str(question, "from"))
+            ? request.matches("(?s).*\\b(?:bitte|welch\\w*|wann|wie|gewicht|sendung|preis)\\b.*")
+            : "de".equals(str(session(d), "language"));
+    var report = d.path("carrierReport");
+    var body = new StringBuilder(de ? "Guten Tag,\n\n" : "Hello,\n\n");
+    body.append(str(session(d), "origin"))
+        .append(" → ")
+        .append(str(session(d), "destination"))
+        .append(", ")
+        .append(d.at("/booking/provider").asText())
+        .append(", ")
+        .append(d.at("/booking/bookingReference").asText())
+        .append(" (")
+        .append(str(session(d), "reference"))
+        .append(").\n");
+    body.append(str(milestone, "label"))
+        .append(" (")
+        .append(str(milestone, "effectiveAt"))
+        .append(").");
+    if (report.has("status")
+        && !Instant.parse(report.at("/status/at").asText())
+            .isBefore(Instant.parse(str(milestone, "effectiveAt"))))
+      body.append(de ? " Meldung der Airline: " : " Carrier update: ")
+          .append(report.at("/status/value").asText())
+          .append(".");
+    if (request.matches("(?s).*\\b(?:weight|kg|gross|gewicht|bruttogewicht)\\b.*")
+        && d.path("inputs").has("grossKg"))
+      body.append(de ? " Bruttogewicht: " : " Gross weight: ")
+          .append(d.at("/inputs/grossKg").asText())
+          .append(" kg.");
+    if (request.matches("(?s).*\\b(?:pieces?|packages?|stück|packstücke)\\b.*")
+        && d.path("inputs").has("pieces"))
+      body.append(de ? " Packstücke: " : " Pieces: ")
+          .append(d.at("/inputs/pieces").asText())
+          .append(".");
+    if (request.matches("(?s).*\\b(?:price|cost|rate|amount|paid|preis|kosten)\\b.*")) {
+      var booked = d.path("bookingResponse");
+      if (booked.hasNonNull("price") && booked.hasNonNull("currency"))
+        body.append(de ? " Buchungspreis der Airline: " : " Airline booking price: ")
+            .append(str(booked, "price"))
+            .append(" ")
+            .append(str(booked, "currency"))
+            .append(".");
+      else if (d.at("/quote/total").hasNonNull("amount"))
+        body.append(de ? " Angebotenes Gesamtentgelt: " : " Quoted all-in total: ")
+            .append(d.at("/quote/total/amount").asText())
+            .append(" ")
+            .append(d.at("/quote/total/currency").asText())
+            .append(".");
+    }
+    for (String field : List.of("flight", "etd", "eta")) {
+      String terms =
+          switch (field) {
+            case "flight" -> "flight|flugnummer";
+            case "etd" -> "etd|departure|abflug";
+            default -> "eta|arrival|ankunft";
+          };
+      if (request.matches("(?s).*\\b(?:" + terms + ")\\b.*")) {
+        body.append(" ")
+            .append(
+                field.equals("flight") ? (de ? "Flug" : "Flight") : field.toUpperCase(Locale.ROOT))
+            .append(": ")
+            .append(
+                report
+                    .path(field)
+                    .path("value")
+                    .asText(de ? "noch nicht bestätigt" : "not yet confirmed"))
+            .append(".");
+      }
+    }
+    body.append(de ? "\n\nViele Grüße\nTeam AEIOU" : "\n\nBest regards,\nTeam AEIOU");
     queueMail(
         d,
         "tracking-" + str(question, "id"),
         "TRACKING",
         str(question, "from"),
         str(question, "id"),
-        str(session(d), "origin")
-            + " → "
-            + str(session(d), "destination")
-            + ", "
-            + d.at("/booking/provider").asText()
-            + " ("
-            + d.at("/booking/bookingReference").asText()
-            + "). "
-            + intro
-            + str(milestone, "label")
-            + " ("
-            + str(milestone, "effectiveAt")
-            + ").",
-        at);
+        body.toString(),
+        at,
+        str(question, "subject"));
     store.changed(d, "TRACKING", "Answered from the confirmed shipment record", at);
   }
 }
