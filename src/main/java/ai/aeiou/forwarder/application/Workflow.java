@@ -152,6 +152,8 @@ public class Workflow {
     var s = session(d);
     var known = (ObjectNode) d.get("inputs");
     known.setAll(fields);
+    if (fields.path("pickupAmbiguous").asBoolean()) known.remove(List.of("zone", "pickupPostcode"));
+    else if (fields.has("pickupPostcode")) known.remove("pickupAmbiguous");
     if (fields.has("grossAlternatives")) known.remove("grossKg");
     else if (fields.has("grossKg")) known.remove("grossAlternatives");
     if (fields.has("volumeAlternatives")) known.remove("volumeCbm");
@@ -444,6 +446,7 @@ public class Workflow {
     if (!str(s, "phase").equals("SOURCING") || d.has("quote")) return;
     var facts = d.path("inputs");
     if (facts.has("dgReference")
+        && d.path("pendingSourceDocs").isEmpty()
         && !d.has("dgRequest")
         && str(s, "control").equals("AUTO")
         && at.isBefore(deadline(d))) {
@@ -478,8 +481,10 @@ public class Workflow {
             str(d, "pin"));
     boolean documentsPending = !d.path("pendingSourceDocs").isEmpty();
     if (documentsPending
+        || d.has("documentHold")
         || facts.has("dgReference")
         || d.has("dgRequest")
+        || (str(s, "scope").equals("DOOR_TO_PORT") && facts.path("pickupAmbiguous").asBoolean())
         || facts.path("lotManifestIncomplete").asBoolean()) winner = Optional.empty();
     boolean paused = str(s, "control").equals("PAUSED");
     if (!at.isBefore(deadline(d))

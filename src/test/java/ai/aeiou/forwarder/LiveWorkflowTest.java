@@ -44,6 +44,7 @@ class LiveWorkflowTest {
   private static final Queue<String> violations = new ConcurrentLinkedQueue<>();
   private static final AtomicReference<JsonNode> board =
       new AtomicReference<>(obj("requests", arr()));
+  private static final Map<String, String> packingFiles = new ConcurrentHashMap<>();
   private static final HttpServer upstream = start();
   @Autowired Worker worker;
   @Autowired LiveIntake intake;
@@ -97,6 +98,14 @@ class LiveWorkflowTest {
       violations.add("Missing API header");
     JsonNode result = obj();
     int status = 200;
+    if (packingFiles.containsKey(path)) {
+      byte[] data = packingFiles.get(path).getBytes(StandardCharsets.UTF_8);
+      ex.sendResponseHeaders(200, data.length);
+      try (var out = ex.getResponseBody()) {
+        out.write(data);
+      }
+      return;
+    }
     switch (path) {
       case "/v1/mailbox/messages/700/attachments/1" -> {
         byte[] file =
@@ -671,6 +680,108 @@ class LiveWorkflowTest {
     assertEquals("1642.68", store.shipment("s_950").at("/quote/total/amount").asText());
     assertEquals(calls + 1, gateway.get());
     assertTrue(violations.isEmpty(), violations.toString());
+  }
+
+  private void customerFile(long id, String buyer, String body, Long parent, String document) {
+    packingFiles.put("/v1/mailbox/messages/" + id + "/attachments/1", document);
+    var mail = (com.fasterxml.jackson.databind.node.ObjectNode) inbound(id, buyer, body, parent);
+    mail.withArray("attachments")
+        .add(
+            obj(
+                "id",
+                1,
+                "filename",
+                "shipment.txt",
+                "content_type",
+                "text/plain",
+                "size",
+                document.length()));
+    inbox.add(mail);
+  }
+
+  private JsonNode replyTo(long parent) {
+    return sent.stream()
+        .filter(m -> m.path("in_reply_to").asLong() == parent)
+        .findFirst()
+        .orElse(null);
+  }
+
+  @Test
+  @Order(11)
+  void correctsDisputedPackingBeforePricingAndUsesLabelledTotals() {
+    String buyer = "packing-buyer@hackloop.mail";
+    String hundred =
+        "Packing List\n"
+            + "Destination airport: LAX\n"
+            + "Total gross weight (kg): 100\n"
+            + "Total volume (cbm): 0.2\n"
+            + "Dangerous goods: None";
+    customerFile(
+        1100,
+        buyer,
+        "Cheapest airport-to-airport MUC to LAX. 100 kg, 0.2 cbm.",
+        null,
+        hundred.replace("100", "200"));
+    waitFor(() -> replyTo(1100) != null);
+    assertTrue(str(replyTo(1100), "body").contains("corrected packing list"));
+    assertFalse(store.shipment("s_1100").has("quote"));
+    assertEquals(
+        0,
+        store.db.queryForObject(
+            "select count(*) from job where shipment_id='s_1100' and action='PORTAL'",
+            Integer.class));
+    customerFile(
+        1101,
+        buyer,
+        "Corrected packing list attached.",
+        replyTo(1100).path("id").asLong(),
+        hundred);
+    waitFor(() -> store.shipment("s_1100").at("/upstreamRates/R-test12345").isObject());
+    offset.addAndGet(46);
+    waitFor(() -> store.shipment("s_1100").at("/quote/sendState").asText().equals("SENT"));
+    assertEquals("100", store.shipment("s_1100").at("/inputs/grossKg").asText());
+    customerFile(
+        1102,
+        "totals-buyer@hackloop.mail",
+        "Cheapest air freight from MUC to LAX. Please use the packing list.",
+        null,
+        hundred);
+    waitFor(() -> store.shipment("s_1102").at("/upstreamRates/R-test12345").isObject());
+    offset.addAndGet(46);
+    waitFor(() -> store.shipment("s_1102").at("/quote/sendState").asText().equals("SENT"));
+    assertEquals("0.2", store.shipment("s_1102").at("/inputs/volumeCbm").asText());
+  }
+
+  @Test
+  @Order(12)
+  void followsMatchingCustomerDocumentsAndClosesOnlyOnce() {
+    String buyer = "decl-buyer@hackloop.mail";
+    customerFile(
+        1200,
+        buyer,
+        "Cheapest airport-to-airport MUC to LAX. 100 kg, 0.2 cbm.",
+        null,
+        "Packing list\nDangerous goods: UN1950");
+    waitFor(() -> replyTo(1200) != null);
+    customerFile(
+        1201,
+        buyer,
+        "Here is the safety data sheet.",
+        replyTo(1200).path("id").asLong(),
+        "Safety Data Sheet\nSection 14 Transport Information\nUN1950");
+    waitFor(() -> replyTo(1201) != null);
+    assertTrue(str(replyTo(1201), "body").contains("Section 14"));
+    customerFile(
+        1202,
+        buyer,
+        "Here is the declaration.",
+        replyTo(1201).path("id").asLong(),
+        "Shipper's Declaration for Dangerous Goods\nUN1950");
+    waitFor(() -> replyTo(1202) != null);
+    assertTrue(str(replyTo(1202), "body").contains("unable to offer"));
+    assertEquals("CLOSED", store.shipment("s_1200").at("/session/phase").asText());
+    assertFalse(store.shipment("s_1200").has("quote"));
+    assertEquals(3, sent.stream().filter(m -> str(m, "to").equals(buyer)).count());
   }
 
   JsonNode solicitation(String to) {

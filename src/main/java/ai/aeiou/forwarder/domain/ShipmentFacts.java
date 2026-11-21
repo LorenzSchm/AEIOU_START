@@ -150,7 +150,13 @@ public class ShipmentFacts {
         && lower.matches("(?s).*(cheapest|günstigst).*")) result.put("objective", "CHEAPEST");
     if (lower.matches("(?s).*(?:not|nicht)\\s+(?:the |die )?(?:cheapest|günstigste).*")
         && lower.matches("(?s).*(fastest|schnellst).*")) result.put("objective", "FASTEST");
-    if (lower.matches(
+    String hazards =
+        lower.replaceAll(
+            "\\b(?:non[- ](?:dangerous|hazardous)(?: goods)?|not (?:dangerous|hazardous)(?:"
+                + " goods)?|(?:dangerous goods|gefahrgut)\\h*[:=]\\h*(?:no|none|nein|n/a|not"
+                + " regulated))\\b",
+            "");
+    if (hazards.matches(
         "(?s).*(dangerous goods|danger"
             + " goods|lithium|temperature.controlled|hazardous|gefahrgut|kühlkette).*"))
       result.put("constraints", text.substring(0, Math.min(text.length(), 400)));
@@ -166,14 +172,27 @@ public class ShipmentFacts {
         result.put(quote ? "quoteDeadline" : "deliveryDeadline", stamp);
       } catch (java.time.DateTimeException ignored) {
       }
-    var zone = Pattern.compile("\\b(\\d{2})\\d{3}\\b").matcher(text);
-    if (zone.find()) result.put("zone", zone.group(1)).put("pickupPostcode", zone.group());
+    var postal =
+        Pattern.compile(
+                "(?iu:\\b(?:plz|post\\s*code|postal code|zip(?:"
+                    + " code)?|from|ab)\\s*[:=]?\\s*)(\\d{5})\\b"
+                    + "|(?<![\\p{L}\\d.,-])(?:D-)?(\\d{5})\\h+\\(?(?=\\p{Lu}\\p{Ll})")
+            .matcher(text);
+    var postcodes = new HashSet<String>();
+    while (postal.find())
+      postcodes.add(postal.group(1) != null ? postal.group(1) : postal.group(2));
+    if (postcodes.size() == 1) {
+      String code = postcodes.iterator().next();
+      result.put("zone", code.substring(0, 2)).put("pickupPostcode", code);
+    } else if (postcodes.size() > 1) result.put("pickupAmbiguous", true);
     result.put(
         "language", lower.matches("(?s).*(bitte|günstig|schnellst|abholung).*") ? "de" : "en");
     if (lower.matches("(?s).*\\bwe(?:['’]ll| will) (?:deliver|bring) [^.]{0,90}\\bourselves\\b.*"))
       result.put("scope", "AIRPORT_TO_AIRPORT");
     var dg = Pattern.compile("(?i)\\bUN[ -]?(\\d{4})\\b").matcher(text);
     if (dg.find()) result.put("dgReference", "UN" + dg.group(1));
+    else if (PackingReview.declaresDangerousGoods(text))
+      result.put("dgReference", "dangerous goods");
     aggregateLots(text, result);
     return result;
   }

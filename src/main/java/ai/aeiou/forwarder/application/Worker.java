@@ -165,7 +165,11 @@ public class Worker implements ApplicationRunner {
     if (j.action.equals("EXTRACT") || j.action.equals("PORTAL")) {
       var shipment = flow.store.shipment(j.id);
       if (!at.isBefore(deadline(shipment))
-          || !shipment.path("requestRevision").equals(j.payload.path("revision"))
+          || (!shipment.path("requestRevision").equals(j.payload.path("revision"))
+              && !(j.action.equals("EXTRACT")
+                  && j.payload.path("revision").asInt() == 1
+                  && shipment.path("hasSourceAttachments").asBoolean()
+                  && shipment.path("gatewayLog").isEmpty()))
           || (j.action.equals("PORTAL") && shipment.has("quote"))) {
         state(j, "CANCELLED", at);
         return j;
@@ -183,7 +187,10 @@ public class Worker implements ApplicationRunner {
         state(j, "CANCELLED", at);
         return j;
       }
-      if (j.key.equals(j.id + ":dg-documents") && !at.isBefore(deadline(d))) {
+      if ((j.key.startsWith(j.id + ":dg-") || j.key.startsWith(j.id + ":packing-"))
+          && (!at.isBefore(deadline(d))
+              || (d.has("documentHold") && !j.key.equals(j.id + ":" + str(d, "documentHold")))
+              || (j.key.startsWith(j.id + ":packing-") && !d.has("documentHold")))) {
         state(j, "CANCELLED", at);
         return j;
       }
@@ -322,6 +329,10 @@ public class Worker implements ApplicationRunner {
       return;
     }
     var d = flow.store.shipment(j.id);
+    if (j.action.equals("ATTACH")
+        && !retry
+        && d.path("pendingSourceDocs").has(str(j.payload.path("meta"), "id")))
+      live.applyCustomerDocument(d, j.payload, "", at);
     if (j.action.equals("PORTAL") && (code == 503 || code == 404) && at.isBefore(deadline(d))) {
       flow.queueMail(
           d,

@@ -10,6 +10,43 @@ import org.junit.jupiter.api.Test;
 
 class DomainTest {
   @Test
+  void pickupRequiresAnUnambiguousAddress() {
+    assertTrue(
+        ShipmentFacts.extract("Pickup in 51447 Bergisch Gladbach or 51103 Köln.")
+            .path("pickupAmbiguous")
+            .asBoolean());
+    assertFalse(
+        ShipmentFacts.extract("Reference 51447. Gross weight 51447 kg.").has("pickupPostcode"));
+    assertEquals(
+        "51447",
+        str(
+            ShipmentFacts.extract("Trucking from our site in 51447 Bergisch Gladbach."),
+            "pickupPostcode"));
+  }
+
+  @Test
+  void approvalRequiresAnUnconditionalInstruction() {
+    for (String reject :
+        java.util.List.of(
+            "Please book it if the price falls.",
+            "Please book it.\n\nBest regards,\nSara\nPS: Please hold until Monday.",
+            "Can you book it?",
+            "Please hold.\n\n> Please book it.",
+            "Please book it subject to confirmation."))
+      assertFalse(ai.aeiou.forwarder.domain.BookingApproval.accepted(reject), reject);
+    for (String signoff :
+        java.util.List.of(
+            "Thanks a lot and have a lovely day!",
+            "Cheers,",
+            "Viele Gruesse / Many greetings",
+            "Sara\nExample Ltd"))
+      assertTrue(
+          ai.aeiou.forwarder.domain.BookingApproval.accepted(
+              "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
+                  + signoff));
+  }
+
+  @Test
   void piecesAndCorrectionsDoNotDoubleCountTotals() {
     var facts =
         ShipmentFacts.extract(

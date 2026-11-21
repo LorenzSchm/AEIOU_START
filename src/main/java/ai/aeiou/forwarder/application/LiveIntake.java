@@ -50,11 +50,6 @@ public class LiveIntake {
           "(?is)\\b(?:we reject|decline your quote|angebot abgelehnt|(?:will not|won't|cannot)"
               + " (?:go ahead|accept)|(?:do not|don't|nicht) (?:book|buchen)|wir lehnen .{0,40}"
               + " ab)\\b");
-  private static final Pattern ACCEPT =
-      Pattern.compile(
-          "(?is)(?:^|[.!\\n"
-              + "]\\s*|,\\s*)(?:we accept\\b|please (?:go ahead and )?book\\b|wir"
-              + " akzeptieren\\b|bitte buchen\\b)");
 
   public LiveIntake(
       Workflow flow,
@@ -359,7 +354,7 @@ public class LiveIntake {
       m.put("category", "TRACKING");
       flow.tracking(d, m, at);
     } else if (!carrier
-        && ACCEPT.matcher(fresh.strip()).find()
+        && BookingApproval.accepted(fresh)
         && !DECLINE.matcher(fresh).find()
         && d.has("quote")
         && !str(session(d), "phase").equals("CLOSED")
@@ -384,7 +379,8 @@ public class LiveIntake {
         }
       } else flow.accepted(d, id, at);
     } else if (!carrier
-        && lower.matches("(?s).*(correction|amend|korrektur|änderung).*")
+        && (lower.matches("(?s).*(correct(?:ed|ion)|revised|amend|korrektur|änderung).*")
+            || !raw.path("attachments").isEmpty())
         && !d.has("quote")) {
       m.put("category", "CORRECTION");
       d.withArray("history")
@@ -401,9 +397,14 @@ public class LiveIntake {
       d.put("requestRevision", d.get("requestRevision").asInt() + 1);
       d.remove("pin");
       flow.facts(d, ShipmentFacts.extract(fresh), m, at);
-      source(d, at);
-      flow.store.schedule(
-          sid(d) + ":extract:" + d.get("requestRevision"), sid(d), "EXTRACT", at, extraction(d, m));
+      if (raw.path("attachments").isEmpty()) source(d, at);
+      if (raw.path("attachments").isEmpty())
+        flow.store.schedule(
+            sid(d) + ":extract:" + d.get("requestRevision"),
+            sid(d),
+            "EXTRACT",
+            at,
+            extraction(d, m));
     } else if (carrier
         && d.has("booking")
         && flow.catalog
@@ -449,14 +450,23 @@ public class LiveIntake {
   }
 
   private void attachments(ObjectNode d, ObjectNode m, JsonNode raw, Instant at) {
-    if (!raw.path("attachments").isEmpty()) d.put("hasSourceAttachments", true);
+    boolean customerDocs = Set.of("RFQ", "CORRECTION").contains(str(m, "category"));
+    long messageId = raw.path("id").asLong();
+    if (customerDocs && !raw.path("attachments").isEmpty()) {
+      d.put("hasSourceAttachments", true);
+      if (!d.has("packingMailFacts"))
+        d.set("packingMailFacts", ShipmentFacts.extract(str(d.get("original"), "bodyText")));
+      if (messageId >= d.path("packingMessage").asLong()) {
+        d.put("packingMessage", messageId);
+        ((ObjectNode) d.get("packingMailFacts")).setAll(ShipmentFacts.extract(str(m, "bodyText")));
+      }
+    }
     for (var a : raw.path("attachments")) {
       String aid = str(a, "id");
       if (!aid.matches("[0-9]+")) continue;
       String name = first(a, "filename", "name").replaceAll("[^\\p{L}\\p{N}._ -]", "_");
       String local = str(m, "id") + "_" + aid;
-      if (Set.of("RFQ", "CORRECTION").contains(str(m, "category")))
-        d.withObject("/pendingSourceDocs").put(local, true);
+      if (customerDocs) d.withObject("/pendingSourceDocs").put(local, true);
       var meta =
           obj(
               "id",
@@ -476,6 +486,10 @@ public class LiveIntake {
           obj(
               "meta",
               meta,
+              "customerDocs",
+              customerDocs,
+              "messageId",
+              messageId,
               "path",
               "/v1/mailbox/messages/" + str(raw, "id") + "/attachments/" + aid));
     }
@@ -519,7 +533,10 @@ public class LiveIntake {
     var facts = d.get("inputs");
     int rev = d.get("requestRevision").asInt();
     if (!flow.clock.now().isBefore(deadline(d))
+        || d.has("documentHold")
+        || !d.path("pendingSourceDocs").isEmpty()
         || facts.has("dgReference")
+        || (str(s, "scope").equals("DOOR_TO_PORT") && facts.path("pickupAmbiguous").asBoolean())
         || facts.path("lotManifestIncomplete").asBoolean()
         || !facts.has("grossKg")
         || !facts.has("volumeCbm")
@@ -920,6 +937,99 @@ public class LiveIntake {
     }
   }
 
+  void applyCustomerDocument(ObjectNode d, ObjectNode p, String text, Instant at) {
+    var meta = p.path("meta");
+    String local = str(meta, "id");
+    long message = p.path("messageId").asLong();
+    if (message == 0 && local.matches("m_[0-9]+_[0-9]+"))
+      message = Long.parseLong(local.split("_")[1]);
+    d.withObject("/pendingSourceDocs").remove(local);
+    d.withObject("/packingDocuments").set(local, PackingReview.describe(text, message));
+    if (!d.path("pendingSourceDocs").isEmpty()
+        || d.has("quote")
+        || !str(session(d), "phase").equals("SOURCING")) return;
+    var mailFacts =
+        d.has("packingMailFacts")
+            ? d.get("packingMailFacts")
+            : ShipmentFacts.extract(str(d.get("original"), "bodyText"));
+    long original = d.path("original").path("upstreamId").asLong();
+    var result =
+        PackingReview.assess(
+            d.get("packingDocuments"),
+            mailFacts,
+            d.path("dgRequest").asText(d.at("/inputs/dgReference").asText()),
+            original);
+    String state = result.state();
+    if (state.equals("verified")) {
+      d.remove("documentHold");
+      var fields = result.fields();
+      if (!mailFacts.has("scope")
+          && mailFacts.has("origin")
+          && !mailFacts.has("pickupPostcode")
+          && str(session(d), "scope").equals("UNKNOWN")) fields.put("scope", "AIRPORT_TO_AIRPORT");
+      d.put("requestRevision", d.path("requestRevision").asInt() + 1);
+      d.remove("pin");
+      flow.facts(
+          d,
+          fields,
+          obj(
+              "id",
+              local,
+              "bodyText",
+              text.substring(0, Math.min(text.length(), 6000)),
+              "at",
+              at.toString()),
+          at);
+      source(d, at);
+      if (d.at("/latestDecision/action").asText().equals("WAIT")) flow.decide(d, at);
+      return;
+    }
+    d.put("documentHold", state);
+    if (!result.classification().isEmpty())
+      d.withObject("/inputs").put("dgReference", result.classification());
+    if (!at.isBefore(deadline(d))) return;
+    if (state.equals("dg-documents")) {
+      flow.decide(d, at);
+      return;
+    }
+    String parent = "m_" + Math.max(message, d.path("packingMessage").asLong());
+    boolean de = str(session(d), "language").equals("de");
+    String reply =
+        switch (state) {
+          case "packing-copy" ->
+              de
+                  ? "Bitte senden Sie eine lesbare Packliste mit Bruttogewicht, Volumen und"
+                      + " Gefahrguteinstufung."
+                  : "Could you send a readable packing list with the total gross weight, volume and"
+                      + " cargo classification?";
+          case "packing-correction" ->
+              de
+                  ? "Bitte senden Sie eine korrigierte Packliste und bestätigen Sie Ziel,"
+                      + " Bruttogewicht und Gesamtvolumen."
+                  : "Could you send a corrected packing list and confirm the destination, gross"
+                      + " weight and total volume? The shipment details do not agree.";
+          case "dg-incomplete" ->
+              de
+                  ? "Bitte senden Sie das Sicherheitsdatenblatt mit Abschnitt 14 und die"
+                      + " Gefahrguterklärung mit übereinstimmender UN-Nummer."
+                  : "Could you send the safety data sheet including Section 14 and the shipper’s"
+                      + " declaration, both showing the same UN classification?";
+          case "dg-unavailable" ->
+              de
+                  ? "Danke für die Unterlagen. Für diese Gefahrgutsendung liegt uns kein"
+                      + " bestätigter Service vor. Wir können dafür kein Angebot machen."
+                  : "Thank you for the documents. We have no confirmed dangerous goods service for"
+                      + " this shipment, so we are unable to offer a quote.";
+          default -> throw new IllegalStateException(state);
+        };
+    if (state.startsWith("dg-")) d.put("dgRequest", result.classification());
+    flow.queueMail(d, state, "OTHER", str(d, "customer"), parent, reply, at);
+    if (state.equals("dg-unavailable"))
+      session(d)
+          .put("phase", "CLOSED")
+          .put("outcomeReason", "No confirmed dangerous goods service");
+  }
+
   public void apply(String action, ObjectNode d, ObjectNode p, JsonNode r, Instant at) {
     if (action.equals("ATTACH")) {
       var m = p.get("meta");
@@ -934,52 +1044,20 @@ public class LiveIntake {
       } catch (java.io.IOException e) {
         throw new IllegalArgumentException(e);
       }
-      if (!d.has("quote") && str(session(d), "phase").equals("SOURCING")) {
+      if (!d.has("quote")
+          && str(session(d), "phase").equals("SOURCING")
+          && (p.path("customerDocs").asBoolean()
+              || d.path("pendingSourceDocs").has(str(m, "id")))) {
+        String text = "";
         try {
-          String text =
+          text =
               ai.aeiou.forwarder.adapters.AttachmentText.extract(
                   str(m, "filename"), r.binaryValue());
-          if (!text.isBlank()) {
-            var source =
-                obj(
-                    "id",
-                    m.get("id"),
-                    "bodyText",
-                    text.substring(0, Math.min(text.length(), 6000)),
-                    "at",
-                    at.toString());
-            if (d.has("pendingSourceDocs"))
-              ((ObjectNode) d.get("pendingSourceDocs")).remove(str(m, "id"));
-            var extra = ShipmentFacts.extract(text);
-            extra.remove("language");
-            for (String key : List.of("grossKg", "volumeCbm")) {
-              String old = str(d.get("inputs"), key), incoming = str(extra, key);
-              if (!old.isEmpty()
-                  && !incoming.isEmpty()
-                  && new BigDecimal(old).compareTo(new BigDecimal(incoming)) != 0) {
-                extra.remove(key);
-                extra.set(
-                    key.equals("grossKg") ? "grossAlternatives" : "volumeAlternatives",
-                    arr(old, incoming));
-              }
-            }
-            if (!extra.isEmpty()) {
-              d.put("requestRevision", d.get("requestRevision").asInt() + 1);
-              flow.facts(d, extra, source, at);
-              source(d, at);
-            }
-          }
-        } catch (Exception e) {
-          flow.store.event(
-              sid(d),
-              "FACTS",
-              "Attachment retained; extraction unavailable",
-              at,
-              session(d).get("version").asInt());
+        } catch (java.io.IOException | RuntimeException ignored) {
+          // An unreadable customer document requires a fresh copy.
         }
+        applyCustomerDocument(d, p, text, at);
       }
-      if (d.path("inputs").has("dgReference")
-          || d.at("/latestDecision/action").asText().equals("WAIT")) flow.decide(d, at);
       flow.store.changed(d, "MESSAGE", "Attachment available", at);
       return;
     }
