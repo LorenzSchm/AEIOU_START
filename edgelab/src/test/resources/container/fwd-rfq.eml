@@ -1,0 +1,26 @@
+From: Dispatch <dispatch@example.com>
+To: quotes@example.com
+Subject: Fwd: RFQ MUC-ORD
+Date: Sat, 21 Nov 2026 10:00:00 +0100
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+--BOUNDARY
+Content-Type: text/plain; charset=UTF-8
+
+Hi team, see the forwarded request below.
+
+--BOUNDARY
+Content-Type: message/rfc822
+Content-Disposition: attachment; filename="rfq.eml"
+
+From: Shipper <shipper@example.com>
+To: dispatch@example.com
+Subject: RFQ MUC-ORD
+Date: Sat, 21 Nov 2026 09:00:00 +0100
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+
+Please quote air freight MUC to ORD: 3 pallets, 412 kg, 2.1 cbm.
+
+--BOUNDARY--

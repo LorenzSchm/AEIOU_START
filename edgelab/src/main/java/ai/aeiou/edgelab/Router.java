@@ -48,10 +48,12 @@ public final class Router {
                 .withPhoto(ai.aeiou.edgelab.photo.PhotoReader.standard())  // ticket 05: photo reader
                 .withVoice(ai.aeiou.edgelab.voice.VoiceReader.standard())  // ticket 02: voice reader
                 .withVideo(ai.aeiou.edgelab.video.VideoReader.standard())  // ticket 06: video reader
-                .withContainer(FormatReader.notYetSupported("container"))  // ticket: container walker
+                .withContainer(new ai.aeiou.edgelab.container.ContainerWalker())  // ticket 07: container walker
                 .withPlainText(new PlainTextReader())
-                // ticket 04: Tika catch-all; ticket 05 wraps it so scanned PDF pages go to the photo reader
-                .withOffice(ai.aeiou.edgelab.photo.ScanAwareOfficeReader.standard());
+                // ticket 04: Tika catch-all; ticket 05 wraps it so scanned PDF pages go to the photo reader;
+                // ticket 07 opens embedded files (pictures in docx/pptx) through the entry point
+                .withOffice(ai.aeiou.edgelab.container.ContainerWalker.openEmbedded(
+                        ai.aeiou.edgelab.photo.ScanAwareOfficeReader.standard()));
     }
 
     /** Every slot set to "not yet supported". */
