@@ -1,0 +1,42 @@
+plugins {
+    id 'java-library'
+    id 'application'
+}
+
+group = 'ai.aeiou'
+version = '0.1.0'
+
+repositories { mavenCentral() }
+
+// Java 8 is first on PATH on Thure's laptop. The toolchain makes Gradle compile
+// and test with Java 21 regardless; run gradlew itself with JAVA_HOME pointing at 21.
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+
+dependencies {
+    // Content-based type detection (magic bytes). Text extraction for office
+    // formats (tika-parsers) arrives with the office reader ticket.
+    api 'org.apache.tika:tika-core:3.2.3'
+    // Tika logs through SLF4J; the CLI and tests don't need its log output.
+    runtimeOnly 'org.slf4j:slf4j-nop:2.0.17'
+
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach { options.compilerArgs.add('-parameters') }
+
+tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+application {
+    mainClass = 'ai.aeiou.edgelab.ReadFile'
+}
+
+// ./gradlew read --args="../start-kit/yellowtail-air-freight-tariff-2026-11.txt"
+tasks.register('read', JavaExec) {
+    group = 'edgelab'
+    description = 'Reads one file and prints the Reading.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ai.aeiou.edgelab.ReadFile'
+    workingDir = projectDir
+}
