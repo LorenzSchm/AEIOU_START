@@ -51,6 +51,13 @@ them. A PDF page with almost no text gets the note `page N looks scanned`, and t
 eml/msg are routed to the container slot; until the container walker exists they only read
 when the office reader is called directly.
 
+## Packing tools
+
+The lightweight `packing-tools` module recognizes a PDF header and recovers complete text
+from explicitly headed packing lists in UTF-8, UTF-16 with BOM, and Windows-1252.
+It shares the plain-text decoder with the main reader. Run `./gradlew :packing-tools:test`
+to test it independently. The module uses only Java 21 at runtime.
+
 ## Backend guard
 
 `BackendGuardTest` compares `../backend/` with `origin/feat/bullshitBranch` (changed,
