@@ -95,6 +95,18 @@ class VoiceReaderTest {
         assertFalse(lower.contains("offer"), text);
     }
 
+    /** Phone recordings: m4a with the index at the end of the file (ticket 02b). One Whisper run. */
+    @Test
+    void m4aVoiceMessageWithItsIndexAtTheEndIsTranscribed() {
+        assumeTrue(modelProblem == null, () -> modelProblem);
+        Reading r = READER.read("voice-message.m4a", M4aFixtures.get(M4aFixtures.MOOV_AT_END));
+
+        assertEquals(Reading.Status.OK, r.status(), () -> "notes: " + r.notes());
+        assertTrue(r.detectedType().startsWith("audio/"), r.detectedType());
+        assertTrue(r.text().contains("340"), r.text());
+        assertTrue(r.text().toLowerCase(Locale.ROOT).contains("munich"), r.text());
+    }
+
     @Test
     void modelIsDownloadedOnceThenReusedFromTheCache() throws Exception {
         assumeTrue(modelProblem == null, () -> modelProblem);
