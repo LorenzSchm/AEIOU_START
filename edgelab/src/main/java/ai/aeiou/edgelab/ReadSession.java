@@ -89,6 +89,30 @@ public final class ReadSession {
         return System.nanoTime() - deadline >= 0;
     }
 
+    /** Note readers add when they stopped early because the budget ran out. */
+    public static final String STOPPED_NOTE = "stopped: time budget used up";
+
+    /**
+     * True when the read on this thread should stop before its next costly step (a gateway
+     * call, a Whisper run, the next page or frame): the budget ran out, the caller already
+     * gave up, or the thread was interrupted. Always false outside a session and not interrupted.
+     * Does not clear the interrupt flag.
+     */
+    public static boolean stopRequested() {
+        if (Thread.currentThread().isInterrupted()) return true;
+        ReadSession s = CURRENT.get();
+        return s != null && (s.expired() || s.isFrozen());
+    }
+
+    private synchronized boolean isFrozen() {
+        return frozen;
+    }
+
+    /** The size limit of the reader that opened this session; parts inside are held to it too. */
+    public long maxBytes() {
+        return reader.maxBytes();
+    }
+
     /** Takes one of the {@link #MAX_FILES} part slots; false when they are used up. */
     public boolean takeFileSlot() {
         if (files >= MAX_FILES) return false;

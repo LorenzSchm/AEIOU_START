@@ -16,8 +16,8 @@ public final class Readers {
     private Readers() {}
 
     public static String suggest(String extension, String contentType) {
-        String ext = extension == null ? "" : extension.toLowerCase();
-        String ct = contentType == null ? "" : contentType.toLowerCase();
+        String ext = extension == null ? "" : extension.toLowerCase(java.util.Locale.ROOT);
+        String ct = contentType == null ? "" : contentType.toLowerCase(java.util.Locale.ROOT);
         if (ext.equals("webm")) return ct.startsWith("audio/") ? "voice reader" : "video reader";
         if (IMAGE.contains(ext) || ct.startsWith("image/")) return "photo reader";
         if (AUDIO.contains(ext) || ct.startsWith("audio/")) return "voice reader";

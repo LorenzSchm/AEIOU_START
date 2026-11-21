@@ -51,7 +51,8 @@ public final class AudioDecoder {
             g.setAudioChannels(1);
             g.setSampleMode(FrameGrabber.SampleMode.FLOAT);
             g.start();
-            if (g.getAudioChannels() <= 0) {
+            // Not getAudioChannels(): it echoes the 1 channel requested above even when there is no audio.
+            if (!g.hasAudio()) {
                 return new Result(null, false, "no audio track found");
             }
             Frame f;

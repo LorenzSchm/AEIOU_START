@@ -77,11 +77,11 @@ public final class HttpGateway implements Gateway {
                 + "\"\r\nContent-Type: " + ("mp3".equals(fmt) ? "audio/mpeg" : "audio/" + fmt) + "\r\n\r\n");
         out.writeBytes(audio);
         writeAscii(out, "\r\n--" + boundary + "--\r\n");
-        HttpRequest req = request("/audio/transcriptions")
+        byte[] multipart = out.toByteArray();
+        return send(() -> request("/audio/transcriptions")
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray()))
-                .build();
-        return send(req, model, json -> {
+                .POST(HttpRequest.BodyPublishers.ofByteArray(multipart))
+                .build(), model, json -> {
             Object text = Json.path(json, "text");
             return text instanceof String t ? new Answer(t.strip(), null, model, null) : null;
         });
@@ -102,11 +102,10 @@ public final class HttpGateway implements Gateway {
     }
 
     private Answer chat(String body, String model, boolean selfRated) {
-        HttpRequest req = request("/chat/completions")
+        return send(() -> request("/chat/completions")
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                .build();
-        return send(req, model, json -> {
+                .build(), model, json -> {
             String content = contentOf(Json.path(json, "choices", 0, "message", "content"));
             if (content == null) return null;
             return selfRated ? splitSelfRating(content, model) : new Answer(content.strip(), null, model, null);
@@ -148,8 +147,17 @@ public final class HttpGateway implements Gateway {
 
     private interface Reader { Answer read(Object json); }
 
-    private Answer send(HttpRequest req, String model, Reader reader) {
+    /** {@code request} is built inside the try: a bad base URL or key must come back as an Answer, not throw. */
+    private Answer send(java.util.function.Supplier<HttpRequest> request, String model, Reader reader) {
         if (!settings.hasKey()) return Answer.failed(model, GatewaySettings.KEY_NAME + " not set");
+        HttpRequest req;
+        try {
+            req = request.get();
+        } catch (RuntimeException e) {
+            // Never the message: it can quote the header value, i.e. the key.
+            return Answer.failed(model, "gateway request could not be built (check the base URL and "
+                    + GatewaySettings.KEY_NAME + "): " + e.getClass().getSimpleName());
+        }
         HttpResponse<String> resp;
         try {
             resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));

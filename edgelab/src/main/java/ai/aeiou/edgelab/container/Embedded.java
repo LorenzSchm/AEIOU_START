@@ -17,6 +17,8 @@ import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.helpers.DefaultHandler;
 
+import ai.aeiou.edgelab.ReadSession;
+
 /**
  * Lists the files directly inside one file, with their bytes: zip/tar/gz/7z/rar entries,
  * mail attachments (eml, msg, also forwarded mails), pictures and objects embedded in
@@ -36,8 +38,28 @@ final class Embedded {
 
     private Embedded() {}
 
+    /**
+     * Caps on what one {@link #collect} keeps in memory, so a zip bomb (thousands of entries,
+     * or a few that inflate to gigabytes) cannot exhaust the heap before the walker's own
+     * limits apply. The walker reads at most {@link ReadSession#MAX_FILES} parts anyway; the
+     * entry cap is a little higher because small icons are dropped later without using a slot.
+     */
+    record Limits(int maxEntries, long maxTotalBytes) {
+        static final Limits DEFAULT = new Limits(5 * ReadSession.MAX_FILES, 100L * 1024 * 1024);
+    }
+
+    /** The children kept, and notes on what was skipped while collecting (empty when nothing was). */
+    record Collected(List<Child> children, List<String> notes) {
+        boolean incomplete() { return !notes.isEmpty(); }
+    }
+
     /** Throws on broken or password-protected files (Tika's exceptions). */
-    static List<Child> collect(String filename, byte[] bytes, String detectedType, long maxBytes)
+    static Collected collect(String filename, byte[] bytes, String detectedType, long maxBytes)
+            throws Exception {
+        return collect(filename, bytes, detectedType, maxBytes, Limits.DEFAULT);
+    }
+
+    static Collected collect(String filename, byte[] bytes, String detectedType, long maxBytes, Limits limits)
             throws Exception {
         Metadata metadata = new Metadata();
         if (filename != null && !filename.isBlank()) {
@@ -55,28 +77,40 @@ final class Embedded {
         pdf.setOcrStrategy(PDFParserConfig.OCR_STRATEGY.NO_OCR);
         pdf.setExtractInlineImages(false);
         context.set(PDFParserConfig.class, pdf);
-        context.set(EmbeddedDocumentExtractor.class, new Collector(children, maxBytes));
+        Collector collector = new Collector(children, maxBytes, limits);
+        context.set(EmbeddedDocumentExtractor.class, collector);
         try (TikaInputStream in = TikaInputStream.get(bytes)) {
             new AutoDetectParser().parse(in, new DefaultHandler(), metadata, context);
         }
-        return children;
+        return new Collected(children, collector.notes());
     }
 
-    /** Keeps each embedded file's bytes instead of parsing it. */
+    /** Keeps each embedded file's bytes instead of parsing it, within {@link Limits} and the time budget. */
     private static final class Collector implements EmbeddedDocumentExtractor {
         private final List<Child> children;
         private final long maxBytes;
+        private final Limits limits;
+        private long totalBytes;
+        private int overCount;
+        private int overTotal;
+        private int late;
 
-        Collector(List<Child> children, long maxBytes) {
+        Collector(List<Child> children, long maxBytes, Limits limits) {
             this.children = children;
             this.maxBytes = maxBytes;
+            this.limits = limits;
         }
 
         @Override
         public boolean shouldParseEmbedded(Metadata metadata) {
             String name = metadata.get(TikaCoreProperties.RESOURCE_NAME_KEY);
             // The preview picture Office saves of the first page is not content.
-            return name == null || !name.contains("docProps/thumbnail");
+            if (name != null && name.contains("docProps/thumbnail")) return false;
+            // Past a limit nothing more is read: Tika skips the entry without handing us its bytes.
+            if (ReadSession.stopRequested()) { late++; return false; }
+            if (children.size() >= limits.maxEntries()) { overCount++; return false; }
+            if (totalBytes >= limits.maxTotalBytes()) { overTotal++; return false; }
+            return true;
         }
 
         @Override
@@ -87,15 +121,28 @@ final class Embedded {
             boolean bodyText = metadata.get(TikaCoreProperties.RESOURCE_NAME_KEY) == null
                     && metadata.get("Content-Disposition") == null
                     && type != null && type.toLowerCase(Locale.ROOT).startsWith("text/");
-            byte[] data = stream.readNBytes((int) Math.min(Integer.MAX_VALUE - 8, maxBytes + 1));
+            long room = limits.maxTotalBytes() - totalBytes;
+            long cap = Math.min(maxBytes, room);
+            byte[] data = stream.readNBytes((int) Math.min(Integer.MAX_VALUE - 8, cap + 1));
             if (data.length > maxBytes) {
-                long size = data.length;
-                byte[] buf = new byte[8192];
-                for (int n; (n = stream.read(buf)) > 0; ) size += n;
-                children.add(new Child(name, type, null, size, bodyText));
+                // Not drained to measure it: a bomb entry would inflate for nothing. Size is "more than this".
+                children.add(new Child(name, type, null, data.length, bodyText));
+            } else if (data.length > room) {
+                overTotal++;
             } else {
+                totalBytes += data.length;
                 children.add(new Child(name, type, data, data.length, bodyText));
             }
+        }
+
+        List<String> notes() {
+            List<String> notes = new ArrayList<>();
+            if (overCount > 0) notes.add(overCount + " embedded file(s) not read, limit of "
+                    + limits.maxEntries() + " files per container reached");
+            if (overTotal > 0) notes.add(overTotal + " embedded file(s) not read, container content over "
+                    + limits.maxTotalBytes() + " bytes in total");
+            if (late > 0) notes.add(late + " embedded file(s) not read, time budget used up");
+            return notes;
         }
 
         private static String nameOf(Metadata metadata, String type, int index) {

@@ -37,7 +37,7 @@ public record Snapshot(Instant now, List<BoardRow> board, List<MailRow> mail, Li
         public String extension() {
             if (filename == null) return "";
             int dot = filename.lastIndexOf('.');
-            return dot < 0 || dot == filename.length() - 1 ? "" : filename.substring(dot + 1).toLowerCase();
+            return dot < 0 || dot == filename.length() - 1 ? "" : filename.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
         }
     }
 

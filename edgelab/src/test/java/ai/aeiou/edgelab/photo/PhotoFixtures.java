@@ -148,6 +148,14 @@ public final class PhotoFixtures {
         }
     }
 
+    /** {@code pages} scanned pages, no text layer. */
+    static byte[] scannedPdf(int pages) throws IOException {
+        try (PDDocument doc = new PDDocument()) {
+            for (int i = 0; i < pages; i++) addScannedPage(doc);
+            return save(doc);
+        }
+    }
+
     /** Page 1 has real text, page 2 is a scan. */
     static byte[] textThenScannedPdf() throws IOException {
         return textPdf(true);

@@ -2,10 +2,10 @@ package ai.aeiou.edgelab.container;
 
 import java.util.List;
 
-import ai.aeiou.edgelab.EdgeReader;
 import ai.aeiou.edgelab.FormatReader;
 import ai.aeiou.edgelab.ReadSession;
 import ai.aeiou.edgelab.Reading;
+import ai.aeiou.edgelab.Router;
 
 /**
  * Wraps the office slot: files that hold other files (pictures in a pptx or docx, a sheet
@@ -22,14 +22,21 @@ final class EmbeddedFiles implements FormatReader {
 
     @Override
     public Reading read(String filename, byte[] bytes, String detectedType) throws Exception {
+        ReadSession session = ReadSession.current();
+        // Called directly, outside the entry point: go through it once (before reading anything, so
+        // the office slot, and any gateway call in it, runs only once), with this reader in the office slot.
+        if (session == null) {
+            return ContainerWalker.outsideSession(Router.standard().withOffice(this), filename, bytes);
+        }
         Reading base = office.read(filename, bytes, detectedType);
         boolean hasEmbedded = base.notes().stream().anyMatch(n -> n.contains("embedded file(s) not opened"));
         if (!hasEmbedded) return base;
-        if (ReadSession.current() == null) return new EdgeReader().read(filename, bytes);
 
         List<Embedded.Child> children;
         try {
-            children = Embedded.collect(filename, bytes, detectedType, EdgeReader.DEFAULT_MAX_BYTES);
+            Embedded.Collected collected = Embedded.collect(filename, bytes, detectedType, session.maxBytes());
+            children = collected.children();
+            ContainerWalker.noteSkipped(session, collected);
         } catch (Exception | LinkageError e) {
             return base; // the office text is still good; the embedded files stay unopened
         }

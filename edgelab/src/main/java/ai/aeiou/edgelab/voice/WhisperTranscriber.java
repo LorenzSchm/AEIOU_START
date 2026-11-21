@@ -43,6 +43,10 @@ public final class WhisperTranscriber implements LocalTranscriber {
     /** Runs are serialised; each gets its own whisper.cpp state. */
     @Override
     public synchronized List<Segment> transcribe(float[] samples) throws IOException, InterruptedException {
+        // A read that waited for the lock may have run out of time meanwhile: don't hold it for nothing.
+        if (ai.aeiou.edgelab.ReadSession.stopRequested()) {
+            throw new InterruptedException(ai.aeiou.edgelab.ReadSession.STOPPED_NOTE);
+        }
         load();
         WhisperFullParams p = new WhisperFullParams(WhisperSamplingStrategy.BEAN_SEARCH);
         p.language = "auto";
