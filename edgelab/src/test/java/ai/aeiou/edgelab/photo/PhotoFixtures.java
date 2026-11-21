@@ -66,7 +66,7 @@ public final class PhotoFixtures {
     }
 
     /** A skewed, blurred "phone photo" of the RFQ: tilted 7 degrees on a grey desk, soft focus. */
-    static byte[] phonePhotoJpeg() {
+    public static byte[] phonePhotoJpeg() {
         BufferedImage page = rfqPage(1600, 1100);
         BufferedImage photo = new BufferedImage(2000, 1500, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = photo.createGraphics();

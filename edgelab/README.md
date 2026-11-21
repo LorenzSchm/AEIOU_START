@@ -177,3 +177,26 @@ gateway vision model (`gpt-4o-mini`, low detail) with the fixed prompt
 ./gradlew -q read --args="../start-kit/danube-wings-cargo-tariff-2026-11-p1.jpg"   # needs TEAM_API_KEY
 ./gradlew test -PrealGateway --tests '*PhotoRealGatewayTest'                       # real call, costs points
 ```
+
+## Video reader (`ai.aeiou.edgelab.video`, ticket 06)
+
+`video/*` (mp4, mov, webm, avi, mkv) is split with the bundled ffmpeg (JavaCV), nothing to install:
+
+- **Sound:** the audio track is decoded to 16 kHz mono and handed to the voice reader as a wav
+  (local Whisper, gateway fallback as usual). No sound track: note `video has no sound track`.
+- **Frames:** at most 5 evenly spread stills. Near-duplicates (a slide held still) and blank
+  frames are skipped before the gateway, so a still video costs one photo call. Phone rotation
+  flags are applied. Same text on several frames is written once.
+
+The text has two labelled sections, `What is shown:` (frame text) and `What is said:` (speech),
+and the Reading has two parts, `video frames` and `sound track`. If one half failed (gateway
+error, broken sound) the other half is kept and the status is `partial`. A broken video is
+`unreadable` with a note.
+
+```bash
+./gradlew -q videoFixtures                                   # writes build/video-fixtures/*.mp4
+./gradlew -q read --args="build/video-fixtures/rfq-video.mp4"   # one frame call on the gateway
+```
+
+Test videos are generated in memory (`VideoFixtures`: the skewed RFQ photo plus the
+Windows-voice RFQ, mpeg4 + aac in mp4, and a silent copy); tests use a fake gateway.

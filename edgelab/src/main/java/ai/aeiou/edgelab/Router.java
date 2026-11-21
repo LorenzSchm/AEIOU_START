@@ -47,7 +47,7 @@ public final class Router {
         return empty()
                 .withPhoto(ai.aeiou.edgelab.photo.PhotoReader.standard())  // ticket 05: photo reader
                 .withVoice(ai.aeiou.edgelab.voice.VoiceReader.standard())  // ticket 02: voice reader
-                .withVideo(FormatReader.notYetSupported("video"))          // ticket: video reader
+                .withVideo(ai.aeiou.edgelab.video.VideoReader.standard())  // ticket 06: video reader
                 .withContainer(FormatReader.notYetSupported("container"))  // ticket: container walker
                 .withPlainText(new PlainTextReader())
                 // ticket 04: Tika catch-all; ticket 05 wraps it so scanned PDF pages go to the photo reader
