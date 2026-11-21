@@ -73,6 +73,13 @@ class WaveWorkerTest {
         .thenAnswer(
             call -> {
               Map<String, Object> payload = call.getArgument(0);
+              var schema = mapper.valueToTree(payload.get("response_format")).path("json_schema");
+              if ("quote_check".equals(schema.path("name").asText())) {
+                assertEquals(24, payload.get("max_completion_tokens"));
+                assertEquals(mapper.createArrayNode().add("contradiction"),
+                    schema.path("schema").path("required"));
+                return gatewayResponse("{\"contradiction\":false}");
+              }
               boolean pickup = payload.toString().contains("60311");
               var fields =
                   mapper
@@ -86,15 +93,7 @@ class WaveWorkerTest {
                       .put("needs_review", false);
               if (pickup) fields.put("pickup_zone", "60");
               else fields.putNull("pickup_zone");
-              return mapper.valueToTree(
-                  Map.of(
-                      "choices",
-                      List.of(
-                          Map.of(
-                              "finish_reason",
-                              "stop",
-                              "message",
-                              Map.of("content", fields.toString())))));
+              return gatewayResponse(fields.toString());
             });
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(), true));
     when(upstream.post(eq("/v1/mailbox/messages"), anyMap()))
@@ -106,6 +105,11 @@ class WaveWorkerTest {
               outbound.add(receipt);
               return receipt;
             });
+  }
+
+  private JsonNode gatewayResponse(String content) {
+    return mapper.valueToTree(Map.of("choices", List.of(
+        Map.of("finish_reason", "stop", "message", Map.of("content", content)))));
   }
 
   void receive(long id, String from, String subject, String body, Long parent) {
@@ -225,6 +229,165 @@ class WaveWorkerTest {
         MailParser.pickupPostcode("Reference 51447. Gross weight 51447 kg.", "51").isEmpty());
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+    "220.11|31|Estimated transit time is 31 hours from actual pickup to airport delivery, excluding any wait before collection.",
+    "268.45|32|Estimated transit time from actual pickup to airport delivery is 32 hours, excluding any wait before collection.",
+    "499.56|11|Estimated transit time from actual pickup to airport delivery, excluding any wait before collection: 11 hours."
+  })
+  void distinguishesCollectionWaitFromAnExclusionInThePrice(String euros, int hours, String timing) {
+    String body = "Our all-in rate for collection and delivery to CGN is " + euros + " EUR.\n" + timing;
+    var bid = MailParser.bid(body, true).orElseThrow();
+    assertEquals(euros, bid.euros().toPlainString());
+    assertEquals(hours / 24.0, bid.days());
+    assertTrue(MailParser.bid(body + " The rate is excluding fuel.", true).isEmpty());
+  }
+
+  @Test
+  void rechecksRejectedTruckBidFromAnOpenThreadOnRestart() throws Exception {
+    receive(7, "buyer@example.invalid", "RFQ CGN to SGN",
+        "Fastest air freight for 100 kg and 0.2 cbm. Pickup from postcode 53088.", null);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 2,
+        new java.math.BigDecimal("50.00"), new java.math.BigDecimal("100"), "portal", "TEST",
+        START.plusSeconds(900))), true));
+    worker.work();
+    var truck = outbound.stream().filter(m -> m.get("subject").toString().contains("pickup from postcode 53088"))
+        .findFirst().orElseThrow();
+    receive(2001, truck.get("to").toString(), "Truck reply", "All-in EUR 499.56. Estimated transit time"
+        + " from actual pickup to airport delivery, excluding any wait before collection: 11 hours.",
+        Ledger.id(truck.get("id")));
+    ledger.jdbc().update("UPDATE tender SET euros=NULL,days=NULL,issue='Unreadable' WHERE reply_id=2001");
+    ledger.jdbc().update("UPDATE mail SET stage='bid unreadable' WHERE id=2001");
+    restart();
+    clock.current = START.plusSeconds(80);
+    worker.recheckOpenExtractions();
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals("bid received", ledger.mail(2001).get("stage"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 549.56 all in"));
+    assertTrue(outbound.getLast().get("body").toString().contains("2 days and 11 hours"));
+  }
+
+  @Test
+  void quotesCityPickupOnlyAfterTheCarrierConfirmsCitywideCoverage() {
+    receive(7, "buyer@example.invalid", "RFQ to RUH", "Fastest air freight for 100 kg and 0.2 cbm."
+        + " Please arrange pickup from our warehouse.\n\nRegards from Regensburg", null);
+    worker.work();
+    var question = outbound.getFirst();
+    assertTrue(question.get("body").toString().contains("full five-digit pickup postcode"));
+    receive(2001, "buyer@example.invalid", "Re: RFQ", "The pickup location is Augsburg, Germany."
+        + "\n\nRegards from Regensburg", Ledger.id(question.get("id")));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 1,
+        new java.math.BigDecimal("50.00"), new java.math.BigDecimal("100"), "portal", "TEST",
+        START.plusSeconds(900))), true));
+    worker.work();
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("86", shipment.pickupZone());
+    assertEquals("MUC", shipment.origin());
+    var trucks = outbound.stream()
+        .filter(m -> m.get("subject").toString().contains("pickup from Augsburg to MUC")).toList();
+    assertEquals(2, trucks.size());
+    assertTrue(trucks.getFirst().get("body").toString().contains("Valid for all of Augsburg"));
+    assertEquals(1, outbound.stream().filter(m -> "buyer@example.invalid".equals(m.get("to"))).count());
+    long replyId = 2002;
+    for (var truck : trucks) {
+      receive(replyId++, truck.get("to").toString(), "Re: Truck quote",
+          "All-in EUR 5.00. Transit from pickup to delivery: 2 hours. Only valid for postcode 86150.",
+          Ledger.id(truck.get("id")));
+    }
+    clock.current = START.plusSeconds(80);
+    worker.work();
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals("sent", ledger.delivery("airport-delivery:7"));
+    receive(replyId, trucks.getFirst().get("to").toString(), "Re: Truck quote",
+        "All-in EUR 25.00. Transit time from pickup to delivery: 2 hours. Valid for all of Augsburg.",
+        Ledger.id(trucks.getFirst().get("id")));
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 75.00 all in"));
+    assertTrue(outbound.getLast().get("body").toString().contains("collection from Augsburg"));
+  }
+
+  @Test
+  void quotesAirportDeliveryOnlyWithExplicitCustomerApproval() throws Exception {
+    receive(7, "buyer@example.invalid", "RFQ to RUH", "Fastest air freight for 100 kg and 0.2 cbm."
+        + " Please arrange pickup from our warehouse.", null);
+    worker.work();
+    var question = outbound.getFirst();
+    receive(2001, "buyer@example.invalid", "Re: RFQ", "Pickup is in Augsburg, Germany.",
+        Ledger.id(question.get("id")));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 1,
+        new java.math.BigDecimal("50.00"), new java.math.BigDecimal("100"), "portal", "TEST",
+        START.plusSeconds(900))), true));
+    worker.work();
+    clock.current = START.plusSeconds(80);
+    worker.work();
+    var offer = outbound.getLast();
+    assertTrue(offer.get("body").toString().contains("We will deliver to MUC ourselves."));
+    long parent = Ledger.id(offer.get("id"));
+    receive(2002, "unrelated@example.invalid", "Re: RFQ", "We will deliver to MUC ourselves.", parent);
+    receive(2003, "buyer@example.invalid", "Re: RFQ", "We will deliver to MUC ourselves if needed.", parent);
+    worker.work();
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals("86", ledger.read(ledger.mail(7).get("fields"), Shipment.class).pickupZone());
+    restart();
+    receive(2004, "buyer@example.invalid", "Re: RFQ", "We will deliver to MUC ourselves.", parent);
+    worker.work();
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("MUC", shipment.origin());
+    assertNull(shipment.pickupZone());
+    assertEquals("sent", ledger.delivery("quote:7"));
+    String quote = outbound.getLast().get("body").toString();
+    assertTrue(quote.contains("EUR 50.00 all in"));
+    assertTrue(quote.contains("airport to airport"));
+    verify(upstream, times(1)).rates(any(), any());
+  }
+
+  @Test
+  void doesNotRepeatTheSameCustomerQuestionIndefinitely() {
+    request("Please arrange pickup from our warehouse.");
+    worker.work();
+    receive(2001, "buyer@hackloop.mail", "Re: RFQ", "I’m still checking the address.",
+        Ledger.id(outbound.getLast().get("id")));
+    worker.work();
+    assertEquals(2, outbound.size());
+    receive(2002, "buyer@hackloop.mail", "Re: RFQ", "I’m still checking the address.",
+        Ledger.id(outbound.getLast().get("id")));
+    worker.work();
+    worker.work();
+    assertEquals(2, outbound.size());
+    assertEquals("waiting for customer", ledger.mail(7).get("stage"));
+  }
+
+  @Test
+  void triesOtherTruckersWhenTheFirstBidsOnlyGiveCollectionWindows() throws Exception {
+    receive(7, "buyer@example.invalid", "RFQ CGN to DFW",
+        "Please quote the fastest service for 100 kg and 0.2 cbm. Pickup from postcode 51804.", null);
+    worker.work();
+    var invitations = outbound.stream()
+        .filter(m -> m.get("subject").toString().contains("pickup from postcode 51804")).toList();
+    assertEquals(2, invitations.size());
+    long message = 2000;
+    for (var invitation : invitations) {
+      receive(message++, invitation.get("to").toString(), "Truck reply",
+          "Our fixed all-in price is EUR 42.00. We can collect within 13 hours.",
+          Ledger.id(invitation.get("id")));
+    }
+    clock.current = START.plusSeconds(80);
+    worker.work();
+    assertEquals(2, outbound.stream().filter(m -> m.containsKey("in_reply_to")).count());
+    restart();
+    clock.current = START.plusSeconds(116);
+    worker.work();
+    worker.work();
+    var contacted = outbound.stream()
+        .filter(m -> m.get("subject").toString().contains("pickup from postcode 51804"))
+        .map(m -> m.get("to")).toList();
+    assertEquals(4, contacted.size());
+    assertEquals(4, new HashSet<>(contacted).size());
+    assertNull(ledger.delivery("quote:7"));
+  }
+
   @Test
   void asksImmediatelyAndRequotesTruckPickupFromTheConfirmedPostcode() throws Exception {
     receive(7, "buyer@hackloop.mail", "RE: FW: Old RFQ to HKG",
@@ -305,6 +468,9 @@ class WaveWorkerTest {
         Ledger.id(followUp.get("id")));
     worker.work();
     assertEquals(7, outbound.size());
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
     verify(upstream, times(1)).parseRfq(anyMap());
   }
 
@@ -409,7 +575,7 @@ class WaveWorkerTest {
     assertTrue(outbound.getLast().get("body").toString().contains("3 days"));
     assertEquals("sent", ledger.delivery("quote:7"));
     assertEquals(10, ledger.cursor());
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @Test
@@ -470,6 +636,7 @@ class WaveWorkerTest {
     assertEquals("uncertain", ledger.delivery("quote:7"));
     assertEquals("review", ledger.mail(7).get("stage"));
     verify(upstream, times(6)).post(eq("/v1/mailbox/messages"), anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @Test
@@ -502,6 +669,14 @@ class WaveWorkerTest {
         MailParser.bid("Pickup all-in EUR 25, valid for 16 hours.", true).orElseThrow().days());
     assertNull(
         MailParser.bid("All-in EUR 25. Please reply in 12 hours.", true).orElseThrow().days());
+    var pickupWindow = MailParser.bid("Our all-in rate is 347.09 EUR. Estimated time from shipment"
+        + " readiness to collection is 13 hours. This does not include road transit, so we can’t"
+        + " confirm the total time to delivery at CGN airport.", true).orElseThrow();
+    assertEquals("347.09", pickupWindow.euros().toPlainString());
+    assertNull(pickupWindow.days());
+    assertEquals(15 / 24.0, MailParser.bid("All-in rate EUR 169.92, with an estimated"
+        + " collection-to-delivery time of 15 hours.", true).orElseThrow().days());
+    assertTrue(MailParser.bid("The estimated rate is EUR 150, transit 2 hours.", true).isEmpty());
     assertTrue(MailParser.bid("EUR 25", false).isEmpty());
     assertEquals(158, catalog.size());
   }
@@ -621,15 +796,35 @@ class WaveWorkerTest {
   }
 
   @Test
-  void manualPricingAndSendingReuseTheOriginalExtraction() throws Exception {
+  void manualPricingIsLocalAndSendingChecksTheShipmentOnce() throws Exception {
     request("");
     var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
     worker.price(7, s, null);
     restart();
     var draft = worker.price(7, s, null);
-    worker.sendQuote(7, draft.revision());
     verify(upstream, never()).parseRfq(anyMap());
+    worker.sendQuote(7, draft.revision());
+    verify(upstream, times(1)).parseRfq(anyMap());
     assertEquals("sent", ledger.delivery("quote:7"));
+  }
+
+  @Test
+  void contradictoryGatewayCheckRequiresOperatorReviewAndIsReusedAfterRestart() throws Exception {
+    request("");
+    when(upstream.parseRfq(anyMap())).thenReturn(gatewayResponse("{\"contradiction\":true}"));
+    worker.work();
+    verify(upstream, never()).parseRfq(anyMap());
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertEquals("review", ledger.mail(7).get("stage"));
+    assertNull(ledger.delivery("quote:7"));
+
+    restart();
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    var draft = worker.price(7, s, null);
+    worker.sendQuote(7, draft.revision());
+    assertEquals("sent", ledger.delivery("quote:7"));
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @org.junit.jupiter.params.ParameterizedTest(name = "Recorded wave {0}")
@@ -670,6 +865,20 @@ class WaveWorkerTest {
             Ledger.id(invite.get("id")));
       }
       worker.work();
+      if (round == 2) {
+        assertNull(ledger.delivery("quote:7"));
+        var transitQuestions = outbound.stream()
+            .filter(m -> m.get("body").toString().contains("Thanks for the pickup quote"))
+            .toList();
+        assertEquals(2, transitQuestions.size());
+        for (var question : transitQuestions) {
+          String address = question.get("to").toString();
+          String euros = address.startsWith("hansekogge") ? "245.02" : "266.03";
+          receive(replyId++, address, "Re: Truck transit", "All-in EUR " + euros
+              + ". Estimated transit time from pickup to delivery: 23 hours.",
+              Ledger.id(question.get("id")));
+        }
+      }
     } else {
       assertEquals(1, outbound.size());
     }
@@ -678,9 +887,11 @@ class WaveWorkerTest {
     assertEquals(
         1, outbound.stream().filter(m -> "buyer@example.invalid".equals(m.get("to"))).count());
     var quote = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
-    assertEquals(0, fixture.get("euros").decimalValue().compareTo(quote.offer().totalEur()));
+    var expectedTotal = round == 9 ? new java.math.BigDecimal("5202.20") : fixture.get("euros").decimalValue();
+    assertEquals(0, expectedTotal.compareTo(quote.offer().totalEur()));
     if (round == 9) {
-      assertEquals("429.80", quote.pickupEur().toPlainString());
+      assertEquals("361.24", quote.pickupEur().toPlainString());
+      assertTrue(quote.body().contains("confirm pickup timing"));
       assertEquals("1952", quote.offer().billedKg().toPlainString());
       assertTrue(quote.body().contains("36627"));
       var bookings = new PortalBookings(ledger, upstream, clock, true);
@@ -706,7 +917,7 @@ class WaveWorkerTest {
       verify(upstream, times(1))
           .post("/v1/portal/bookings", Map.of("rate_id", "TEST-R9-0", "team_reference", "AEIOU-7"));
     }
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -846,7 +1057,7 @@ class WaveWorkerTest {
     assertEquals("486", shipment.weightKg().toPlainString());
     assertEquals("2.62", shipment.volumeCbm().toPlainString());
     assertNull(shipment.pickupZone());
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -958,7 +1169,7 @@ class WaveWorkerTest {
     assertEquals("sent", ledger.delivery("quote:7"));
     assertEquals(1, outbound.size());
     assertTrue(outbound.getFirst().get("body").toString().contains("EUR 50.00"));
-    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, times(1)).parseRfq(anyMap());
   }
 
   @Test

@@ -195,7 +195,12 @@ public final class MailParser {
   }
 
   public static Parsed request(
-      String subject, String body, boolean attachments, Catalog catalog, String confirmedPostcode) {
+      String subject, String body, boolean attachments, Catalog catalog, String confirmedPickupZone) {
+    return request(subject, body, attachments, catalog, confirmedPickupZone, null);
+  }
+
+  public static Parsed request(String subject, String body, boolean attachments, Catalog catalog,
+      String confirmedPickupZone, String customerDeliveryAirport) {
     subject = currentSubject(subject, body);
     body = authoredText(body);
     String text = subject + "\n" + body;
@@ -213,8 +218,12 @@ public final class MailParser {
                 "\\b(?:zone|PLZ|postal code|post ?code|zip(?:"
                     + " code)?)\\s*[:#-]?\\s*(\\d{2})(?:\\d{3})?\\b"));
     if (pickup) zones.addAll(captures(text, "\\b(\\d{2})\\d{3}\\b"));
-    String zone = confirmedPostcode == null ? only(zones) : confirmedPostcode.substring(0, 2);
+    String zone = confirmedPickupZone == null ? only(zones) : confirmedPickupZone;
     String origin = origins.isEmpty() ? catalog.zones.get(zone) : only(origins);
+    if (customerDeliveryAirport != null) {
+      origin = customerDeliveryAirport;
+      zone = null;
+    }
     boolean fast = has(text, "fastest|quickest|shortest|schnellst|prioriti[sz]e speed");
     boolean cheap =
         has(
@@ -267,9 +276,9 @@ public final class MailParser {
         text,
         "dangerous|hazardous|lithium|temperature.control|dry ice|gefahrgut|perishable|refrigerat"))
       issue = "Special handling needs a confirmed price.";
-    else if (selfDelivery && (pickup || zone != null))
+    else if (customerDeliveryAirport == null && selfDelivery && (pickup || zone != null))
       issue = "Confirm whether collection or customer delivery to the airport is required.";
-    else if ((pickup || !zones.isEmpty()) && zone == null)
+    else if (customerDeliveryAirport == null && (pickup || !zones.isEmpty()) && zone == null)
       issue = "Pickup requested. Confirm the pickup postcode or zone.";
     else if (incompleteLots) issue = "Confirm gross weight and volume for every lot.";
     else if (lots.size() < 2
@@ -287,16 +296,68 @@ public final class MailParser {
 
   public record Bid(BigDecimal euros, Double days) {}
 
+  private static final Pattern EXCLUDES_COLLECTION_WAIT =
+      pattern("(?:\\h*[,;]\\h*)?\\bexcluding\\h+(?:(?:the|any)\\h+)?wait(?:ing\\h+time)?"
+          + "\\h+(?:before|until)\\h+(?:pickup|collection)\\b");
+
+  public static boolean confirmsPickupArea(String body, String area) {
+    String text = EXCLUDES_COLLECTION_WAIT.matcher(authoredText(body)).replaceAll("");
+    if (!has(text, "\\ball[- ]in\\b")) return false;
+    if (has(text, "\\b(?:except|excluding|only|subject to|depending on|conditional|"
+        + "(?:postcode|address) surcharge (?:applies|may apply))\\b")) return false;
+    String town = Pattern.quote(area);
+    return has(text, "(?:^|[.!?]\\h+|\\R)\\h*(?:(?:this|the|our)\\h+"
+        + "(?:(?:all-in|fixed|firm)\\h+)?(?:rate|price|quote)(?:\\h+and\\h+transit(?:\\h+time)?)?\\h+)?"
+        + "(?:(?:is\\h+)?valid\\h+(?:for\\h+all\\h+of|throughout)|"
+        + "(?:apply|applies|covers)\\h+(?:to\\h+)?"
+        + "(?:all\\h+addresses\\h+in|all\\h+of|anywhere\\h+in|throughout))\\h+" + town
+        + "(?:,\\h*(?:Germany|Deutschland))?\\h*(?:[.!]|$|\\R)");
+  }
+
+  private static final String FROM_PICKUP_TO_DELIVERY =
+      "(?:from (?:actual )?(?:pickup|collection) to (?:airport )?delivery|"
+          + "(?:pickup|collection)[ -]to[ -](?:airport[ -])?delivery(?: time)?)";
+  private static final String DURATION =
+      "(\\d{1,4}(?:[.,]\\d{1,2})?)\\s*(hours?|hrs?|h|minutes?|mins?|days?|tage?)\\b";
+  private static final Pattern TRUCK_TRANSIT =
+      pattern("\\b(?:(?:(?:road|truck(?:ing)?) )?transit(?: time)?(?: "
+          + FROM_PICKUP_TO_DELIVERY + ")?|" + FROM_PICKUP_TO_DELIVERY + ")"
+          + "\\s*(?:is\\s+|of\\s+|takes\\s+|[:=]\\s*)?" + DURATION);
+  private static final Pattern TRUCK_TRANSIT_AFTER_DURATION =
+      pattern(DURATION + "\\s+" + FROM_PICKUP_TO_DELIVERY);
+
+  private static Double truckTransit(String text) {
+    var durations = new HashSet<Double>();
+    for (var expression : List.of(TRUCK_TRANSIT, TRUCK_TRANSIT_AFTER_DURATION)) {
+      for (var match : expression.matcher(text).results().toList()) {
+        double duration = Double.parseDouble(match.group(1).replace(',', '.'));
+        String unit = match.group(2).toLowerCase(Locale.ROOT);
+        if (unit.startsWith("h")) duration /= 24;
+        else if (unit.startsWith("min")) duration /= 24 * 60;
+        durations.add(duration);
+      }
+    }
+    if (durations.size() != 1) return null;
+    double days = durations.iterator().next();
+    return days <= 90 ? days : null;
+  }
+
   /**
    * Never promote a per-kg, provisional, mixed-currency or multi-option number to an all-in price.
    */
   public static Optional<Bid> bid(String body, boolean truck) {
-    String text =
-        body.split("(?im)^\\s*(?:>|On .+ wrote:|Am .+ schrieb|-----Original Message-----)", 2)[0];
+    String text = authoredText(body);
+    String priceTerms = truck ? text.replaceAll(
+        "(?iu)\\b(?:cannot|can[’']t|unable to) confirm[^.!?\\r\\n]*(?:\\b(?:time|transit|hours?)\\b|"
+            + "\\bestimate " + FROM_PICKUP_TO_DELIVERY + ")",
+        "") : text;
+    if (truck) priceTerms = EXCLUDES_COLLECTION_WAIT.matcher(priceTerms).replaceAll("");
     if (has(
-        text,
-        "\\b(?:USD|GBP|CHF|plus|excluding|excluded|estimate|estimated"
-            + " price|indicative|unavailable|unable|cannot|decline|separately|additional"
+        priceTerms,
+        "\\b(?:USD|GBP|CHF|plus|excluding|excluded|estimated (?:price|cost|rate|total)|"
+            + "estimate(?:d)? (?:of )?(?:EUR|price|rate|cost)|(?:price|rate|cost) (?:is )?(?:an )?estimate|"
+            + (!truck ? "estimate|" : "")
+            + "indicative|unavailable|unable|cannot|can[’']t|decline|separately|additional"
             + " charges|starting at|extras"
             + " apply)\\b|\\+\\s*(?:VAT|fuel|security)|(?:per|/)\\s*(?:kg|km|pallet)|\\bsubject"
             + " to\\b")) return Optional.empty();
@@ -305,14 +366,15 @@ public final class MailParser {
     var price = number(only(amounts));
     if (price == null || price.signum() <= 0) return Optional.empty();
     // A range, or separate options with different transit times, requires review.
-    if (has(
-        text, "\\d+\\s*(?:-|–|to)\\s*\\d+\\s*(?:business |working )?(?:days?|tage?|hours?|hrs?|h)"))
-      return Optional.empty();
+    if (has(text,
+        "\\d+\\s*(?:-|–|to)\\s*\\d+\\s*(?:business |working )?(?:days?|tage?|hours?|hrs?|h)"))
+      return truck ? Optional.of(new Bid(price, null)) : Optional.empty();
     String timing =
         pattern(
                 "(?:valid(?:ity)?|gültig)\\s*(?:for|of|:)?\\s*\\d+\\s*(?:days?|tage?|hours?|hrs?|h)\\b")
-            .matcher(text)
+            .matcher(priceTerms)
             .replaceAll("");
+    if (truck) return Optional.of(new Bid(price, truckTransit(timing)));
     var transit =
         captures(
             timing, "\\b(\\d{1,2})\\s*(?:business |working |calendar )?(?:days?|tag(?:e|en)?)\\b");
@@ -327,7 +389,6 @@ public final class MailParser {
       int duration = Integer.parseInt(hours.getFirst());
       return duration <= 90 * 24 ? Optional.of(new Bid(price, duration / 24.0)) : Optional.empty();
     }
-    if (transit.isEmpty() && truck) return Optional.of(new Bid(price, null));
     if (transit.size() != 1) return Optional.empty();
     int days = Integer.parseInt(transit.getFirst());
     return days <= 90 ? Optional.of(new Bid(price, (double) days)) : Optional.empty();

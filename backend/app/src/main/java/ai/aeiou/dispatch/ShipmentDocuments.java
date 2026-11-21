@@ -61,7 +61,7 @@ final class ShipmentDocuments {
   }
 
   Decision inspect(Map<String, Object> original, List<Map<String, Object>> followUps,
-      String confirmedPostcode) {
+      String confirmedPickupZone, String customerDeliveryAirport) {
     var latestPacking = read(original);
     var followUpDocuments = new ArrayList<PackingSafety.Document>();
     latestPacking.stream()
@@ -101,7 +101,8 @@ final class ShipmentDocuments {
             .replaceAll(
                 "(?iu)\\b(?:non[- ]dangerous|not (?:dangerous|hazardous)|non[- ]hazardous)\\b",
                 "general cargo");
-    var parsed = MailParser.request(subject, body, false, catalog, confirmedPostcode);
+    var parsed = MailParser.request(subject, body, false, catalog, confirmedPickupZone,
+        customerDeliveryAirport);
     var terms = parsed.shipment();
     var destinations = new HashSet<String>();
     var weights = new HashSet<BigDecimal>();

@@ -91,7 +91,7 @@ class MailboxIntegrationTest {
                         "Carrier response",
                         "body",
                         truck
-                            ? "Our all-in rate is 25.00 EUR. Pickup time is 16 hours, and the rate"
+                            ? "Our all-in rate is 25.00 EUR. Transit time from pickup to delivery is 16 hours, and the rate"
                                 + " is valid until 21 Nov 2026 14:16 UTC."
                             : "All-in EUR 70.00, transit 2 days.",
                         "in_reply_to",
