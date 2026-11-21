@@ -58,6 +58,14 @@ tasks.withType(Test).configureEach { useJUnitPlatform() }
 // ticket 04: sources and test fixtures contain umlauts; Windows would compile them as cp1252.
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 
+// --- Gateway (ticket 03) -----------------------------------------------------
+// Tests never call the real gateway (it costs points). Opt in with
+//   ./gradlew test -PrealGateway      (runs the @Tag("real-gateway") tests too)
+tasks.withType(Test).configureEach {
+    systemProperty 'edgelab.gateway.enabled', project.hasProperty('realGateway') ? 'true' : 'false'
+}
+// --- end gateway ---------------------------------------------------------------
+
 application {
     mainClass = 'ai.aeiou.edgelab.ReadFile'
 }
