@@ -252,6 +252,7 @@ class WaveWorkerTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+    "132.02|30|The estimated transit time from actual pickup to delivery at the airport is 30 hours, excluding any wait before collection.",
     "220.11|31|Estimated transit time is 31 hours from actual pickup to airport delivery, excluding any wait before collection.",
     "268.45|32|Estimated transit time from actual pickup to airport delivery is 32 hours, excluding any wait before collection.",
     "499.56|11|Estimated transit time from actual pickup to airport delivery, excluding any wait before collection: 11 hours."
