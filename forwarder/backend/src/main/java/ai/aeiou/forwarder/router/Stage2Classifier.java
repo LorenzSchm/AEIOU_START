@@ -60,15 +60,18 @@ class Stage2Classifier {
               length x width x height (cm) / 1,000,000 x pieces.
             - rfq.mode: "fastest" if the customer stresses speed, urgency or the earliest arrival;
               "cheapest" if they stress price or budget, or say nothing about it.
-            - rfq.doorPickup: true if we must collect the goods at an address (pickup, collect, ex works,
-              "from our warehouse in <town>"), false if they deliver to the airport, null if unclear.
+            - rfq.doorPickup: true ONLY if the customer asks us to collect the goods at their address (pickup,
+              collect, ex works, "from our warehouse in <town>"); then also fill rfq.originZip. false if they bring
+              or deliver the goods to the airport themselves ("we will deliver to DUS ourselves"), or if they only
+              name an origin airport. null if unclear.
             - rfq.readyDate: ISO date (YYYY-MM-DD) the goods are ready; resolve relative dates from the mail date.
             - bid.price: the all-in total for the shipment as a plain number; bid.currency: ISO code (EUR, USD).
               bid.transitDays: whole days. bid.declined: true if the carrier cannot offer. bid.airlineOrCompany:
               who makes the offer.
             - tracking.reference: any booking reference (BK-xxxxxxxx), our reference (AEI-xxxxx) or other
               shipment id; tracking.question: the question in one short sentence.
-            - language: ISO 639-1 code of the language the mail body is written in (en, de, fr, ...).
+            - language: ISO 639-1 code of the language the main text is written in (en, de, fr, ...). Ignore
+              greetings and signature lines: an English mail signed "Mit freundlichen Gruessen" is "en".
             - senderName: the name the sender signs with, e.g. "Maria Keller"; null if unsigned.
             - confidence: your probability (0 to 1) that the type is right. Stay below 0.6 when the mail is
               ambiguous.

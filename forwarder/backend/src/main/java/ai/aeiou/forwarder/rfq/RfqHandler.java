@@ -88,9 +88,16 @@ public class RfqHandler implements MailHandler {
         String destination = iata(r.destination());
         String origin = resolveOrigin(r);
         String mode = QuoteDecider.FASTEST.equalsIgnoreCase(r.mode()) ? QuoteDecider.FASTEST : QuoteDecider.CHEAPEST;
+        // A pickup needs a postcode: it picks the trucker zone. Without one the LLM's "door pickup" is a misread
+        // (e.g. "we deliver to DUS ourselves"), and insisting on it would leave us with no quotable price.
+        boolean doorPickup = Boolean.TRUE.equals(r.doorPickup()) && r.originZip() != null && !r.originZip().isBlank();
+        if (Boolean.TRUE.equals(r.doorPickup()) && !doorPickup) {
+            events.system(sessionId, mail.id(), "rfq.door_pickup_ignored",
+                    "Door pickup read from the mail but no postcode given: pricing airport to airport", payload());
+        }
         RfqRecord rfq = new RfqRecord(sessionId, mail.id(), r.originZip(), origin, destination, r.weightKg(), r.volumeCbm(),
                 r.weightKg() == null ? null : new Shipment(origin, destination, r.weightKg(), r.volumeCbm()).chargeableKg(),
-                r.pieces(), mode, Boolean.TRUE.equals(r.doorPickup()), parseDate(r.readyDate()), r.commodity(),
+                r.pieces(), mode, doorPickup, parseDate(r.readyDate()), r.commodity(),
                 x.language(), x.senderName(), null);
         if (!repo.insertRfq(rfq, x)) {
             events.system(sessionId, mail.id(), "rfq.duplicate", "RFQ already registered for this session", payload());
