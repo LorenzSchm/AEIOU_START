@@ -108,3 +108,16 @@ dependencies {
     implementation 'com.drewnoakes:metadata-extractor:2.19.0'
 }
 // ---- end photo reader -----------------------------------------------------------
+
+// ---- Video reader (ticket 06) ---------------------------------------------------
+// Frames and sound through the bundled ffmpeg (JavaCV, voice block above); nothing new.
+// ./gradlew videoFixtures   writes the test videos to build/video-fixtures/ for the demo.
+tasks.register('videoFixtures', JavaExec) {
+    group = 'edgelab'
+    description = 'Writes the generated test videos (RFQ photo + spoken RFQ, and a silent one).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ai.aeiou.edgelab.video.VideoFixtures'
+    args = ['build/video-fixtures']
+    workingDir = projectDir
+}
+// ---- end video reader -------------------------------------------------------------
