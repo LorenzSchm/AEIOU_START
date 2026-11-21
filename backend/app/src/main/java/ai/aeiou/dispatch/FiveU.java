@@ -13,11 +13,13 @@ import org.springframework.web.client.*;
 class FiveU {
   private final RestClient client;
   private final RestClient gateway;
+  private final MarketMemory memory;
   private Instant retryAt = Instant.EPOCH;
 
-  FiveU(@Value("${dispatch.base-url}") String base, @Value("${dispatch.key}") String key) {
+  FiveU(@Value("${dispatch.base-url}") String base, @Value("${dispatch.key}") String key, Ledger ledger) {
     client = client(base, key, 4);
     gateway = client(base, key, 15);
+    memory = new MarketMemory(ledger);
   }
 
   private static RestClient client(String base, String key, int seconds) {
@@ -58,11 +60,17 @@ class FiveU {
         .body(byte[].class);
   }
 
-  record Rates(List<Offer> offers, boolean complete) {}
+  record Rates(List<Offer> offers, boolean complete, boolean reset, String version) {
+    Rates(List<Offer> offers, boolean complete) { this(offers, complete, false, null); }
+  }
 
-  private record RateQuery(String airline, BigDecimal weight) {}
+  private record RateQuery(String airline, String name, BigDecimal weight, BigDecimal billed,
+                           MarketMemory.Key key, MarketMemory.Sample sample) {
+    BigDecimal estimate() { return sample.estimate(billed); }
+  }
+  private record LiveRate(Offer offer, String version) {}
 
-  private Offer rate(Shipment shipment, RateQuery query, Instant now) {
+  private LiveRate rate(Shipment shipment, RateQuery query, Instant now) {
     var r =
         get(
             "/v1/portal/rates?origin={o}&destination={d}&airline={a}&weight_kg={w}&volume_cbm={v}",
@@ -81,7 +89,7 @@ class FiveU {
     var price = new BigDecimal(Ledger.str(r, "total")).multiply(fx);
     if (fx.signum() <= 0 || price.signum() <= 0 || expiry == null || !expiry.isAfter(now))
       throw new IllegalArgumentException("Invalid rate");
-    return new Offer(
+    var offer = new Offer(
         Ledger.str(r, "airline"),
         Integer.parseInt(Ledger.str(r, "transit_days")),
         price,
@@ -89,41 +97,119 @@ class FiveU {
         "portal",
         Ledger.str(r, "rate_id"),
         expiry);
+    if (offer.billedKg().signum() <= 0) throw new IllegalArgumentException("Invalid billed weight");
+    return new LiveRate(offer, Ledger.str(r, "dataset_version"));
+  }
+
+  private record QueryPlan(List<RateQuery> ordered, boolean complete) {}
+  private record Carrier(String code, String name) {}
+  private List<?> lanes = List.of();
+  private Instant lanesExpire = Instant.MIN;
+
+  private synchronized List<Carrier> carriers(Shipment shipment, Instant now) {
+    if (!now.isBefore(lanesExpire)) {
+      var ports = get("/v1/portal/ports");
+      if (ports == null || !(ports.get("lanes") instanceof List<?> published))
+        throw new IllegalArgumentException("Missing portal lanes");
+      lanes = published;
+      lanesExpire = now.plusSeconds(30);
+    }
+    var result = new ArrayList<Carrier>();
+    for (var raw : lanes) {
+      if (!(raw instanceof Map<?, ?> lane)
+          || !shipment.origin().equals(lane.get("origin"))
+          || !shipment.destination().equals(lane.get("destination"))) continue;
+      if (!(lane.get("airlines") instanceof List<?> airlines))
+        throw new IllegalArgumentException("Missing lane airlines");
+      for (var airline : airlines) {
+        if (!(airline instanceof Map<?, ?> c) || Ledger.str(c, "code").isBlank())
+          throw new IllegalArgumentException("Missing airline code");
+        result.add(new Carrier(Ledger.str(c, "code"), Ledger.str(c, "name")));
+      }
+    }
+    return result;
+  }
+
+  Set<String> portalAirlines(Shipment shipment, Instant now) {
+    var names = new HashSet<String>();
+    try {
+      for (var carrier : carriers(shipment, now))
+        if (!carrier.name().isBlank()) names.add(carrier.name());
+    } catch (RestClientException | IllegalArgumentException unavailable) {
+      // The invitation wave can still use carrier declarations and kit tariffs.
+    }
+    return names;
+  }
+
+  private QueryPlan plan(Shipment shipment, Instant now, Map<MarketMemory.Key, MarketMemory.Sample> history) {
+    boolean complete = true;
+    var queries = new ArrayList<RateQuery>();
+    var higherBreaks = new ArrayList<RateQuery>();
+    for (var carrier : carriers(shipment, now)) {
+      String code = carrier.code();
+      String name = carrier.name();
+      var billed = shipment.chargeableKg();
+      var breaks = new TreeSet<BigDecimal>();
+      try {
+        var brackets = get("/v1/portal/brackets?airline={a}", code);
+        if (!(brackets.get("breaks_kg") instanceof List<?> published))
+          throw new IllegalArgumentException("Missing portal weight brackets");
+        for (var kg : published) breaks.add(new BigDecimal(kg.toString()));
+      } catch (RestClientException | IllegalArgumentException ex) {
+        complete = false;
+      }
+      if (!breaks.isEmpty()) breaks.add(BigDecimal.ZERO);
+      queries.add(query(code, name, shipment.weightKg(), billed, breaks.floor(billed), history));
+      var next = breaks.higher(billed);
+      if (next != null) higherBreaks.add(query(code, name, next, next, next, history));
+    }
+    queries.addAll(higherBreaks);
+    var predicted = Comparator.comparing(RateQuery::estimate);
+    if ("fastest".equals(shipment.preference()))
+      predicted = Comparator.comparingDouble((RateQuery q) -> q.sample().days()).thenComparing(predicted);
+    var known = queries.stream().filter(q -> q.sample() != null).sorted(predicted).toList();
+    var ordered = new ArrayList<RateQuery>();
+    if (!known.isEmpty()) ordered.add(known.getFirst());
+    queries.stream().filter(q -> q.sample() == null).forEach(ordered::add);
+    ordered.addAll(known.stream().skip(1).toList());
+    return new QueryPlan(ordered, complete);
   }
 
   synchronized Rates rates(Shipment shipment, Instant now) {
+    return rates(shipment, now, List.of(), null);
+  }
+
+  synchronized Rates rates(Shipment shipment, Instant now, List<Offer> verified, String priorVersion) {
     List<Offer> offers = new ArrayList<>();
-    if (now.isBefore(retryAt)) return new Rates(offers, false);
+    if (now.isBefore(retryAt)) return new Rates(offers, false, false, priorVersion);
     boolean complete = true;
+    boolean reset = !verified.isEmpty() && (priorVersion == null || priorVersion.isBlank());
+    String version = reset ? null : priorVersion;
+    var history = memory.recent(shipment, now);
     try {
-      var queries = new ArrayList<RateQuery>();
-      var higherBreaks = new ArrayList<RateQuery>();
-      var ports = get("/v1/portal/ports");
-      for (Object raw : (List<?>) ports.get("lanes")) {
-        var lane = (Map<?, ?>) raw;
-        if (!shipment.origin().equals(lane.get("origin"))
-            || !shipment.destination().equals(lane.get("destination"))) continue;
-        for (Object airline : (List<?>) lane.get("airlines")) {
-          String code = ((Map<?, ?>) airline).get("code").toString();
-          queries.add(new RateQuery(code, shipment.weightKg()));
-          try {
-            var brackets = get("/v1/portal/brackets?airline={a}", code);
-            ((List<?>) brackets.get("breaks_kg"))
-                .stream()
-                    .map(v -> new BigDecimal(v.toString()))
-                    .filter(kg -> kg.compareTo(shipment.chargeableKg()) > 0)
-                    .min(BigDecimal::compareTo)
-                    .ifPresent(kg -> higherBreaks.add(new RateQuery(code, kg)));
-          } catch (RestClientException | IllegalArgumentException ex) {
-            complete = false;
-          }
-        }
-      }
-      // Spend the limited reads on every airline's actual rate before comparing buy-ups.
-      queries.addAll(higherBreaks);
-      for (var query : queries) {
+      var plan = plan(shipment, now, history);
+      complete = plan.complete();
+      for (var query : plan.ordered()) {
+        if (priorVersion != null && !priorVersion.isBlank() && verified.stream().anyMatch(o ->
+            o.airline().equals(query.name()) && o.billedKg().compareTo(query.billed()) == 0
+                && o.rateId() != null && !o.rateId().isBlank() && o.validUntil() != null
+                && o.validUntil().isAfter(now.plusSeconds(120)))) continue;
         try {
-          offers.add(rate(shipment, query, now));
+          var live = rate(shipment, query, now);
+          var offer = live.offer();
+          if (version != null && !version.equals(live.version())) {
+            memory.forget(shipment);
+            // The dataset changed midway. Restart on a single version on the next tick.
+            return new Rates(List.of(), false, true, null);
+          }
+          version = live.version();
+          if (!history.isEmpty() && query.sample() != null && !query.sample().version().equals(version)) {
+            memory.forget(shipment);
+            history.clear();
+          }
+          if (query.key() != null && offer.billedKg().compareTo(query.billed()) == 0)
+            memory.record(shipment, query.key(), offer, version, now);
+          offers.add(offer);
         } catch (HttpClientErrorException.TooManyRequests ex) {
           String seconds =
               ex.getResponseHeaders() == null
@@ -132,14 +218,20 @@ class FiveU {
           retryAt =
               now.plusSeconds(
                   seconds != null && seconds.matches("\\d+") ? Long.parseLong(seconds) : 60);
-          return new Rates(offers, false);
+          return new Rates(offers, false, reset, version);
         } catch (RestClientException | IllegalArgumentException ex) {
           complete = false;
         }
       }
-    } catch (RestClientException ex) {
+    } catch (RestClientException | IllegalArgumentException ex) {
       complete = false;
     }
-    return new Rates(offers, complete);
+    return new Rates(offers, complete, reset, version);
+  }
+
+  private static RateQuery query(String code, String name, BigDecimal weight, BigDecimal billed,
+      BigDecimal bracket, Map<MarketMemory.Key, MarketMemory.Sample> history) {
+    var key = bracket == null ? null : new MarketMemory.Key(code, bracket.stripTrailingZeros().toPlainString());
+    return new RateQuery(code, name, weight, billed, key, key == null ? null : history.get(key));
   }
 }

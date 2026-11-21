@@ -397,8 +397,10 @@ class WaveWorker {
         || (queried > 0
             && clock.instant().getEpochSecond() - queried >= 35
             && clock.instant().isBefore(deadline.minusSeconds(35)))) {
-      var result = upstream.rates(s, clock.instant());
       var offers = new ArrayList<Offer>(Arrays.asList(cached(w)));
+      var result = offers.isEmpty() ? upstream.rates(s, clock.instant())
+          : upstream.rates(s, clock.instant(), offers, (String) w.get("portal_version"));
+      if (result.reset()) offers.clear();
       for (var o : result.offers()) {
         offers.removeIf(
             old ->
@@ -406,12 +408,14 @@ class WaveWorker {
         offers.add(o);
       }
       queried = result.complete() ? -1 : clock.instant().getEpochSecond();
+      if (result.reset() && result.offers().isEmpty()) queried = 0;
       ledger
           .jdbc()
           .update(
-              "UPDATE wave_case SET offers=?,queried=? WHERE id=?",
+              "UPDATE wave_case SET offers=?,queried=?,portal_version=? WHERE id=?",
               ledger.write(offers),
               queried,
+              result.version(),
               id);
     }
     var tenders = ledger.tenders(id);
@@ -598,7 +602,25 @@ class WaveWorker {
   }
 
   private List<Catalog.Carrier> invitations(long id, Shipment shipment, boolean confirmedPickup) {
-    var selected = catalog.invitations(shipment, ledger.airlineRoutesBefore(id));
+    var lane = shipment.origin() + "-" + shipment.destination();
+    var stored = ledger.jdbc().queryForMap(
+        "SELECT invitation_lane,invitation_airlines FROM wave_case WHERE id=?", id);
+    Set<String> documented;
+    if (lane.equals(stored.get("invitation_lane"))) {
+      documented = Set.of(ledger.read(stored.get("invitation_airlines"), String[].class));
+    } else {
+      documented = new HashSet<>();
+      // Finish a wave already invited by an older worker using its original selection policy.
+      if (stored.get("invitation_lane") != null || ledger.tenders(id).isEmpty()) {
+        documented.addAll(upstream.portalAirlines(shipment, clock.instant()));
+        var received = Ledger.instant(ledger.mail(id).get("received"));
+        for (var offer : catalog.price(shipment, received.atZone(ZoneId.of("Europe/Berlin")).toLocalDate()))
+          documented.add(offer.airline());
+      }
+      ledger.jdbc().update("UPDATE wave_case SET invitation_lane=?,invitation_airlines=? WHERE id=?",
+          lane, ledger.write(documented), id);
+    }
+    var selected = catalog.invitations(shipment, ledger.airlineRoutesBefore(id), documented);
     if (!confirmedPickup || shipment.pickupZone() == null) return selected;
     var airlines = selected.stream().filter(c -> !c.truck()).toList();
     var trucks = new LinkedHashSet<Catalog.Carrier>();
@@ -1004,13 +1026,14 @@ class WaveWorker {
   synchronized Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c) {
     var m = target(id);
     checkPacking(id, m, s);
+    if (catalog.problem(s) != null || (!c.serves(c.truck() ? s.pickupZone() : s.destination())
+        && !invitations(id, s, false).contains(c)))
+      throw new IllegalArgumentException("Check shipment and carrier coverage.");
     return invite(id, s, c, clarifications.details(id, m));
   }
 
   private Map<String, Object> invite(long id, Shipment s, Catalog.Carrier c,
       CustomerClarifications.Details details) {
-    if (catalog.problem(s) != null || !c.serves(c.truck() ? s.pickupZone() : s.destination()))
-      throw new IllegalArgumentException("Check shipment and carrier coverage.");
     var previous = ledger.tenders(id).stream().filter(t -> c.email().equals(t.get("email"))).findFirst();
     boolean citywide = c.truck() && details.area() != null;
     String base = "bid:" + id + ":" + c.email();

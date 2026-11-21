@@ -723,6 +723,38 @@ class WaveWorkerTest {
   }
 
   @Test
+  void firstInvitationUsesExactPortalAndTariffLanesAndSurvivesRestart() throws Exception {
+    when(upstream.portalAirlines(any(), any())).thenReturn(Set.of("Meridian Freightways"));
+    receive(7, "buyer@example.invalid", "RFQ HAM to EZE",
+        "Please quote the cheapest air freight from HAM to EZE for 100 kg and 0.2 cbm.", null);
+    worker.work();
+    assertEquals(5, outbound.size());
+    assertEquals("meridian-freightways@hackloop.mail", outbound.get(0).get("to"));
+    assertEquals("wayzata-air-cargo@hackloop.mail", outbound.get(1).get("to"));
+    restart();
+    worker.work();
+    assertEquals(5, outbound.size());
+    verify(upstream, times(1)).portalAirlines(any(), any());
+  }
+
+  @Test
+  void workerPersistsPortalVersionAndResumesPartialOffersAcrossRestart() throws Exception {
+    var confirmed = new Offer("Test Cargo", 1, new java.math.BigDecimal("10"),
+        new java.math.BigDecimal("100"), "portal", "current", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(
+        new FiveU.Rates(List.of(confirmed), false, false, "v1"));
+    when(upstream.rates(any(), any(), eq(List.of(confirmed)), eq("v1"))).thenReturn(
+        new FiveU.Rates(List.of(), true, false, "v1"));
+    request("");
+    worker.work();
+    restart();
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    verify(upstream).rates(any(), any(), eq(List.of(confirmed)), eq("v1"));
+    assertEquals("sent", ledger.delivery("quote:7"));
+  }
+
+  @Test
   void invitesAirlinesThatDeclaredTheExactRouteAndUsesTheirBids() {
     receive(2, "elbflug-air-freight@hackloop.mail", "Prior carrier response",
         "We fly FRA-DFW, STR-PVG.", null);
@@ -1105,7 +1137,13 @@ class WaveWorkerTest {
       long replyId = 10;
       for (var invite : List.copyOf(outbound)) {
         var address = invite.get("to").toString();
-        var reply = fixture.get("replies").required(address);
+        var reply = fixture.get("replies").get(address);
+        if (reply == null) {
+          // The archive only records the original recipients. Let the new invitation time out.
+          assertEquals("wayzata-air-cargo@hackloop.mail", address);
+          clock.current = START.plusSeconds(76);
+          continue;
+        }
         receive(
             replyId++,
             address,
@@ -1233,7 +1271,7 @@ class WaveWorkerTest {
     // Round 8 portal observations. Only the HTTP boundary and rate IDs are fixtures.
     var rateReads = new ArrayList<String>();
     var portal =
-        new FiveU("http://localhost", "fixture") {
+        new FiveU("http://localhost", "fixture", ledger) {
           @Override
           Map<String, Object> get(String uri, Object... args) {
             if (uri.endsWith("/ports"))

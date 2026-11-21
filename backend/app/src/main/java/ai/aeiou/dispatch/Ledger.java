@@ -79,6 +79,9 @@ class Ledger {
         """);
     ensureColumn("tender", "bid_action", "TEXT");
     ensureColumn("wave_case", "customer_reply", "INTEGER");
+    ensureColumn("wave_case", "portal_version", "TEXT");
+    ensureColumn("wave_case", "invitation_lane", "TEXT");
+    ensureColumn("wave_case", "invitation_airlines", "TEXT");
     db.execute(
         "CREATE TABLE IF NOT EXISTS retry(action TEXT PRIMARY KEY, after_epoch INTEGER NOT NULL)");
     db.execute(
