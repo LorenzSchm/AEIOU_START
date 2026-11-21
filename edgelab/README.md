@@ -100,7 +100,7 @@ the ref is not available. Run `git fetch` first if Lorenz's branch moved on.
 with the ffmpeg bundled in JavaCV, then transcribed locally by Whisper (whisper-jni, which
 ships its own native engine). No gateway cost, nothing to install.
 
-- Model: `base-q5_1` (multilingual, ~57 MB). Downloaded once from Hugging Face into
+- Model: `small-q5_1` on macOS for spoken freight amounts, `base-q5_1` elsewhere. Downloaded once from Hugging Face into
   `~/.cache/edgelab/whisper/`, then works offline. Override with `EDGELAB_WHISPER_MODEL`
   (e.g. `base`, `small-q5_1`) and `EDGELAB_WHISPER_DIR`. `tiny` was too weak for German numbers.
 - Language is detected automatically (German and English tested).

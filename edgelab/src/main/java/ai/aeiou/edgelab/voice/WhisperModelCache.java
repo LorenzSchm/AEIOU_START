@@ -16,13 +16,14 @@ import java.time.Duration;
  * After the first download everything works offline.
  *
  * Settings (system property, else environment variable):
- *   edgelab.whisper.model / EDGELAB_WHISPER_MODEL  model name, default {@value #DEFAULT_MODEL}
+ *   edgelab.whisper.model / EDGELAB_WHISPER_MODEL  model override
  *   edgelab.whisper.dir   / EDGELAB_WHISPER_DIR    cache folder, default ~/.cache/edgelab/whisper
  */
 public final class WhisperModelCache {
 
-    /** Multilingual base model, 5-bit quantised (~57 MB). Tiny got German numbers wrong. */
-    public static final String DEFAULT_MODEL = "base-q5_1";
+    // The base model misheard a German MP3 freight price on the macOS runner.
+    public static final String DEFAULT_MODEL = System.getProperty("os.name").startsWith("Mac")
+            ? "small-q5_1" : "base-q5_1";
 
     private static final String BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
 

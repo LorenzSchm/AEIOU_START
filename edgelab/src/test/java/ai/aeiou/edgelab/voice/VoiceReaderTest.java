@@ -36,6 +36,7 @@ class VoiceReaderTest {
         try {
             WhisperModelCache.fromSettings().ensure();
         } catch (Exception e) {
+            if (Boolean.getBoolean("edgelab.requireWhisper")) throw new AssertionError("Whisper model unavailable", e);
             modelProblem = "Whisper model not available (" + e + "); skipping voice transcription tests";
             System.err.println(modelProblem);
         }

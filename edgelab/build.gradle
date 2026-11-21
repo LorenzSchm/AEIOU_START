@@ -69,6 +69,7 @@ tasks.withType(Test).configureEach {
 // build deliberately modifies the backend, so run its reader contract separately.
 tasks.register('readerIntegrationTest', Test) {
     testLogging.exceptionFormat = 'full'
+    systemProperty 'edgelab.requireWhisper', project.hasProperty('testEdgeBundle')
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     filter { excludeTestsMatching '*.BackendGuardTest.backendIsUntouchedComparedToLorenzBranch' }
