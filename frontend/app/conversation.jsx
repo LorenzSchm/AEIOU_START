@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import EmailPreview from "./email-preview";
 import { disclosure, previewSwap, spring } from "./lib/motion";
 import Icon from "./components/ui/Icon";
+import { languageName, needsTranslation, useTranslation } from "./lib/translation";
 
 const inboxLabels = {
   request: "Customer request",
@@ -47,6 +48,7 @@ function timeline(messages, selected) {
       address: message.sender || "",
       subject: message.subject,
       body: message.body,
+      language: message.language,
       attachments: message.attachments,
       time: message.received,
     });
@@ -60,6 +62,7 @@ function timeline(messages, selected) {
         state: item.state,
         subject: item.subject,
         body: item.body,
+        language: item.language,
         fields,
         outgoing: true,
         time: item.time,
@@ -126,13 +129,48 @@ function EntryHead({ entry, showPreview }) {
   );
 }
 
+/** Offers an on-demand translation when the mail is not in the desk's language. */
+function TranslateBar({ language, translation }) {
+  const from = languageName(translation.source || language);
+  const { status, translated, error } = translation;
+  return (
+    <div className="cv-translate" aria-live="polite">
+      <Icon name="translate" size={14} />
+      {translated ? (
+        <>
+          <span>Translated from {from}</span>
+          <button type="button" className="cv-translate-btn" onClick={translation.showOriginal}>Show original</button>
+        </>
+      ) : (
+        <>
+          <span>Written in {languageName(language)}</span>
+          <button type="button" className="cv-translate-btn" onClick={translation.translate} disabled={status === "loading"}>
+            {status === "loading" ? "Translating…" : status === "done" ? "Show translation" : "Translate"}
+          </button>
+          {status === "error" && <span className="cv-translate-error">{error}</span>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function EntryContent({ entry }) {
+  const translation = useTranslation(entry.body ?? "");
+  const offer = entry.body != null && needsTranslation(entry.language);
   return (
     <>
+      {offer && <TranslateBar language={entry.language} translation={translation} />}
       {entry.outgoing && entry.body != null ? (
-        <EmailPreview body={entry.body} fields={entry.fields} />
+        <EmailPreview body={translation.translated ? translation.text : entry.body} fields={entry.fields} />
+      ) : entry.body == null ? (
+        <div className="cv-text">The original message text was not recorded.</div>
       ) : (
-        <div className="cv-text">{entry.body ?? "The original message text was not recorded."}</div>
+        <div className="cv-text" lang={translation.translated ? "en" : entry.language || undefined}>
+          {translation.translated
+            ? translation.parts.map((part, i) =>
+                part.changed ? <span key={i} className="cv-translated" title={part.original}>{part.text}</span> : part.text)
+            : entry.body}
+        </div>
       )}
       {entry.attachments?.length > 0 && (
         <div className="cv-files">

@@ -24,6 +24,7 @@ const paths = {
   euro: <><path d="M17 6a6 6 0 1 0 0 12" /><path d="M4 10h9M4 14h9" /></>,
   pin: <><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.5" /></>,
   reply: <><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></>,
+  translate: <><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6" /></>,
 };
 
 export default function Icon({ name, size = 18, className, title }) {

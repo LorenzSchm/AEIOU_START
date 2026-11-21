@@ -36,6 +36,9 @@ class WriteGuard implements WebMvcConfigurer {
       public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
           throws Exception {
         if (SAFE.contains(request.getMethod()) || lease.mayWrite()) return true;
+        // Translation only writes its own cache, so every desk may use it.
+        if ("POST".equals(request.getMethod()) && TranslationController.PATH.equals(request.getRequestURI()))
+          return true;
         response.setStatus(HttpStatus.FORBIDDEN.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getWriter().write(lease.readOnly()
