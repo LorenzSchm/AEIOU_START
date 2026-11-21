@@ -14,7 +14,7 @@ import { cursorPaging, flatten } from "@/lib/pagination";
 import { useDebounced } from "@/lib/use-debounce";
 import { useKeys } from "@/lib/use-hotkeys";
 import { useNow } from "@/lib/use-now";
-import { MailCard, RouteChip } from "./mail-card";
+import { MailCard } from "./mail-card";
 
 function Reader({ id }: { id: number }) {
   const { data, isPending, isError, error } = useGetMail(id);
@@ -68,7 +68,7 @@ export function Mailbox() {
     <div className="panel grid h-[calc(100dvh-10.5rem)] min-h-[480px] grid-cols-1 overflow-hidden md:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
       <div className={cn("flex min-h-0 flex-col border-r border-line", selectedId && "max-md:hidden")}>
         <div className="flex flex-col gap-2 border-b border-line p-3">
-          <SearchInput value={search} onChange={setSearch} placeholder="Search subject, body, address…" />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search" />
           <Segmented<"all" | MailDirection>
             value={direction}
             onChange={setDirection}
@@ -105,11 +105,9 @@ export function Mailbox() {
                       {m.attachmentCount > 0 && <Paperclip className="size-3 shrink-0 text-subtle" />}
                       <span className="num ml-auto shrink-0 text-2xs text-subtle">{ago(m.sentAt, now)}</span>
                     </div>
-                    <p className="truncate text-xs">{m.subject}</p>
-                    <p className="line-clamp-1 text-xs text-subtle">{m.snippet}</p>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      {m.sessionRef && <span className="num text-2xs font-semibold text-accent">{m.sessionRef}</span>}
-                      <RouteChip type={m.routeType} confidence={m.routeConfidence} />
+                    <div className="flex items-center gap-2" title={m.snippet}>
+                      <p className="min-w-0 flex-1 truncate text-xs text-muted">{m.subject}</p>
+                      {m.sessionRef && <span className="num shrink-0 text-2xs font-semibold text-accent">{m.sessionRef}</span>}
                     </div>
                   </button>
                 </li>
@@ -119,7 +117,7 @@ export function Mailbox() {
           )}
         </div>
       </div>
-      <div className={cn("min-h-0 overflow-y-auto bg-bg/40", !selectedId && "max-md:hidden")}>
+      <div className={cn("min-h-0 overflow-y-auto", !selectedId && "max-md:hidden")}>
         {selectedId ? (
           <>
             <button onClick={() => select(null)} className="flex items-center gap-1.5 px-4 pt-3 text-xs text-muted md:hidden">
@@ -128,7 +126,7 @@ export function Mailbox() {
             <Reader id={selectedId} />
           </>
         ) : (
-          <EmptyState icon={MailOpen} title="Pick a mail to read it" hint="j / k move through the list, Esc closes the reader." className="h-full" />
+          <EmptyState icon={MailOpen} title="Select a mail" className="h-full" />
         )}
       </div>
     </div>

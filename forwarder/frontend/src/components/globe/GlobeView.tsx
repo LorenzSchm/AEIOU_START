@@ -135,9 +135,7 @@ export function GlobeView() {
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-[32px] md:leading-[1.1]">
             Air freight in motion
           </h1>
-          <p className="mt-1 max-w-sm text-[13px] text-slate-400">
-            Every booked and confirmed shipment, from German hubs to the world.
-          </p>
+
         </div>
         <StatsBar counts={counts} total={shipments.length} />
       </header>

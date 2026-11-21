@@ -8,20 +8,20 @@ import { EmptyState } from "@/components/ui/states";
 import { cn } from "@/lib/cn";
 import { ago, dateTime, kg, money, shortDate } from "@/lib/format";
 import { useNow } from "@/lib/use-now";
-import { BookingChip, ModeTag } from "./status";
+import { BookingChip } from "./status";
 
 export function RfqFacts({ rfq }: { rfq: Rfq | null }) {
   if (!rfq) {
     return (
       <Panel title="RFQ" icon={<ScrollText />}>
-        <p className="px-4 py-4 text-xs text-subtle">No RFQ extracted for this session.</p>
+        <p className="px-4 py-4 text-xs text-subtle">—</p>
       </Panel>
     );
   }
   return (
     <Panel title="RFQ" icon={<ScrollText />} actions={rfq.language && <Badge tone="muted">{rfq.language.toUpperCase()}</Badge>}>
       <div className="px-4 py-3">
-        <div className="mb-3 flex items-center gap-3">
+        <div className="mb-3 flex items-center gap-3" title={[rfq.customerName, rfq.commodity, rfq.pieces ? `${rfq.pieces} pcs` : null].filter(Boolean).join(" · ")}>
           <div className="text-center">
             <div className="num text-lg font-semibold">{rfq.originAirport ?? "—"}</div>
             <div className="text-2xs text-subtle">{rfq.doorPickup ? `pickup ${rfq.originZip ?? ""}` : "airport"}</div>
@@ -36,15 +36,10 @@ export function RfqFacts({ rfq }: { rfq: Rfq | null }) {
         </div>
         <Facts
           items={[
-            { label: "Customer", value: rfq.customerName },
-            { label: "Mode", value: <ModeTag mode={rfq.mode} /> },
             { label: "Weight", value: kg(rfq.weightKg), mono: true },
             { label: "Volume", value: rfq.volumeCbm ? `${rfq.volumeCbm} cbm` : "—", mono: true },
             { label: "Chargeable", value: <span className="font-semibold">{kg(rfq.chargeableKg)}</span>, mono: true },
-            { label: "Pieces", value: rfq.pieces, mono: true },
-            { label: "Commodity", value: rfq.commodity },
             { label: "Ready", value: rfq.readyDate, mono: true },
-            { label: "Door pickup", value: rfq.doorPickup ? `yes · ${rfq.originZip ?? ""}` : "no" },
           ]}
         />
       </div>
@@ -65,9 +60,9 @@ export function CandidatesTable({ candidates, currency }: { candidates: PriceCan
   const sorted = [...candidates].sort((a, b) => Number(b.chosen) - Number(a.chosen) || Number(a.totalEur) - Number(b.totalEur));
   const best = Math.min(...candidates.filter((c) => c.source !== "truck").map((c) => Number(c.totalEur)));
   return (
-    <Panel title="Price candidates" icon={<Scale />} count={candidates.length}>
+    <Panel title="Prices" icon={<Scale />} count={candidates.length}>
       {candidates.length === 0 ? (
-        <EmptyState icon={Scale} title="No prices yet" hint="Sheets, portal rates and carrier bids show up as they come in." className="py-8" />
+        <EmptyState icon={Scale} title="No prices yet" className="py-8" />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -94,7 +89,6 @@ export function CandidatesTable({ candidates, currency }: { candidates: PriceCan
                   </td>
                   <td className="px-2 py-2">
                     <div className={cn("max-w-[140px] truncate", c.chosen && "font-medium text-fg")}>{c.airlineName ?? "—"}</div>
-                    {c.rejectReason && <div className="mt-0.5 text-2xs text-subtle">{c.rejectReason}</div>}
                     {c.currency !== "EUR" && <div className="num mt-0.5 text-2xs text-subtle">{money(c.total, c.currency)}</div>}
                   </td>
                   <td className={cn("num px-2 py-2 text-right", c.chosen && "font-semibold text-ok")}>
@@ -119,30 +113,25 @@ export function BidsPanel({ bids }: { bids: BidRequest[] }) {
   if (bids.length === 0) return null;
   const answered = bids.filter((b) => b.answeredAt).length;
   return (
-    <Panel title="Bid requests" icon={<Gavel />} actions={<span className="num text-2xs text-subtle">{answered}/{bids.length} answered</span>}>
+    <Panel title="Bids" icon={<Gavel />} actions={<span className="num text-2xs text-subtle">{answered}/{bids.length}</span>}>
       <ul className="divide-y divide-line">
         {bids.map((b) => {
           const state = b.declined ? "declined" : b.answeredAt ? "answered" : "pending";
           return (
-            <li key={b.id} className="flex items-center gap-3 px-4 py-2.5">
+            <li key={b.id} className="flex h-10 items-center gap-3 px-4" title={`${b.kind} · asked ${ago(b.sentAt, now)} ago`}>
               <span
                 className={cn(
                   "size-2 shrink-0 rounded-full",
                   state === "answered" ? "bg-ok" : state === "declined" ? "bg-danger" : "animate-pulse-dot bg-attn",
                 )}
               />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px]">{b.carrierName}</p>
-                <p className="text-2xs text-subtle">
-                  {b.kind} · asked {ago(b.sentAt, now)} ago
-                </p>
-              </div>
+              <p className="min-w-0 flex-1 truncate text-[13px]">{b.carrierName}</p>
               <div className="text-right">
                 {state === "answered" ? (
-                  <>
-                    <p className="num text-xs">{money(b.price, b.currency)}</p>
-                    {b.transitDays != null && <p className="num text-2xs text-subtle">{b.transitDays}d</p>}
-                  </>
+                  <p className="num text-xs">
+                    {money(b.price, b.currency)}
+                    {b.transitDays != null && <span className="ml-2 text-subtle">{b.transitDays}d</span>}
+                  </p>
                 ) : (
                   <Badge tone={state === "declined" ? "danger" : "attn"}>{state}</Badge>
                 )}
@@ -161,16 +150,13 @@ export function BookingCard({ booking }: { booking: Booking | null }) {
     <Panel title="Booking" icon={<PackageCheck />} actions={<BookingChip status={booking.status} />}>
       <div className="px-4 py-3">
         <p className="num text-lg font-semibold tracking-tight">{booking.bookingReference ?? "pending"}</p>
-        <p className="mb-3 text-xs text-muted">
-          {booking.airlineName} · team ref <span className="num">{booking.teamReference}</span>
+        <p className="mb-3 text-xs text-muted" title={`Team ref ${booking.teamReference} · rate ${booking.rateId ?? "—"} · booked ${dateTime(booking.bookedAt)}`}>
+          {booking.airlineName}
         </p>
         <Facts
           items={[
             { label: "Lane", value: `${booking.origin} → ${booking.destination}`, mono: true },
             { label: "Price", value: money(booking.price, booking.currency), mono: true },
-            { label: "Rate ID", value: booking.rateId, mono: true },
-            { label: "Booked", value: dateTime(booking.bookedAt), mono: true },
-            { label: "Confirmed", value: dateTime(booking.confirmedAt), mono: true },
             { label: "Departure", value: shortDate(booking.departureAt), mono: true },
             { label: "ETA", value: shortDate(booking.etaAt), mono: true },
           ]}

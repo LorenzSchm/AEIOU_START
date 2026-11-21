@@ -23,8 +23,8 @@ type FieldSpec =
 
 const KNOWN: Record<string, FieldSpec> = {
   bidWaitSeconds: { kind: "number", label: "Bid wait", hint: "How long to wait for carrier bids before deciding. Quotes within 2:00 get full time points.", min: 0, max: 300, step: 5, unit: "s" },
-  routerConfidenceThreshold: { kind: "number", label: "Router confidence threshold", hint: "Below this, a routed mail goes to the human queue.", min: 0, max: 1, step: 0.01 },
-  autopilot: { kind: "boolean", label: "Autopilot", hint: "Off: the agents only write drafts and a human sends every reply." },
+  routerConfidenceThreshold: { kind: "number", label: "Router confidence threshold", hint: "Below this, a routed mail is marked for attention.", min: 0, max: 1, step: 0.01 },
+  autopilot: { kind: "boolean", label: "Autopilot", hint: "Off = draft mode." },
   bidPolicy: {
     kind: "select",
     label: "Bid policy",
@@ -132,17 +132,15 @@ function SettingRow({ setting }: { setting: Setting }) {
     spec?.kind === "number" && (typeof draft !== "number" || Number.isNaN(draft) || draft < spec.min || draft > spec.max);
 
   return (
-    <li className="flex flex-wrap items-start gap-x-6 gap-y-3 px-4 py-4">
+    <li className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
       <div className="min-w-[220px] flex-1">
         <div className="flex items-center gap-2">
-          <p className="text-[13px] font-medium">{spec?.label ?? setting.key}</p>
+          <p className="text-[13px] font-medium" title={`${spec?.hint ?? "JSON value"} · updated ${dateTime(setting.updatedAt)}${setting.updatedBy ? ` by ${setting.updatedBy}` : ""}`}>
+            {spec?.label ?? setting.key}
+          </p>
           <code className="num text-2xs text-subtle">{setting.key}</code>
         </div>
-        <p className="mt-0.5 max-w-md text-xs text-muted">{spec?.hint ?? "Free-form JSON value."}</p>
-        <p className="mt-1 text-2xs text-subtle">
-          updated {dateTime(setting.updatedAt)}
-          {setting.updatedBy ? ` by ${setting.updatedBy}` : ""}
-        </p>
+
       </div>
       <div className="flex items-center gap-2">
         {control}

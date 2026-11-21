@@ -138,7 +138,7 @@ export function ReasonCodes({ board }: { board: BoardResult[] }) {
   }
   const rows = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   const max = Math.max(1, ...rows.map((r) => r[1]));
-  if (rows.length === 0) return <p className="py-6 text-center text-xs text-subtle">No rejections yet. Reason codes show up here first when the setup changes.</p>;
+  if (rows.length === 0) return <p className="py-6 text-center text-xs text-subtle">No rejections</p>;
   return (
     <ul className="flex flex-col gap-2">
       {rows.map(([code, n]) => (

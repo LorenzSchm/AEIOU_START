@@ -35,12 +35,12 @@ export function Drawer({
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
       <button
         aria-label="Close"
-        className="absolute inset-0 animate-fade-in bg-black/50 backdrop-blur-[2px]"
+        className="absolute inset-0 animate-fade-in bg-black/30 backdrop-blur-[3px]"
         onClick={onClose}
       />
       <aside
         className={cn(
-          "relative flex h-full w-full animate-slide-in flex-col border-l border-line bg-surface shadow-2xl",
+          "glass glass-strong relative flex h-full w-full animate-slide-in flex-col rounded-none border-y-0 border-r-0 shadow-2xl",
           width,
         )}
       >
@@ -84,7 +84,7 @@ export function Modal({
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div className="fixed inset-0 z-50 grid place-items-center p-4" role="dialog" aria-modal="true">
-      <button aria-label="Close" className="absolute inset-0 animate-fade-in bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <button aria-label="Close" className="absolute inset-0 animate-fade-in bg-black/30 backdrop-blur-[3px]" onClick={onClose} />
       <div className="panel relative w-full max-w-md animate-slide-in">
         <header className="flex items-center border-b border-line px-4 py-3">
           <h2 className="text-sm font-semibold">{title}</h2>

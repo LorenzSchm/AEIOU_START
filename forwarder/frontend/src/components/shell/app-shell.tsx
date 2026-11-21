@@ -21,7 +21,7 @@ import { ThemeToggle } from "./theme-toggle";
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { data: stats } = useGetStats({ hours: 24 });
-  const needsHuman = stats?.needsHuman ?? 0;
+  const attention = stats?.needsHuman ?? 0;
 
   return (
     <nav className="flex flex-col gap-0.5" aria-label="Main">
@@ -36,15 +36,14 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             aria-current={active ? "page" : undefined}
             className={cn(
               "group relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors",
-              active ? "bg-surface-3 text-fg" : "text-muted hover:bg-surface-2 hover:text-fg",
+              active ? "bg-surface-3 text-fg shadow-[inset_0_1px_0_var(--glass-highlight)]" : "text-muted hover:bg-surface-2 hover:text-fg",
             )}
           >
-            {active && <span className="absolute top-1.5 bottom-1.5 -left-3 w-0.5 rounded-full bg-accent" />}
             <Icon className={cn("size-4", active ? "text-accent" : "text-subtle group-hover:text-muted")} />
             <span className="flex-1">{item.label}</span>
-            {item.href === "/" && needsHuman > 0 ? (
-              <span className="num rounded-full bg-attn px-1.5 text-[10px] leading-4 font-semibold text-[#1b1200]" title="Sessions that need a human">
-                {needsHuman}
+            {item.href === "/" && attention > 0 ? (
+              <span className="num rounded-full bg-attn/90 px-1.5 text-[10px] leading-4 font-semibold text-[#1b1200]" title="Attention">
+                {attention}
               </span>
             ) : (
               <Kbd className="opacity-0 transition-opacity group-hover:opacity-100">g {item.key}</Kbd>
@@ -59,11 +58,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 function SidebarFooter({ onShortcuts }: { onShortcuts: () => void }) {
   return (
     <div className="mt-auto flex flex-col gap-3 border-t border-line pt-3">
-      {MOCK_MODE && (
-        <div className="rounded-lg border border-violet/25 bg-violet/8 px-2.5 py-2 text-2xs text-violet">
-          <span className="font-semibold">Demo data.</span> Mock mode with simulated mail traffic, no backend.
-        </div>
-      )}
       <div className="flex items-center justify-between gap-2">
         <ThemeToggle />
         <div className="flex items-center gap-1">
@@ -146,9 +140,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const current = NAV.find((n) => isActive(pathname, n.href));
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-dvh gap-3 overflow-hidden p-0 md:p-3">
       {/* Desktop sidebar */}
-      <aside className="hidden w-[212px] shrink-0 flex-col gap-5 border-r border-line bg-surface px-3 py-4 md:flex">
+      <aside className="glass hidden w-[200px] shrink-0 flex-col gap-5 px-3 py-4 md:flex">
         <Link href="/" className="px-1.5">
           <Logo />
         </Link>
@@ -160,7 +154,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {menuOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <button className="absolute inset-0 bg-black/50" aria-label="Close menu" onClick={() => setMenuOpen(false)} />
-          <aside className="relative flex h-full w-[240px] animate-slide-in flex-col gap-5 border-r border-line bg-surface px-3 py-4">
+          <aside className="glass glass-strong relative flex h-full w-[240px] animate-slide-in flex-col gap-5 rounded-none px-3 py-4">
             <div className="flex items-center justify-between px-1.5">
               <Logo />
               <button onClick={() => setMenuOpen(false)} className="text-subtle" aria-label="Close menu">
@@ -173,8 +167,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface/80 px-3 backdrop-blur sm:px-5">
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <header className="glass flex h-12 shrink-0 items-center gap-3 rounded-none border-x-0 border-t-0 px-3 sm:px-4 md:rounded-[14px] md:border">
           <button onClick={() => setMenuOpen(true)} className="text-muted md:hidden" aria-label="Open menu">
             <Menu className="size-5" />
           </button>
@@ -182,9 +176,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Logo collapsed />
           </div>
           <div className="flex min-w-0 items-center gap-2 text-[13px]">
-            <span className="hidden text-subtle sm:inline">Ops</span>
-            <span className="hidden text-subtle sm:inline">/</span>
-            <span className="truncate font-medium">{pathname.startsWith("/sessions") ? "Session" : pathname.startsWith("/admin") ? "Admin" : (current?.label ?? "")}</span>
+            <span className="truncate font-semibold tracking-tight">{pathname.startsWith("/sessions") ? "Session" : pathname.startsWith("/admin") ? "Admin" : (current?.label ?? "")}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <LocalClock />
@@ -197,7 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <ConnectionIndicator />
           </div>
         </header>
-        <main id="main" className="dot-grid min-h-0 flex-1 overflow-y-auto">
+        <main id="main" className="min-h-0 flex-1 overflow-y-auto">
           {children}
         </main>
       </div>

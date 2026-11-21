@@ -319,19 +319,9 @@ export async function rfqStory(spec: RfqSpec): Promise<void> {
   patchSession(s.id, { lane, mode: spec.mode, status: "PRICING" });
 
   if (spec.ambiguous) {
-    patchSession(s.id, {
-      status: "NEEDS_HUMAN",
-      needsHuman: true,
-      needsHumanReason: `Router confidence ${confidence.toFixed(2)} is below 0.75: reads like a follow-up to a phone call, but carries new cargo details and asks for a pickup.`,
-    });
-    addEvent(s.id, "route.needs_human", "Parked for a human: low router confidence", { payload: { confidence, threshold: 0.75 } });
-    const decision = await waitForSignal<{ type?: string }>(s.id, "human");
-    if (decision.type && decision.type !== "NEW_RFQ") {
-      patchSession(s.id, { status: "CLOSED", needsHuman: false, needsHumanReason: null });
-      return;
-    }
-    patchSession(s.id, { status: "PRICING", needsHuman: false, needsHumanReason: null });
-    await sleep(800);
+    // Fully autonomous: a low-confidence route is only marked for attention, the RFQ is priced anyway.
+    patchSession(s.id, { needsHuman: true, needsHumanReason: `Low router confidence ${confidence.toFixed(2)}` });
+    addEvent(s.id, "human.needed", `Attention: router confidence ${confidence.toFixed(2)}`, { payload: { confidence, threshold: 0.75 } });
   }
 
   // Sheets: every kit airline on the lane, priced in memory.
@@ -505,22 +495,12 @@ export async function rfqStory(spec: RfqSpec): Promise<void> {
   writerCall(s.id, "quote-writer", { ...quote, customer: spec.customer.name, language: spec.customer.lang, register: spec.customer.register }, reply);
 
   const draftMode = !db().admin.autopilot;
-  if (spec.manual || draftMode || !session(s.id).autopilot) {
-    if (session(s.id).autopilot && !draftMode) {
-      patchSession(s.id, { autopilot: false });
-      addEvent(s.id, "human.take_over", "Autopilot off for this session", { actor: "human", payload: { by: "ops" } });
-    }
+  // Only draft mode or a deliberate take-over holds the reply back; nothing else waits for a person.
+  if (draftMode || !session(s.id).autopilot) {
     db().drafts.set(s.id, { sessionId: s.id, to: spec.customer.email, subject: `Re: ${subject}`, body: reply, inReplyToExt: inbound.externalId, createdAt: nowIso() });
-    patchSession(s.id, {
-      needsHuman: true,
-      needsHumanReason: draftMode
-        ? "Draft mode: automatic answering is off, so this quote waits for approval."
-        : "Quote draft is waiting for approval (autopilot off).",
-    });
-    addEvent(s.id, "quote.draft", `Draft ready for review · €${quote.total}`, { payload: { total: quote.total } });
+    addEvent(s.id, "quote.draft", `Draft · €${quote.total}`, { payload: { total: quote.total } });
     reply = await waitForSignal<string>(s.id, "draft");
     db().drafts.delete(s.id);
-    patchSession(s.id, { needsHuman: false, needsHumanReason: null });
   }
 
   const out = addMail({ sessionId: s.id, direction: "out", from: MAILBOX, to: spec.customer.email, subject: `Re: ${subject}`, body: reply, inReplyTo: inbound });
@@ -693,13 +673,13 @@ export async function tariffStory(tariffId: number): Promise<void> {
   });
   addEvent(s.id, "tariff.ingested", `${tariff.airlineName} ${tariff.version}: ${tariff.lanes.length} lanes parsed`, { payload: { tariffId: tariff.id, lanes: tariff.lanes.length } });
   await sleep(300);
-  patchSession(s.id, { status: "NEEDS_HUMAN", needsHuman: true, needsHumanReason: tariff.notes ?? "Sanity check failed against the active version." });
-  addEvent(s.id, "system.alert", `Tariff held for review: ${tariff.notes}`, { payload: { tariffId: tariff.id, checks: { laneCount: "ok", rateDelta: "failed", breakOrder: "ok" } } });
-  const verdict = await waitForSignal<"activate" | "reject">(s.id, "tariff");
-  patchSession(s.id, { status: "CLOSED", needsHuman: false, needsHumanReason: null });
-  addEvent(s.id, verdict === "activate" ? "tariff.ingested" : "tariff.rejected", verdict === "activate" ? `${tariff.airlineName} ${tariff.version} is now active` : `${tariff.airlineName} ${tariff.version} rejected`, {
-    actor: "human",
-    payload: { tariffId: tariff.id },
+  // Structurally fine, so it goes live at once; the rate jump is only flagged.
+  db().tariffs = db().tariffs.map((x) =>
+    x.id === tariff.id ? { ...x, status: "active" } : x.airlineName === tariff.airlineName && x.status === "active" ? { ...x, status: "superseded" } : x,
+  );
+  patchSession(s.id, { status: "CLOSED", needsHuman: true, needsHumanReason: tariff.notes ?? "Rates moved more than 50%" });
+  addEvent(s.id, "tariff.ingested", `${tariff.airlineName} ${tariff.version} active · rate jump flagged`, {
+    payload: { tariffId: tariff.id, checks: { laneCount: "ok", rateDelta: "warning", breakOrder: "ok" } },
   });
 }
 

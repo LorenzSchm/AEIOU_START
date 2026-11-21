@@ -1,19 +1,19 @@
 "use client";
 
 import { parseISO } from "date-fns";
-import { Braces, ChevronRight, ListTree } from "lucide-react";
+import { ChevronRight, ListTree } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useGetEventPayload } from "@/api/generated/events/events";
 import { useListLlmCallsInfinite } from "@/api/generated/llm/llm";
 import type { EventItem, LlmCall, MailDetail } from "@/api/generated/model";
 import { useListSessionEventsInfinite, useListSessionMails } from "@/api/generated/sessions/sessions";
 import { MailCard } from "@/components/mail/mail-card";
-import { TONE_BG, TONE_TEXT } from "@/components/ui/badge";
+import { TONE_TEXT } from "@/components/ui/badge";
 import { Select } from "@/components/ui/fields";
 import { JsonView } from "@/components/ui/json-view";
 import { EmptyState, ErrorState, Skeleton } from "@/components/ui/states";
 import { cn } from "@/lib/cn";
-import { clock, fullDateTime, ms, time, usd } from "@/lib/format";
+import { clock, fullDateTime, ms, usd } from "@/lib/format";
 import { cursorPaging, flatten } from "@/lib/pagination";
 import { kindMeta } from "./event-kinds";
 import { useSessionActions } from "./use-session-action";
@@ -30,7 +30,7 @@ function Payload({ eventId }: { eventId: number }) {
 function ConfidenceBar({ value }: { value: number }) {
   const low = value < 0.75;
   return (
-    <div className="mt-1.5 flex items-center gap-2" title="Router confidence (threshold 0.75)">
+    <div className="mb-2 flex items-center gap-2" title="Router confidence (threshold 0.75)">
       <div className="relative h-1.5 w-40 overflow-hidden rounded-full bg-surface-3">
         <div className={cn("h-full rounded-full", low ? "bg-attn" : "bg-violet")} style={{ width: `${value * 100}%` }} />
         <div className="absolute top-0 h-full w-px bg-fg/50" style={{ left: "75%" }} />
@@ -43,7 +43,7 @@ function ConfidenceBar({ value }: { value: number }) {
 function LlmChips({ call }: { call: LlmCall }) {
   const chip = "num rounded border border-line bg-surface-2 px-1.5 py-px text-2xs text-muted";
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1.5">
+    <div className="mb-2 flex flex-wrap gap-1.5">
       <span className={cn(chip, "text-violet")}>{call.model}</span>
       <span className={chip}>{call.purpose}</span>
       <span className={chip}>
@@ -82,63 +82,45 @@ function TimelineEntry({
   const offset = (parseISO(event.createdAt).getTime() - startedAt) / 1000;
   const isMail = (event.kind === "mail.in" || event.kind === "mail.out") && mail;
   const confidence = confidenceOf(event);
+  const expandable = Boolean(isMail || llm || confidence != null || event.hasPayload);
+  // A mail event already shows the whole mail; its JSON payload would only repeat it.
+  const summary = isMail ? `${mail.direction === "in" ? mail.fromAddr : mail.toAddr} · ${mail.subject}` : event.summary;
 
   return (
-    <li className="relative flex gap-3 pb-4 last:pb-0">
-      <span className="absolute top-7 bottom-0 left-[13px] w-px bg-line" aria-hidden />
-      <span
+    <li className="border-b border-line last:border-b-0">
+      <button
+        type="button"
+        onClick={() => expandable && setOpen((v) => !v)}
+        aria-expanded={expandable ? open : undefined}
+        title={`${meta.label} · ${fullDateTime(event.createdAt)}`}
         className={cn(
-          "relative z-[1] grid size-[27px] shrink-0 place-items-center rounded-full border border-line bg-surface",
-          TONE_TEXT[meta.tone],
+          "flex h-9 w-full items-center gap-3 px-4 text-left transition-colors",
+          expandable ? "hover:bg-surface-2" : "cursor-default",
         )}
       >
-        <span className={cn("absolute inset-0 rounded-full opacity-10", TONE_BG[meta.tone])} />
-        <Icon className="size-3.5" />
-      </span>
+        <Icon className={cn("size-3.5 shrink-0", TONE_TEXT[meta.tone])} />
+        <span className="min-w-0 flex-1 truncate text-[13px] text-fg/90">{summary}</span>
+        {event.actor === "human" && <span className="rounded bg-attn/15 px-1 text-[10px] font-semibold text-attn uppercase">human</span>}
+        <span className="num shrink-0 text-2xs text-subtle">+{clock(offset)}</span>
+        <ChevronRight className={cn("size-3.5 shrink-0 text-subtle transition-transform", open && "rotate-90", !expandable && "opacity-0")} />
+      </button>
 
-      <div className="min-w-0 flex-1 pt-0.5">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className={cn("text-xs font-semibold", TONE_TEXT[meta.tone])}>{meta.label}</span>
-          {event.actor !== "system" && (
-            <span className={cn("rounded px-1 text-[10px] font-semibold uppercase", event.actor === "human" ? "bg-attn/15 text-attn" : "bg-violet/15 text-violet")}>
-              {event.actor}
-            </span>
+      {open && (
+        <div className="animate-fade-in px-4 pb-3 pl-10">
+          {confidence != null && <ConfidenceBar value={confidence} />}
+          {event.kind === "llm.call" && llm && <LlmChips call={llm} />}
+          {isMail && (
+            <div className="mt-1">
+              <MailCard mail={mail} compact actions={rerouteSlot} />
+            </div>
           )}
-          {!isMail && <span className="min-w-0 text-[13px] text-fg/90">{event.summary}</span>}
-          <span className="ml-auto flex shrink-0 items-baseline gap-2">
-            <span className="num text-2xs text-subtle" title="Time since the session started">
-              +{clock(offset)}
-            </span>
-            <time className="num text-2xs text-muted" dateTime={event.createdAt} title={fullDateTime(event.createdAt)}>
-              {time(event.createdAt)}
-            </time>
-            {event.hasPayload && (
-              <button
-                onClick={() => setOpen((v) => !v)}
-                aria-expanded={open}
-                className="inline-flex items-center gap-0.5 rounded px-1 text-2xs text-subtle hover:bg-surface-3 hover:text-fg"
-                title="Show the raw JSON payload"
-              >
-                <Braces className="size-3" />
-                <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
-              </button>
-            )}
-          </span>
+          {event.hasPayload && !isMail && (
+            <div className="mt-2">
+              <Payload eventId={event.id} />
+            </div>
+          )}
         </div>
-
-        {confidence != null && <ConfidenceBar value={confidence} />}
-        {event.kind === "llm.call" && llm && <LlmChips call={llm} />}
-        {isMail && (
-          <div className="mt-2">
-            <MailCard mail={mail} compact actions={rerouteSlot} />
-          </div>
-        )}
-        {open && (
-          <div className="mt-2 animate-fade-in">
-            <Payload eventId={event.id} />
-          </div>
-        )}
-      </div>
+      )}
     </li>
   );
 }
@@ -214,8 +196,8 @@ export function Timeline({ sessionId, startedAt }: { sessionId: number; startedA
   const start = parseISO(startedAt).getTime();
 
   return (
-    <section className="panel">
-      <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+    <section className="panel overflow-hidden">
+      <header className="flex h-11 items-center gap-2 border-b border-line px-4">
         <ListTree className="size-3.5 text-subtle" />
         <h2 className="text-[13px] font-semibold">Timeline</h2>
         <span className="num text-xs text-subtle">{items.length}</span>
@@ -231,17 +213,11 @@ export function Timeline({ sessionId, startedAt }: { sessionId: number; startedA
           ))}
         </div>
       </header>
-      <div className="p-4">
+      <div>
         {events.isPending ? (
-          <div className="flex flex-col gap-4">
-            {Array.from({ length: 6 }, (_, i) => (
-              <div key={i} className="flex gap-3">
-                <Skeleton className="size-7 rounded-full" />
-                <div className="flex flex-1 flex-col gap-2">
-                  <Skeleton className="h-3.5 w-2/3" />
-                  {i % 3 === 0 && <Skeleton className="h-24 w-full" />}
-                </div>
-              </div>
+          <div className="flex flex-col gap-3 p-4">
+            {Array.from({ length: 8 }, (_, i) => (
+              <Skeleton key={i} className="h-4 w-full" />
             ))}
           </div>
         ) : events.isError ? (

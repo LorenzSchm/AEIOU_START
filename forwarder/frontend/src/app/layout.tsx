@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Sky } from "@/components/shell/sky";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-script";
 import "./globals.css";
 
@@ -24,8 +25,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#090b0f" },
-    { media: "(prefers-color-scheme: light)", color: "#f4f5f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#050a1a" },
+    { media: "(prefers-color-scheme: light)", color: "#6fb1ea" },
   ],
 };
 
@@ -40,7 +41,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
-      <body className="h-full">{children}</body>
+      <body className="h-full">
+        <Sky />
+        {children}
+      </body>
     </html>
   );
 }

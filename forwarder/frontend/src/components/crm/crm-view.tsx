@@ -13,7 +13,7 @@ import { Segmented } from "@/components/ui/fields";
 import { LoadMore } from "@/components/ui/load-more";
 import { Panel } from "@/components/ui/panel";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows } from "@/components/ui/states";
-import { dateTime, money, shortDate } from "@/lib/format";
+import { money, shortDate } from "@/lib/format";
 import { cursorPaging, flatten } from "@/lib/pagination";
 import { CostPerHour, QuotesPerHour, ReasonCodes, ResponseDistribution } from "./charts";
 
@@ -49,7 +49,7 @@ function Bookings() {
       ) : q.isError ? (
         <ErrorState error={q.error} />
       ) : rows.length === 0 ? (
-        <EmptyState icon={PackageCheck} title="No bookings yet" hint="Accepted quotes are booked by rate ID and land here." />
+        <EmptyState icon={PackageCheck} title="No bookings yet" />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -116,7 +116,7 @@ function Verdicts() {
       ) : isError ? (
         <ErrorState error={error} />
       ) : rows.length === 0 ? (
-        <EmptyState icon={Trophy} title="No board verdicts yet" hint="The board watcher polls /v1/board/me every minute." />
+        <EmptyState icon={Trophy} title="No board verdicts yet" />
       ) : (
         <table className="w-full text-[13px]">
           <thead className="sticky top-0 border-b border-line bg-surface">
@@ -168,16 +168,16 @@ export function CrmView() {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-4">
-        <Panel title="Quotes vs accepted" icon={<ChartColumn />} bodyClassName="p-4" actions={<span className="text-2xs text-subtle">per hour · last 12 h</span>}>
+        <Panel title="Quotes vs accepted" icon={<ChartColumn />} bodyClassName="p-4">
           {chart(stats.data && <QuotesPerHour hourly={stats.data.hourly} />)}
         </Panel>
-        <Panel title="LLM cost" icon={<ChartColumn />} bodyClassName="p-4" actions={<span className="text-2xs text-subtle">updated {dateTime(stats.data?.hourly.at(-1)?.hour)}</span>}>
+        <Panel title="LLM cost" icon={<ChartColumn />} bodyClassName="p-4">
           {chart(stats.data && <CostPerHour hourly={stats.data.hourly} />)}
         </Panel>
-        <Panel title="Response time" icon={<ChartColumn />} bodyClassName="p-4" actions={<span className="text-2xs text-subtle">request → quote</span>}>
+        <Panel title="Response time" icon={<ChartColumn />} bodyClassName="p-4">
           {sessions.isPending ? <Skeleton className="h-[220px] w-full" /> : <ResponseDistribution sessions={flatten(sessions.data)} />}
         </Panel>
-        <Panel title="Rejection reasons" icon={<ChartColumn />} bodyClassName="p-4" actions={<span className="text-2xs text-subtle">early warning for setup changes</span>}>
+        <Panel title="Rejection reasons" icon={<ChartColumn />} bodyClassName="p-4">
           {board.isPending ? <Skeleton className="h-[220px] w-full" /> : <ReasonCodes board={board.data ?? []} />}
         </Panel>
       </div>

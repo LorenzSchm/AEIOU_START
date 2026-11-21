@@ -35,11 +35,9 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-2 px-6 py-14 text-center", className)}>
-      <div className="mb-1 grid size-10 place-items-center rounded-full border border-line bg-surface-2">
-        <Icon className="size-4.5 text-subtle" />
-      </div>
-      <p className="text-sm font-medium">{title}</p>
+    <div className={cn("flex flex-col items-center justify-center gap-2 px-6 py-12 text-center", className)}>
+      <Icon className="size-5 text-subtle" />
+      <p className="text-[13px] text-muted">{title}</p>
       {hint && <p className="max-w-sm text-xs text-muted">{hint}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
@@ -59,7 +57,6 @@ export function ErrorState({ error, className }: { error: unknown; className?: s
         {message}
         {status ? <span className="num ml-1 text-subtle">({status})</span> : null}
       </p>
-      <p className="text-2xs text-subtle">It will reload by itself once the live stream reconnects.</p>
     </div>
   );
 }

@@ -51,6 +51,8 @@ const EXACT: Record<string, KindMeta> = {
   "tariff.rejected": { icon: CircleX, tone: "danger", label: "Tariff rejected" },
   "board.verdict": { icon: Trophy, tone: "attn", label: "Board verdict" },
   "system.alert": { icon: Siren, tone: "danger", label: "Alert" },
+  "human.needed": { icon: TriangleAlert, tone: "attn", label: "Attention" },
+  "human.resolved": { icon: BadgeCheck, tone: "muted", label: "Attention cleared" },
 };
 
 export function kindMeta(kind: string): KindMeta {

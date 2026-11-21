@@ -32,22 +32,16 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const hint = MOCK_MODE && !process.env.APP_PASSWORD ? "Demo mode: the password is “demo”." : undefined;
 
   return (
-    <main className="dot-grid relative grid min-h-dvh place-items-center overflow-hidden px-4">
+    <main className="relative grid min-h-dvh place-items-center overflow-hidden px-4">
       <Routes />
       <div className="relative w-full max-w-[380px]">
         <div className="mb-8 flex justify-center">
           <Logo />
         </div>
         <div className="panel p-6 sm:p-7">
-          <h1 className="text-lg font-semibold tracking-tight">Welcome back</h1>
-          <p className="mt-1 mb-6 text-[13px] text-muted">
-            Quotes, bookings and every mail the agents write, live.
-          </p>
+          <h1 className="mb-5 text-lg font-semibold tracking-tight">Sign in</h1>
           <LoginForm next={next} hint={hint} />
         </div>
-        <p className="mt-6 text-center text-2xs text-subtle">
-          Team AEIOU · 5U AI Challenge · START HACK Munich 2026
-        </p>
       </div>
     </main>
   );

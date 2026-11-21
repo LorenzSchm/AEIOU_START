@@ -76,7 +76,6 @@ function KeyCard({ status }: { status: AdminStatus }) {
             Register
           </Button>
         </form>
-        <p className="text-2xs text-subtle">Sent once to the gateway through the backend. It is not stored in this browser.</p>
 
         {result && (
           <p role="status" className={cn("flex items-start gap-2 text-[13px]", result.ok ? "text-ok" : "text-danger")}>
@@ -110,11 +109,9 @@ function LiveCard({ status }: { status: AdminStatus }) {
         <div className="flex items-start gap-2.5 border-b border-attn/25 bg-attn/[0.08] px-4 py-3 text-[13px]" role="alert">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-attn" />
           <div>
-            <p className="font-semibold text-attn">This is not the live instance.</p>
-            <p className="mt-0.5 text-xs text-fg/85">
-              {!status.envPollerEnabled && "POLLER_ENABLED is false"}
-              {!status.envPollerEnabled && !status.envSendEnabled && " and "}
-              {!status.envSendEnabled && "SEND_ENABLED is false"} in this backend&apos;s environment, so these switches have no effect here.
+            <p className="font-semibold text-attn">Not the live instance</p>
+            <p className="num mt-0.5 text-2xs text-fg/80">
+              {[!status.envPollerEnabled && "POLLER_ENABLED=false", !status.envSendEnabled && "SEND_ENABLED=false"].filter(Boolean).join(" · ")}
             </p>
           </div>
         </div>
@@ -123,7 +120,6 @@ function LiveCard({ status }: { status: AdminStatus }) {
         <li className="flex items-center gap-4 px-4 py-4">
           <div className="flex-1">
             <p className="text-[13px] font-medium">Poll mailbox</p>
-            <p className="mt-0.5 text-xs text-muted">Fetch new mail from aeiou@hackloop.mail every second.</p>
           </div>
           <Switch
             checked={status.pollingEnabled}
@@ -134,10 +130,7 @@ function LiveCard({ status }: { status: AdminStatus }) {
         </li>
         <li className="flex items-center gap-4 px-4 py-4">
           <div className="flex-1">
-            <p className="text-[13px] font-medium">Answer live mails automatically</p>
-            <p className="mt-0.5 text-xs text-muted">
-              Off means draft mode: the agents still price and write every reply, but a human approves each one before it goes out.
-            </p>
+            <p className="text-[13px] font-medium" title="Off = draft mode">Autopilot</p>
           </div>
           <Switch
             checked={status.autopilot}
@@ -148,11 +141,8 @@ function LiveCard({ status }: { status: AdminStatus }) {
         </li>
       </ul>
 
-      <Modal open={confirmAutopilot} onClose={() => setConfirmAutopilot(false)} title="Turn on automatic answering?">
-        <p className="text-[13px] text-muted">
-          From now on, quotes, booking confirmations and tracking answers go to real customers without review. Only the first quote in a thread counts, so a
-          wrong one cannot be taken back.
-        </p>
+      <Modal open={confirmAutopilot} onClose={() => setConfirmAutopilot(false)} title="Turn on autopilot?">
+        <p className="text-[13px] text-muted">Replies go to real customers without review.</p>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setConfirmAutopilot(false)}>
             Cancel

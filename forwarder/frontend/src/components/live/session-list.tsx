@@ -1,11 +1,12 @@
 "use client";
 
-import { Hand, Inbox } from "lucide-react";
+import { Inbox } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ListSessionsParams, SessionStatus, SessionType } from "@/api/generated/model";
 import { useListSessionsInfinite } from "@/api/generated/sessions/sessions";
-import { SESSION_STATUSES, statusLabel } from "@/components/session/status";
+import { useGetStats } from "@/api/generated/stats/stats";
+import { AttentionDot, SESSION_STATUSES, statusLabel } from "@/components/session/status";
 import { SearchInput, Segmented, Select } from "@/components/ui/fields";
 import { LoadMore } from "@/components/ui/load-more";
 import { Panel } from "@/components/ui/panel";
@@ -22,7 +23,9 @@ export function SessionList() {
   const router = useRouter();
   const [status, setStatus] = useState<SessionStatus | "">("");
   const [type, setType] = useState<TypeFilter>("all");
-  const [onlyHuman, setOnlyHuman] = useState(false);
+  const [onlyAttention, setOnlyAttention] = useState(false);
+  const { data: stats } = useGetStats({ hours: 24 });
+  const attentionCount = stats?.needsHuman ?? 0;
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim(), 250);
 
@@ -31,10 +34,10 @@ export function SessionList() {
       limit: 40,
       ...(status ? { status } : {}),
       ...(type !== "all" ? { type } : {}),
-      ...(onlyHuman ? { needsHuman: true } : {}),
+      ...(onlyAttention ? { needsHuman: true } : {}),
       ...(q ? { q } : {}),
     }),
-    [status, type, onlyHuman, q],
+    [status, type, onlyAttention, q],
   );
 
   const query = useListSessionsInfinite(params, { query: cursorPaging });
@@ -61,21 +64,45 @@ export function SessionList() {
     },
   });
 
-  const filtered = Boolean(status || type !== "all" || onlyHuman || q);
+  const filtered = Boolean(status || type !== "all" || onlyAttention || q);
 
   return (
     <Panel
       title="Sessions"
       count={sessions.length}
-      className="min-h-[420px]"
+      className="min-h-[420px] flex-1"
       actions={
-        <span className="hidden text-2xs text-subtle lg:inline">
-          <span className="num">j</span>/<span className="num">k</span> to move · <span className="num">↵</span> to open
-        </span>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {(attentionCount > 0 || onlyAttention) && (
+            <button
+              onClick={() => setOnlyAttention((v) => !v)}
+              aria-pressed={onlyAttention}
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
+                onlyAttention ? "border-attn/40 bg-attn/15 text-attn" : "border-line bg-surface-2 text-muted hover:text-fg",
+              )}
+            >
+              <AttentionDot /> Attention <span className="num">{attentionCount}</span>
+            </button>
+          )}
+          {filtered && (
+            <button
+              onClick={() => {
+                setStatus("");
+                setType("all");
+                setOnlyAttention(false);
+                setSearch("");
+              }}
+              className="text-xs text-subtle hover:text-fg"
+            >
+              Clear
+            </button>
+          )}
+        </div>
       }
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-3.5 py-2.5">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search ref, customer, lane…" className="w-full sm:w-64" />
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search" className="w-full sm:w-56" />
         <Segmented<TypeFilter>
           value={type}
           onChange={setType}
@@ -86,37 +113,14 @@ export function SessionList() {
             { value: "TARIFF", label: "Tariff" },
           ]}
         />
-        <Select value={status} onChange={(e) => setStatus(e.target.value as SessionStatus | "")} aria-label="Status" className="w-40">
-          <option value="">Any status</option>
+        <Select value={status} onChange={(e) => setStatus(e.target.value as SessionStatus | "")} aria-label="Status" className="w-36">
+          <option value="">All statuses</option>
           {SESSION_STATUSES.map((s) => (
             <option key={s} value={s}>
               {statusLabel(s)}
             </option>
           ))}
         </Select>
-        <button
-          onClick={() => setOnlyHuman((v) => !v)}
-          aria-pressed={onlyHuman}
-          className={cn(
-            "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium transition-colors",
-            onlyHuman ? "border-attn/40 bg-attn/12 text-attn" : "border-line bg-surface-2 text-muted hover:text-fg",
-          )}
-        >
-          <Hand className="size-3.5" /> Needs human
-        </button>
-        {filtered && (
-          <button
-            onClick={() => {
-              setStatus("");
-              setType("all");
-              setOnlyHuman(false);
-              setSearch("");
-            }}
-            className="text-xs text-subtle hover:text-fg"
-          >
-            Clear
-          </button>
-        )}
       </div>
 
       <SessionHeaderRow />
@@ -125,11 +129,7 @@ export function SessionList() {
       ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : sessions.length === 0 ? (
-        <EmptyState
-          icon={Inbox}
-          title={filtered ? "No sessions match these filters" : "Quiet skies"}
-          hint={filtered ? "Try a broader search or clear the filters." : "New RFQs show up here the second they land in the mailbox."}
-        />
+        <EmptyState icon={Inbox} title={filtered ? "No matches" : "Quiet skies"} />
       ) : (
         <div role="list">
           {sessions.map((s, i) => (

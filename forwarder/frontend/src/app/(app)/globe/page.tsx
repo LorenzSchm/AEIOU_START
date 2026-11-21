@@ -7,5 +7,9 @@ export const metadata: Metadata = {
 };
 
 export default function GlobePage() {
-  return <GlobeView />;
+  return (
+    <div className="h-full overflow-hidden border-white/10 md:rounded-[14px] md:border">
+      <GlobeView />
+    </div>
+  );
 }

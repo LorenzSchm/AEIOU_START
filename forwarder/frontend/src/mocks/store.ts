@@ -333,7 +333,7 @@ export function addLlmCall(
 
 // ───────────────────────────── signals ─────────────────────────────
 
-/** Pause a story until a human acts on the session. */
+/** Pause a story until an operator acts (draft mode or a taken-over session). */
 export function waitForSignal<T>(sessionId: number, name: string): Promise<T> {
   return new Promise<T>((resolve) => {
     db().signals.set(`${sessionId}:${name}`, (v) => resolve(v as T));

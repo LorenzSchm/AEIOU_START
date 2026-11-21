@@ -174,7 +174,7 @@ export function LlmView() {
         ) : q.isError ? (
           <ErrorState error={q.error} />
         ) : calls.length === 0 ? (
-          <EmptyState icon={Bot} title="No LLM calls yet" hint="Each RFQ should cost one or two small calls." />
+          <EmptyState icon={Bot} title="No LLM calls yet" />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
@@ -216,7 +216,7 @@ export function LlmView() {
         )}
       </Panel>
 
-      <Drawer open={open != null} onClose={() => setOpen(null)} title={`LLM call #${open ?? ""}`} subtitle="Prompt and response as sent through the 5U gateway">
+      <Drawer open={open != null} onClose={() => setOpen(null)} title={`LLM call #${open ?? ""}`}>
         {open != null && <CallDetail id={open} />}
       </Drawer>
     </div>

@@ -2,59 +2,73 @@
 
 /* ───────────────────────── Design tokens ─────────────────────────
    Dark-first "air cargo ops" palette: graphite surfaces, hairline rules,
-   one cool accent for interaction, amber reserved for things a human must see. */
+   one cool accent for interaction, amber for attention. */
+/* ───────────────────────── Design tokens ─────────────────────────
+   Frosted glass over a living sky. Surfaces are translucent and pick up the sky behind them;
+   --surface-solid is for things that float over scrolling content (menus, sticky rows). */
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #090b0f;
-  --surface: #0e1116;
-  --surface-2: #13171e;
-  --surface-3: #1a1f28;
-  --line: #1d232d;
-  --line-strong: #2a3240;
-  --fg: #e6e9ee;
-  --fg-muted: #98a1b0;
-  --fg-subtle: #5f6878;
-  --accent: #7cb4ff;
-  --accent-strong: #a9cdff;
+  --bg: #050a1a;
+  --surface: rgb(14 22 46 / 0.4);
+  --surface-solid: rgb(14 21 42 / 0.78);
+  --surface-2: rgb(255 255 255 / 0.045);
+  --surface-3: rgb(255 255 255 / 0.09);
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.16);
+  --glass-edge: rgb(255 255 255 / 0.12);
+  --glass-highlight: rgb(255 255 255 / 0.07);
+  --glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.05), transparent 120px);
+  --glass-sat: 170%;
+  --fg: #eef2fa;
+  --fg-muted: #a9b4c8;
+  --fg-subtle: #7180a0;
+  --accent: #8cc0ff;
+  --accent-strong: #b8d8ff;
   --accent-fg: #06101f;
-  --ok: #4fd1a1;
-  --attn: #f5b547;
-  --danger: #f2716e;
-  --violet: #b39dfa;
-  --cyan: #5ccfe6;
-  --pink: #f08fc0;
-  --shadow: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -12px rgb(0 0 0 / 0.6);
-  --grid-dot: rgb(255 255 255 / 0.035);
+  --ok: #5fe0b0;
+  --attn: #ffc25c;
+  --danger: #ff8a86;
+  --violet: #c2adff;
+  --cyan: #6fdcf2;
+  --pink: #f6a0cb;
+  --shadow: 0 1px 0 0 var(--glass-highlight) inset, 0 18px 40px -18px rgb(0 0 10 / 0.7);
+  --grid-dot: transparent;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f5f7;
-  --surface: #ffffff;
-  --surface-2: #f6f7f9;
-  --surface-3: #eceff3;
-  --line: #e2e5ea;
-  --line-strong: #cfd4dc;
-  --fg: #0d1117;
-  --fg-muted: #535d6c;
-  --fg-subtle: #8a93a1;
-  --accent: #1f5fd6;
-  --accent-strong: #1747a8;
+  --bg: #cfe6fb;
+  --surface: rgb(255 255 255 / 0.5);
+  --surface-solid: rgb(240 248 255 / 0.74);
+  --surface-2: rgb(255 255 255 / 0.42);
+  --surface-3: rgb(16 52 102 / 0.07);
+  --line: rgb(18 52 96 / 0.1);
+  --line-strong: rgb(18 52 96 / 0.18);
+  --glass-edge: rgb(255 255 255 / 0.7);
+  --glass-highlight: rgb(255 255 255 / 0.85);
+  --glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.35), transparent 120px);
+  --glass-sat: 125%;
+  --fg: #0b1626;
+  --fg-muted: #3f5068;
+  --fg-subtle: #6a7a92;
+  --accent: #1a5fd0;
+  --accent-strong: #1446a3;
   --accent-fg: #ffffff;
-  --ok: #0f8a5f;
-  --attn: #b26a00;
-  --danger: #c7322f;
-  --violet: #6b4fd8;
-  --cyan: #0a7f99;
-  --pink: #b8346f;
-  --shadow: 0 1px 2px rgb(13 17 23 / 0.04), 0 8px 24px -12px rgb(13 17 23 / 0.12);
-  --grid-dot: rgb(13 17 23 / 0.05);
+  --ok: #0b8558;
+  --attn: #a85f00;
+  --danger: #c22f2b;
+  --violet: #6244d0;
+  --cyan: #077893;
+  --pink: #b02f69;
+  --shadow: 0 1px 0 0 var(--glass-highlight) inset, 0 16px 36px -18px rgb(20 60 120 / 0.28);
+  --grid-dot: transparent;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-solid: var(--surface-solid);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-line: var(--line);
@@ -109,6 +123,7 @@
   }
   body {
     background: var(--bg);
+    min-height: 100dvh;
     color: var(--fg);
     font-family: var(--font-sans);
     font-feature-settings: "ss02", "zero";
@@ -146,11 +161,20 @@
     text-transform: uppercase;
     color: var(--fg-subtle);
   }
-  .panel {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 10px;
+  /* Frosted glass. Every panel, card, sidebar and dialog is one of these. */
+  .panel,
+  .glass {
+    background: var(--glass-sheen), var(--surface);
+    border: 1px solid var(--glass-edge);
+    border-radius: 14px;
     box-shadow: var(--shadow);
+    -webkit-backdrop-filter: blur(16px) saturate(var(--glass-sat));
+    backdrop-filter: blur(16px) saturate(var(--glass-sat));
+  }
+  .glass-strong {
+    background: var(--surface-solid);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
   }
   .hairline {
     border-color: var(--line);
@@ -170,6 +194,110 @@
 @keyframes shimmer {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
+}
+
+/* ───────────────────────── Sky ─────────────────────────
+   Day and night are both rendered and cross-faded with the theme. Only transform and opacity animate. */
+.sky {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sky-layer {
+  position: absolute;
+  inset: 0;
+  transition: opacity 0.9s ease;
+}
+.sky-day {
+  background:
+    radial-gradient(120% 70% at 85% -10%, rgb(255 246 214 / 0.75), transparent 55%),
+    linear-gradient(180deg, #3f8fdc 0%, #6fb1ea 28%, #a7d2f6 58%, #dcefff 100%);
+}
+.sky-night {
+  opacity: 0;
+  background:
+    radial-gradient(60% 45% at 82% 12%, rgb(120 150 230 / 0.16), transparent 60%),
+    radial-gradient(90% 60% at 10% 110%, rgb(64 46 140 / 0.35), transparent 60%),
+    linear-gradient(180deg, #030716 0%, #071131 45%, #10204e 80%, #1b2d63 100%);
+}
+:root[data-theme="dark"] .sky-day { opacity: 0; }
+:root[data-theme="dark"] .sky-night { opacity: 1; }
+
+.cloud {
+  position: absolute;
+  left: 0;
+  will-change: transform;
+  animation: cloud-drift var(--dur, 180s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+.cloud > span {
+  position: absolute;
+  border-radius: 9999px;
+  background: var(--cloud, #fff);
+}
+.cloud-body {
+  position: relative;
+  width: var(--w, 360px);
+  height: calc(var(--w, 360px) * 0.34);
+  filter: blur(var(--blur, 7px));
+  opacity: var(--o, 0.9);
+}
+@keyframes cloud-drift {
+  from { transform: translate3d(-40vw, 0, 0); }
+  to { transform: translate3d(120vw, 0, 0); }
+}
+
+.stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  border-radius: 9999px;
+  background: transparent;
+}
+.stars-twinkle { animation: twinkle 5s ease-in-out infinite; }
+.stars-twinkle-b { animation: twinkle 7s ease-in-out infinite reverse; }
+@keyframes twinkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.moon {
+  position: absolute;
+  top: 58%;
+  left: 5vw;
+  width: 74px;
+  height: 74px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 38% 36%, #fffdf3 0%, #f1ecd9 45%, #cfc8b0 100%);
+  box-shadow: 0 0 40px 12px rgb(230 228 210 / 0.22), 0 0 140px 60px rgb(150 170 255 / 0.12);
+}
+.shooting-star {
+  position: absolute;
+  top: 14%;
+  left: 18%;
+  width: 140px;
+  height: 1px;
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.9), transparent);
+  transform: rotate(-18deg);
+  opacity: 0;
+  animation: shoot 17s ease-out infinite 6s;
+}
+@keyframes shoot {
+  0%, 92% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-18deg); }
+  93% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(340px, 110px, 0) rotate(-18deg); }
+}
+
+@media (max-width: 767px) {
+  .moon { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud, .stars-twinkle, .stars-twinkle-b, .shooting-star { animation: none !important; }
+  .cloud { transform: translate3d(var(--rest, 20vw), 0, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
