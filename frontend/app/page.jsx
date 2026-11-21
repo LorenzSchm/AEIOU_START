@@ -154,6 +154,17 @@ function Case({ m, messages, directory, refresh }) {
           {m.review_reason}
         </p>
       )}
+      {m.board_result ? (
+        <p className="note">
+          5U board · Round {m.board_result.round_no} · {m.board_result.verdict}
+          {m.board_result.reason ? ` · ${m.board_result.reason.replaceAll("_", " ")}` : ""}
+          {m.board_result.total != null ? ` · ${m.board_result.total} points` : ""}
+          {Object.entries(m.board_result.points ?? {}).map(([kind, points]) => (
+            <span key={kind}> · {kind} {points}</span>
+          ))}
+          {m.board_result.cost_pending ? " · cost points pending" : ""}
+        </p>
+      ) : null}
       <Conversation messages={messages} selected={m} />
       {request && (
         <>

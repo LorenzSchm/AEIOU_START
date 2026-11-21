@@ -13,4 +13,8 @@ dependencies {
 tasks.named('processResources') {
     from(rootProject.file('data')) { into 'kit' }
     from(rootProject.file('../start-kit')) { include '*.csv'; into 'kit' }
+    from(rootProject.file('cloudline')) {
+        include 'mail-designs/cloudline.html', 'mail-designs/assets/**'
+        into 'cloudline'
+    }
 }

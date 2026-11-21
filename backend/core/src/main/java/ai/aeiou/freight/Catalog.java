@@ -104,7 +104,17 @@ public final class Catalog {
   }
 
   public List<Carrier> invitations(Shipment s) {
-    var airlines = carriers.stream().filter(c -> !c.truck() && c.serves(s.destination())).toList();
+    return invitations(s, Map.of());
+  }
+
+  public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes) {
+    String route = s.origin() + "-" + s.destination();
+    var airlines = carriers.stream()
+        .filter(c -> !c.truck())
+        .filter(c -> airlineRoutes.containsKey(c.email())
+            ? airlineRoutes.get(c.email()).contains(route) : c.serves(s.destination()))
+        .sorted(Comparator.comparing(c -> !airlineRoutes.containsKey(c.email())))
+        .toList();
     var trucks = carriers.stream().filter(c -> c.truck() && c.serves(s.pickupZone())).toList();
     // In zone 60 these truckers returned the lowest initial bids in the pre-wave comparison.
     // This is an invitation preference only. Each shipment still needs a fresh confirmed rate.
