@@ -1,9 +1,9 @@
 package ai.aeiou.forwarder.api;
 
 import ai.aeiou.forwarder.api.port.DraftSender;
-import ai.aeiou.forwarder.api.port.GatewayKeyClient;
 import ai.aeiou.forwarder.api.port.MailRerouter;
 import ai.aeiou.forwarder.event.EventLog;
+import ai.aeiou.forwarder.fiveu.FiveUClient;
 import ai.aeiou.forwarder.session.SessionService;
 import ai.aeiou.forwarder.settings.SettingsService;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,10 +27,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Full application context against a Testcontainers Postgres with the real read models. Collaborators owned by
- * other modules (event log, session service, settings, sending, routing) are mocked. Every subclass shares one
+ * other modules (event log, session service, settings, sending, routing, the 5U client) are mocked. Every subclass shares one
  * cached context and one container; tables are truncated before each test.
  */
-@SpringBootTest(properties = {"app.poller.enabled=false", "app.mail.send-enabled=false"})
+@SpringBootTest(properties = {"app.poller.enabled=false", "app.mail.send-enabled=false",
+        "app.fiveu.base-url=http://5u.invalid", "app.fiveu.api-key=test-team-key"})
 @AutoConfigureMockMvc
 @Import(ApiTestBase.Containers.class)
 public abstract class ApiTestBase {
@@ -49,7 +50,7 @@ public abstract class ApiTestBase {
     @MockitoBean protected SettingsService settingsService;
     @MockitoBean protected DraftSender draftSender;
     @MockitoBean protected MailRerouter mailRerouter;
-    @MockitoBean protected GatewayKeyClient gatewayKeyClient;
+    @MockitoBean protected FiveUClient fiveU;
 
     @Autowired protected MockMvc mvc;
     @Autowired protected JdbcClient jdbc;

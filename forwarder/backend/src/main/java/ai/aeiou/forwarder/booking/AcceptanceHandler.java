@@ -3,13 +3,13 @@ package ai.aeiou.forwarder.booking;
 import ai.aeiou.forwarder.booking.BookingRepository.ChosenCandidate;
 import ai.aeiou.forwarder.booking.BookingRepository.RfqInfo;
 import ai.aeiou.forwarder.booking.port.BookingPortal;
-import ai.aeiou.forwarder.booking.port.BookingPortal.BookingOut;
 import ai.aeiou.forwarder.booking.port.BookingPortal.BookingResult;
-import ai.aeiou.forwarder.booking.port.BookingPortal.Rate;
 import ai.aeiou.forwarder.booking.port.BookingPortal.RateQuery;
 import ai.aeiou.forwarder.booking.port.BookingPortal.RateResult;
 import ai.aeiou.forwarder.event.Actor;
 import ai.aeiou.forwarder.event.EventLog;
+import ai.aeiou.forwarder.fiveu.PortalModels.Booking;
+import ai.aeiou.forwarder.fiveu.PortalModels.Rate;
 import ai.aeiou.forwarder.mail.MailGateway;
 import ai.aeiou.forwarder.mail.OutgoingMail;
 import ai.aeiou.forwarder.mail.StoredMail;
@@ -211,7 +211,7 @@ public class AcceptanceHandler implements MailHandler {
         return drift.compareTo(MAX_PRICE_DRIFT) <= 0;
     }
 
-    private void onBooked(Context ctx, BookingOut out, Integer transitDays) {
+    private void onBooked(Context ctx, Booking out, Integer transitDays) {
         long sessionId = ctx.session().id();
         OffsetDateTime departure = ShipmentFacts.departure(ctx.rfq().readyDate(), OffsetDateTime.now(clock));
         BookingRecord booking = new BookingRecord(0, sessionId, out.rateId(), ctx.session().publicRef(), out.bookingReference(),

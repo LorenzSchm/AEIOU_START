@@ -2,7 +2,6 @@ package ai.aeiou.forwarder.pricing;
 
 import ai.aeiou.forwarder.reference.Carrier;
 import ai.aeiou.forwarder.reference.ReferenceData;
-import ai.aeiou.forwarder.settings.SettingsService;
 import ai.aeiou.forwarder.tariff.RateCard;
 import ai.aeiou.forwarder.tariff.TariffRepository;
 import java.math.BigDecimal;
@@ -22,7 +21,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -36,23 +34,19 @@ import org.springframework.stereotype.Service;
 public class SheetPricingService implements PricingService {
 
     public static final String SOURCE = "sheet";
-    public static final String FX_SETTING = "fxEurPerUsd";
     private static final Logger log = LoggerFactory.getLogger(SheetPricingService.class);
 
     private final TariffRepository tariffs;
     private final ReferenceData referenceData;
-    private final ObjectProvider<SettingsService> settings;
+    private final FxRates fxRates;
     private final Clock clock;
-    private final BigDecimal defaultFxEurPerUsd;
     private final AtomicReference<Map<String, List<RateCard>>> lanes = new AtomicReference<>(Map.of());
 
-    public SheetPricingService(TariffRepository tariffs, ReferenceData referenceData, ObjectProvider<SettingsService> settings,
-                               ObjectProvider<Clock> clock, @Value("${app.pricing.default-fx-eur-per-usd:0.86}") BigDecimal defaultFxEurPerUsd) {
+    public SheetPricingService(TariffRepository tariffs, ReferenceData referenceData, FxRates fxRates, ObjectProvider<Clock> clock) {
         this.tariffs = tariffs;
         this.referenceData = referenceData;
-        this.settings = settings;
+        this.fxRates = fxRates;
         this.clock = clock.getIfAvailable(Clock::systemDefaultZone);
-        this.defaultFxEurPerUsd = defaultFxEurPerUsd;
     }
 
     @Override
@@ -119,11 +113,7 @@ public class SheetPricingService implements PricingService {
     private Optional<Fx> fx(RateCard card) {
         if ("EUR".equalsIgnoreCase(card.currency())) return Optional.of(new Fx(BigDecimal.ONE, "none"));
         if (card.fxEurPerUnit() != null) return Optional.of(new Fx(card.fxEurPerUnit(), "sheet"));
-        if ("USD".equalsIgnoreCase(card.currency())) {
-            SettingsService s = settings.getIfAvailable();
-            BigDecimal rate = s == null ? defaultFxEurPerUsd : BigDecimal.valueOf(s.getDouble(FX_SETTING, defaultFxEurPerUsd.doubleValue()));
-            return Optional.of(new Fx(rate, "default"));
-        }
+        if ("USD".equalsIgnoreCase(card.currency())) return Optional.of(new Fx(fxRates.eurPerUsd(), "default"));
         return Optional.empty();
     }
 

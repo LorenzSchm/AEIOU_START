@@ -13,6 +13,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -132,8 +133,8 @@ public class FiveUClient {
                 .queryParam("origin", origin)
                 .queryParam("destination", destination)
                 .queryParam("airline", airline)
-                .queryParam("weight_kg", weightKg.toPlainString())
-                .queryParam("volume_cbm", volumeCbm == null ? "0" : volumeCbm.toPlainString())
+                .queryParam("weight_kg", plain(weightKg))
+                .queryParam("volume_cbm", volumeCbm == null ? "0" : plain(volumeCbm))
                 .build()), Rate.class);
     }
 
@@ -169,34 +170,37 @@ public class FiveUClient {
         if (res.isSuccess()) {
             log.info("OpenAI key registered: ok");
         } else {
-            log.warn("OpenAI key registered: failed (HTTP {}) {}", res.status(), redact(errorMessage(res), apiKey));
+            log.warn("OpenAI key registered: failed (HTTP {}) {}", res.status(), redact(Objects.toString(res.errorDetail(), ""), apiKey));
         }
         return res;
     }
 
+    /**
+     * {@code GET /v1/gateway/openai-key} answer, e.g. {@code {"set":true,"last4":"b_wA","checked_at":"..."}}.
+     *
+     * @param set       whether the gateway holds a key for our team
+     * @param last4     the last four characters of the stored key, as shown by 5U
+     * @param checkedAt when 5U last validated the key (ISO-8601), may be null
+     */
+    public record OpenAiKeyStatus(Boolean set, String last4, String checkedAt) {}
+
     /** {@code GET /v1/gateway/openai-key}: whether a key is registered, as reported by 5U. */
-    public ApiResponse<JsonNode> openAiKeyStatus() {
-        return exchange(http.get().uri("/v1/gateway/openai-key"), JsonNode.class);
+    public ApiResponse<OpenAiKeyStatus> openAiKeyStatus() {
+        return exchange(http.get().uri("/v1/gateway/openai-key"), OpenAiKeyStatus.class);
     }
 
-    private String errorMessage(ApiResponse<JsonNode> res) {
-        try {
-            JsonNode body = snakeCase.readTree(res.rawBody());
-            for (String field : List.of("detail", "message", "error")) {
-                if (body.path(field).isString()) return body.path(field).asString();
-            }
-        } catch (JacksonException ignored) {
-            // not JSON: nothing to show
-        }
-        return "";
-    }
-
-    private static String redact(String text, String secret) {
+    /** Replaces every occurrence of {@code secret} in {@code text} with {@code ***}. */
+    public static String redact(String text, String secret) {
         if (text == null || secret == null || secret.isEmpty()) return text;
         return text.replace(secret, "***");
     }
 
     // ---------------------------------------------------------------- internals
+
+    /** "250" rather than "250.00": the portal keys identical queries by their text. */
+    private static String plain(BigDecimal value) {
+        return value.stripTrailingZeros().toPlainString();
+    }
 
     private <T> ApiResponse<T> exchange(RestClient.RequestHeadersSpec<?> spec, Class<T> type) {
         return spec.exchange((request, response) -> {

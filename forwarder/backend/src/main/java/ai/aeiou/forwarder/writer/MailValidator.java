@@ -17,10 +17,6 @@ import java.util.regex.Pattern;
  */
 final class MailValidator {
 
-    private static final String CURRENCY = "(EUR|USD|GBP|CHF|€|\\$|£)";
-    private static final String NUMBER = "(\\d[\\d.,']*\\d|\\d)";
-    private static final Pattern AMOUNT = Pattern.compile(
-            "(?i)" + CURRENCY + "\\s?" + NUMBER + "|" + NUMBER + "\\s?" + CURRENCY + "|" + NUMBER + "\\s?(euros?\\b|dollars?\\b)");
     private static final Pattern PLACEHOLDER = Pattern.compile("[\\[\\]{}]|<[A-Za-z _]+>|\\bTBD\\b|\\bXXX\\b");
 
     /** Phrases that make a mail read like a chatbot. Lower-case, matched case-insensitively. */
@@ -71,7 +67,7 @@ final class MailValidator {
         if (total.isEmpty()) return List.of();
         String currency = facts.get(Facts.CURRENCY) == null ? null : canonicalCurrency(String.valueOf(facts.get(Facts.CURRENCY)));
         List<String> errors = new ArrayList<>();
-        Matcher m = AMOUNT.matcher(body);
+        Matcher m = Money.AMOUNT.matcher(body);
         while (m.find()) {
             String cur = firstNonNull(m.group(1), m.group(4), m.group(6));
             String num = firstNonNull(m.group(2), m.group(3), m.group(5));

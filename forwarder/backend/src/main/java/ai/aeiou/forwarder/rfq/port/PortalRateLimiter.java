@@ -12,21 +12,26 @@ import org.springframework.stereotype.Component;
 /**
  * One token bucket for all portal rate reads of the team key, shared across sessions.
  *
- * <p>The portal uses a fixed one-minute window per key. We do not know where the window starts, so the bucket
- * follows the server: every response tells us {@code X-RateLimit-Remaining}, and a 429 tells us via
- * {@code Retry-After} when the next window opens. Until the first response the bucket is optimistic.
+ * <p>The portal uses a fixed one-minute window per key and allows only {@value #DEFAULT_LIMIT} rate reads in it. We
+ * do not know where the window starts, so the bucket is conservative: it assumes a window starts with our first read
+ * (the server's may have started earlier and end sooner) and follows the server from there. Every response tells us
+ * {@code X-RateLimit-Limit}/{@code -Remaining}, and a 429 tells us via {@code Retry-After} when the next window opens.
  */
 @Component
 public class PortalRateLimiter {
 
     static final Duration WINDOW = Duration.ofSeconds(60);
+    /** Reads per window before the portal has told us its limit (5U: {@code x-ratelimit-limit: 10}). */
+    static final int DEFAULT_LIMIT = 10;
 
     private final Clock clock;
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition refilled = lock.newCondition();
-    /** Reads left in the current window; null = unknown (assume available). */
-    private Integer remaining;
-    /** When the current window ends, if known. */
+    /** Reads per window, as last stated by the portal. */
+    private int limit = DEFAULT_LIMIT;
+    /** Reads left in the current window (our estimate, never above the server's count). */
+    private int remaining = DEFAULT_LIMIT;
+    /** When the current window ends; null until the first read of a window. */
     private Instant windowEndsAt;
 
     @Autowired
@@ -49,11 +54,12 @@ public class PortalRateLimiter {
             while (true) {
                 Instant now = clock.instant();
                 if (windowEndsAt != null && !now.isBefore(windowEndsAt)) {
-                    remaining = null; // a new window has started
+                    remaining = limit; // a new window has started
                     windowEndsAt = null;
                 }
-                if (remaining == null || remaining > 0) {
-                    if (remaining != null && --remaining == 0 && windowEndsAt == null) windowEndsAt = now.plus(WINDOW);
+                if (remaining > 0) {
+                    remaining--;
+                    if (windowEndsAt == null) windowEndsAt = now.plus(WINDOW);
                     return true;
                 }
                 if (windowEndsAt.isAfter(budgetEnd)) return false;
@@ -80,13 +86,14 @@ public class PortalRateLimiter {
         lock.lock();
         try {
             Instant now = clock.instant();
+            if (result.rateLimitLimit() != null && result.rateLimitLimit() > 0) limit = result.rateLimitLimit();
             if (result.rateLimited()) {
                 remaining = 0;
                 windowEndsAt = now.plus(result.retryAfter() != null ? result.retryAfter() : WINDOW);
             } else if (result.rateLimitRemaining() != null) {
                 // Other calls may be in flight; the server's count is the truth, never raise our own estimate.
-                remaining = remaining == null ? result.rateLimitRemaining() : Math.min(remaining, result.rateLimitRemaining());
-                if (remaining <= 0 && windowEndsAt == null) windowEndsAt = now.plus(WINDOW);
+                remaining = Math.max(0, Math.min(remaining, result.rateLimitRemaining()));
+                if (windowEndsAt == null) windowEndsAt = now.plus(WINDOW);
             }
             refilled.signalAll();
         } finally {
@@ -94,8 +101,8 @@ public class PortalRateLimiter {
         }
     }
 
-    /** Reads left in the current window, or null when unknown. */
-    public Integer remaining() {
+    /** Reads left in the current window, as far as we know. */
+    public int remaining() {
         lock.lock();
         try {
             return remaining;

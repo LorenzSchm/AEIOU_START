@@ -12,9 +12,12 @@ class PortalRateLimiterTest {
     private final PortalRateLimiter limiter = new PortalRateLimiter();
 
     @Test
-    void optimisticUntilTheServerSaysOtherwise() throws InterruptedException {
-        assertThat(limiter.acquire(Instant.now())).isTrue();
-        assertThat(limiter.remaining()).isNull();
+    void assumesTenReadsPerMinuteUntilTheServerSaysOtherwise() throws InterruptedException {
+        for (int i = 0; i < PortalRateLimiter.DEFAULT_LIMIT; i++) {
+            assertThat(limiter.acquire(Instant.now())).isTrue();
+        }
+        assertThat(limiter.remaining()).isZero();
+        assertThat(limiter.tryAcquire()).isFalse();
     }
 
     @Test

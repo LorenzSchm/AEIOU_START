@@ -5,6 +5,7 @@ import static ai.aeiou.forwarder.rfq.RfqEvents.payload;
 import ai.aeiou.forwarder.mail.MailGateway;
 import ai.aeiou.forwarder.mail.OutgoingMail;
 import ai.aeiou.forwarder.mail.StoredMail;
+import ai.aeiou.forwarder.pricing.FxRates;
 import ai.aeiou.forwarder.pricing.PriceQuote;
 import ai.aeiou.forwarder.pricing.PricingService;
 import ai.aeiou.forwarder.pricing.Shipment;
@@ -25,6 +26,7 @@ import ai.aeiou.forwarder.writer.EmailWriter;
 import ai.aeiou.forwarder.writer.EmailWriter.MailIntent;
 import ai.aeiou.forwarder.writer.EmailWriter.Purpose;
 import ai.aeiou.forwarder.writer.EmailWriter.WrittenMail;
+import ai.aeiou.forwarder.writer.Money;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -469,7 +471,7 @@ public class QuoteOrchestrator {
             Decision decision = decider.decide(rfq.mode(), rfq.doorPickup(), repo.candidates(sessionId));
             Candidate chosen = persist(sessionId, decision);
             events.system(sessionId, "pricing.decision", chosen == null ? "No quotable price" : "Chose " + chosen.label()
-                            + " " + Money.label(chosen.total(), chosen.currency()),
+                            + " " + Money.format(chosen.total(), chosen.currency()),
                     payload("trigger", trigger, "reasoning", decision.reasoning(), "chosenCandidateId", chosen == null ? null : chosen.id(),
                             "rateId", chosen == null ? null : chosen.rateId(), "candidates", decision.evaluated().stream()
                                     .map(e -> payload("label", e.candidate().label(), "totalEur", e.candidate().totalEur(),

@@ -6,16 +6,35 @@ import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-/** Formats and parses money amounts the way they appear in mails ("EUR 1,387.35", "1.387,35 €"). */
+/**
+ * Formats, parses and finds money amounts the way they appear in mails ("EUR 1,387.35", "1.387,35 €"). The one
+ * place that formats quoted amounts, so writer facts, body checks and templates agree.
+ */
 public final class Money {
 
+    private static final String CURRENCY = "(EUR|USD|GBP|CHF|€|\\$|£)";
+    private static final String NUMBER = "(\\d[\\d.,']*\\d|\\d)";
+    /**
+     * Any amount with a currency next to it: "EUR 1,387.35", "1.387,35 €", "$980", "980 USD", "980 euros".
+     * Groups: currency 1, 4 or 6; number 2, 3 or 5.
+     */
+    static final Pattern AMOUNT = Pattern.compile(
+            "(?i)" + CURRENCY + "\\s?" + NUMBER + "|" + NUMBER + "\\s?" + CURRENCY + "|" + NUMBER + "\\s?(euros?\\b|dollars?\\b)");
+
     private Money() {}
+
+    /** Rounds to cents, half up. */
+    public static BigDecimal round(BigDecimal value) {
+        return value.setScale(2, RoundingMode.HALF_UP);
+    }
 
     /** "1,387.35": the canonical display form of an amount in every mail we write. */
     public static String amount(BigDecimal value) {
         DecimalFormat f = new DecimalFormat("#,##0.00", DecimalFormatSymbols.getInstance(Locale.US));
-        return f.format(value.setScale(2, RoundingMode.HALF_UP));
+        return f.format(round(value));
     }
 
     /** "EUR 1,387.35": the literal that must appear verbatim in quotes and confirmations. */
@@ -51,6 +70,22 @@ public final class Money {
         } catch (NumberFormatException e) {
             return Optional.empty();
         }
+    }
+
+    /** How many money amounts (number + currency) a text states. */
+    public static int countAmounts(String text) {
+        if (text == null) return 0;
+        Matcher m = AMOUNT.matcher(text);
+        int n = 0;
+        while (m.find()) n++;
+        return n;
+    }
+
+    /** True when {@code body} states exactly one amount and it is {@code label} (see {@link #format}) verbatim. */
+    public static boolean statesExactlyOneTotal(String body, String label) {
+        if (body == null) return false;
+        int occurrences = body.split(Pattern.quote(label), -1).length - 1;
+        return occurrences == 1 && countAmounts(body) == 1;
     }
 
     private static int countOf(String s, char c) {

@@ -39,4 +39,7 @@ app:
     model-router: ${LLM_MODEL_ROUTER:gpt-4o-mini}
     model-writer: ${LLM_MODEL_WRITER:gpt-4o-mini}
     model-extract: ${LLM_MODEL_EXTRACT:gpt-4o-mini}
+  pricing:
+    # Default EUR per USD behind the runtime setting fxEurPerUsd; the portal's latest fx_eur_per_usd overrides both.
+    default-fx-eur-per-usd: ${DEFAULT_FX_EUR_PER_USD:0.86}
   start-kit-dir: ${START_KIT_DIR:../../start-kit}

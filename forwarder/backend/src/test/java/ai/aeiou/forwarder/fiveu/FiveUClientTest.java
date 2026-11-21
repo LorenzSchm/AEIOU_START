@@ -148,10 +148,12 @@ class FiveUClientTest {
                         .body("{\"detail\":\"invalid key sk-test-not-real\"}"));
         server.expect(requestTo(BASE + "/v1/gateway/openai-key"))
                 .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"registered\": false}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"set\":true,\"last4\":\"b_wA\",\"checked_at\":\"2026-11-21T13:52:24.494264Z\"}",
+                        MediaType.APPLICATION_JSON));
 
         assertThat(client.registerOpenAiKey("sk-test-not-real").status()).isEqualTo(422);
-        assertThat(client.openAiKeyStatus().body().path("registered").asBoolean()).isFalse();
+        assertThat(client.openAiKeyStatus().body())
+                .isEqualTo(new FiveUClient.OpenAiKeyStatus(true, "b_wA", "2026-11-21T13:52:24.494264Z"));
         server.verify();
     }
 }

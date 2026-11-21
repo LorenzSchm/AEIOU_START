@@ -6,14 +6,10 @@ import ai.aeiou.forwarder.api.dto.TariffDetail;
 import ai.aeiou.forwarder.api.dto.TariffSummary;
 import ai.aeiou.forwarder.api.port.TariffActions;
 import ai.aeiou.forwarder.api.query.ReferenceQueries;
-import ai.aeiou.forwarder.event.Actor;
-import ai.aeiou.forwarder.event.EventLog;
 import ai.aeiou.forwarder.settings.SettingsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,14 +29,11 @@ public class ConfigController {
     private final ReferenceQueries reference;
     private final TariffActions tariffActions;
     private final SettingsService settings;
-    private final EventLog events;
 
-    public ConfigController(ReferenceQueries reference, TariffActions tariffActions, SettingsService settings,
-                            EventLog events) {
+    public ConfigController(ReferenceQueries reference, TariffActions tariffActions, SettingsService settings) {
         this.reference = reference;
         this.tariffActions = tariffActions;
         this.settings = settings;
-        this.events = events;
     }
 
     @GetMapping("/tariffs")
@@ -81,18 +74,12 @@ public class ConfigController {
         return reference.settings();
     }
 
+    /** The settings service writes the one {@code setting.changed} event (actor human, with the previous value). */
     @PutMapping("/settings/{key}")
     @Operation(operationId = "updateSetting", summary = "Change a runtime setting; takes effect immediately")
     public Setting updateSetting(@PathVariable String key, @RequestBody Setting.Update update) {
         if (update.value() == null) throw ApiException.badRequest("value is required");
-        Object previous = reference.setting(key).map(Setting::value).orElse(null);
         settings.set(key, update.value(), HUMAN);
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("key", key);
-        payload.put("from", previous);
-        payload.put("to", update.value());
-        events.append(null, null, "human.setting_changed", Actor.human,
-                "Setting " + key + " changed to " + update.value(), payload);
         return reference.setting(key).orElseThrow(() -> ApiException.notFound("Setting", key));
     }
 }

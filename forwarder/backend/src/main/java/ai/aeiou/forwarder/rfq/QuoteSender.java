@@ -15,6 +15,8 @@ import ai.aeiou.forwarder.writer.EmailWriter;
 import ai.aeiou.forwarder.writer.EmailWriter.MailIntent;
 import ai.aeiou.forwarder.writer.EmailWriter.Purpose;
 import ai.aeiou.forwarder.writer.EmailWriter.WrittenMail;
+import ai.aeiou.forwarder.writer.Facts;
+import ai.aeiou.forwarder.writer.Money;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -60,7 +62,7 @@ public class QuoteSender {
         StoredMail customerMail = gateway.findById(rfq.mailId())
                 .orElseThrow(() -> new IllegalStateException("RFQ mail " + rfq.mailId() + " not found"));
         Map<String, Object> facts = facts(rfq, chosen);
-        String totalLabel = Money.label(chosen.total(), chosen.currency());
+        String totalLabel = Money.format(chosen.total(), chosen.currency());
         String body = writeBody(sessionId, rfq, customerMail, facts, totalLabel);
         OutgoingMail mail = OutgoingMail.reply(customerMail, body);
 
@@ -96,8 +98,8 @@ public class QuoteSender {
             Map<String, Object> meta = draft.meta() == null ? Map.of() : draft.meta();
             BigDecimal total = decimal(meta.get("total"));
             String currency = (String) meta.get("currency");
-            if (overrideBody != null && !body.contains(Money.label(total, currency))) {
-                events.human(sessionId, "quote.edited", "Edited quote does not contain " + Money.label(total, currency)
+            if (overrideBody != null && !body.contains(Money.format(total, currency))) {
+                events.human(sessionId, "quote.edited", "Edited quote does not contain " + Money.format(total, currency)
                         + "; the stored total may differ from the mail", payload());
             }
             Long candidateId = meta.get("candidateId") instanceof Number n ? n.longValue() : null;
@@ -116,7 +118,7 @@ public class QuoteSender {
 
     private Outcome claimAndSend(long sessionId, OutgoingMail mail, BigDecimal total, String currency, BigDecimal totalEur,
                                  Long candidateId, Actor actor) {
-        String label = Money.label(total, currency);
+        String label = Money.format(total, currency);
         if (!sessions.claimQuote(sessionId, total, currency, totalEur)) {
             events.append(sessionId, null, "quote.skipped", actor, "Quote " + label + " not sent: this thread already has a quote", payload());
             return Outcome.ALREADY_QUOTED;
@@ -156,28 +158,30 @@ public class QuoteSender {
         return QuoteTemplate.render(facts, totalLabel, rfq.customerName());
     }
 
-    static Map<String, Object> facts(RfqRecord rfq, Candidate c) {
-        // "total" (plain amount) and "currency" are the keys the writer's single-price validator reads.
-        // TODO(integration): use writer.Money/Facts
+    private Map<String, Object> facts(RfqRecord rfq, Candidate c) {
+        // TOTAL (plain amount) and CURRENCY are the keys the writer's single-price validator reads.
         Map<String, Object> f = new LinkedHashMap<>();
-        f.put("total", Money.format(c.total()));
-        f.put("currency", c.currency());
-        f.put("airline", c.airlineName() != null ? c.airlineName() : c.airlineCode());
-        f.put("transitDays", c.transitDays());
-        f.put("route", rfq.originAirport() + " → " + rfq.destination());
-        f.put("chargeableKg", rfq.chargeableKg() == null ? null : rfq.chargeableKg().stripTrailingZeros().toPlainString());
-        f.put("validity", validity(c));
-        f.put("doorPickup", rfq.doorPickup());
+        f.put(Facts.TOTAL, Money.amount(c.total()));
+        f.put(Facts.CURRENCY, c.currency());
+        f.put(Facts.AIRLINE, c.airlineName() != null ? c.airlineName() : c.airlineCode());
+        f.put(Facts.TRANSIT_DAYS, c.transitDays());
+        f.put(QuoteTemplate.ROUTE, rfq.originAirport() + " → " + rfq.destination());
+        f.put(Facts.CHARGEABLE_KG, rfq.chargeableKg() == null ? null : rfq.chargeableKg().stripTrailingZeros().toPlainString());
+        f.put(Facts.VALID_UNTIL, validUntil(c));
+        f.put(QuoteTemplate.DOOR_PICKUP, rfq.doorPickup());
         return f;
     }
 
     /**
-     * Portal rate ids live 15 minutes, which is not an offer validity for a customer (booking fetches a fresh rate
-     * when needed). Bids may state their own validity; otherwise we hold the price for a week.
+     * The validity we promise the customer. A portal rate_id expires after 15 minutes, but that is our booking
+     * handle, not a commercial offer: on acceptance after expiry the booking re-fetches the rate and books it only
+     * if it is within 1% of the quoted total (otherwise a human decides). So the customer gets a commercial validity
+     * of {@code quoteValidityDays}; only a bid that states its own validity overrides it.
      */
-    private static String validity(Candidate c) {
+    private String validUntil(Candidate c) {
         boolean ownValidity = c.validUntil() != null && c.source() != CandidateSource.portal && c.rateId() == null;
-        LocalDate until = ownValidity ? c.validUntil().toLocalDate() : LocalDate.now(ZoneOffset.UTC).plusDays(7);
+        LocalDate until = ownValidity ? c.validUntil().toLocalDate()
+                : LocalDate.now(ZoneOffset.UTC).plusDays(settings.quoteValidityDays());
         return until.toString();
     }
 

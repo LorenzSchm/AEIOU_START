@@ -17,8 +17,9 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
-import ai.aeiou.forwarder.booking.port.RestBookingPortal;
+import ai.aeiou.forwarder.booking.port.FiveUBookingPortal;
 import ai.aeiou.forwarder.event.EventLog;
+import ai.aeiou.forwarder.fiveu.FiveUClient;
 import ai.aeiou.forwarder.mail.MailGateway;
 import ai.aeiou.forwarder.mail.OutgoingMail;
 import ai.aeiou.forwarder.mail.StoredMail;
@@ -52,6 +53,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Acceptance and airline confirmation against a real Postgres, with the 5U portal behind MockRestServiceServer. */
 class BookingWorkflowTest {
@@ -76,7 +78,7 @@ class BookingWorkflowTest {
     void setUp() {
         jdbc = BookingTestDb.jdbc();
         BookingTestDb.reset();
-        RestClient.Builder builder = RestClient.builder();
+        RestClient.Builder builder = RestClient.builder().baseUrl(BASE);
         server = MockRestServiceServer.bindTo(builder).build();
 
         sessions = mock(SessionService.class);
@@ -94,7 +96,7 @@ class BookingWorkflowTest {
         BookingRepository repo = new BookingRepository(jdbc);
         Outbox outbox = new Outbox(mailGateway, settings, events, jdbc);
         CustomerNotifier notifier = new CustomerNotifier(writer, outbox, mailGateway, repo, sessions, events, clock);
-        acceptance = new AcceptanceHandler(new RestBookingPortal(builder, BASE, "k"), repo, sessions, events, writer, outbox,
+        acceptance = new AcceptanceHandler(new FiveUBookingPortal(new FiveUClient(builder.build(), JsonMapper.builder().build())), repo, sessions, events, writer, outbox,
                 mailGateway, notifier, clock);
         confirmation = new BookingConfirmationHandler(repo, sessions, events, notifier);
 

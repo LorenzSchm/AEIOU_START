@@ -1,4 +1,4 @@
-package ai.aeiou.forwarder.rfq;
+package ai.aeiou.forwarder.writer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -9,8 +9,8 @@ class MoneyTest {
 
     @Test
     void formatsWithGroupingAndTwoDecimals() {
-        assertThat(Money.label(new BigDecimal("1387.345"), "EUR")).isEqualTo("EUR 1,387.35");
-        assertThat(Money.format(new BigDecimal("980"))).isEqualTo("980.00");
+        assertThat(Money.format(new BigDecimal("1387.345"), "EUR")).isEqualTo("EUR 1,387.35");
+        assertThat(Money.amount(new BigDecimal("980"))).isEqualTo("980.00");
     }
 
     @Test

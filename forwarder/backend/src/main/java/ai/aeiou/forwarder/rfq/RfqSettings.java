@@ -1,7 +1,6 @@
 package ai.aeiou.forwarder.rfq;
 
 import ai.aeiou.forwarder.settings.SettingsService;
-import java.math.BigDecimal;
 import java.time.Duration;
 import org.springframework.stereotype.Component;
 
@@ -56,9 +55,9 @@ public class RfqSettings {
         return settings.getBool("portalProbeNextBreak", true);
     }
 
-    /** Fallback EUR per USD until the portal tells us its rate (setting {@code fxEurPerUsd}). */
-    public BigDecimal fallbackEurPerUsd() {
-        return BigDecimal.valueOf(settings.getDouble("fxEurPerUsd", 0.92));
+    /** Days a quote stays valid for the customer (setting {@code quoteValidityDays}, default 7). See {@link QuoteSender}. */
+    public int quoteValidityDays() {
+        return settings.getInt("quoteValidityDays", 7);
     }
 
     public String ratedeskAddress() {

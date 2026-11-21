@@ -3,6 +3,7 @@ package ai.aeiou.forwarder.rfq;
 import static ai.aeiou.forwarder.rfq.RfqEvents.payload;
 
 import ai.aeiou.forwarder.mail.StoredMail;
+import ai.aeiou.forwarder.pricing.FxRates;
 import ai.aeiou.forwarder.rfq.RfqRepository.BidRequestRow;
 import ai.aeiou.forwarder.router.Extraction;
 import ai.aeiou.forwarder.router.RoutedMail;

@@ -12,6 +12,10 @@ public final class Admin {
             @Schema(nullable = true, description = "Whether the 5U gateway holds our OpenAI key; null if unknown")
             Boolean openAiKeyRegistered,
             @Schema(nullable = true) String openAiKeyMessage,
+            @Schema(nullable = true, description = "Last four characters of the stored key, as reported by 5U")
+            String openAiKeyLast4,
+            @Schema(nullable = true, description = "When 5U last checked the stored key (ISO-8601)")
+            String openAiKeyCheckedAt,
             @Schema(description = "Runtime setting pollingEnabled") boolean pollingEnabled,
             @Schema(description = "Runtime setting autopilot: answer live mails automatically") boolean autopilot,
             @Schema(description = "app.poller.enabled (env POLLER_ENABLED)") boolean envPollerEnabled,

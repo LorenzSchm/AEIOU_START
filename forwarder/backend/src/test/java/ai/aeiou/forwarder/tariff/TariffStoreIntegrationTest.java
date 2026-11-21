@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ai.aeiou.forwarder.event.EventLog;
 import ai.aeiou.forwarder.mail.MailGateway;
 import ai.aeiou.forwarder.pricing.PriceQuote;
+import ai.aeiou.forwarder.pricing.FxRates;
 import ai.aeiou.forwarder.pricing.SheetPricingService;
 import ai.aeiou.forwarder.pricing.Shipment;
 import ai.aeiou.forwarder.reference.Carrier;
@@ -44,7 +45,7 @@ import tools.jackson.databind.json.JsonMapper;
 @TestPropertySource(properties = "app.start-kit-dir=../../start-kit")
 @Import({TariffStoreIntegrationTest.Config.class, ReferenceData.class, ReferenceDataSeeder.class, TariffRepository.class,
         TariffParsers.class, XlsxTariffParser.class, DocxTariffParser.class, PdfTariffParser.class, TextTariffParser.class,
-        TariffAdminService.class, TariffLoader.class, SheetPricingService.class})
+        TariffAdminService.class, TariffLoader.class, SheetPricingService.class, FxRates.class})
 class TariffStoreIntegrationTest {
 
     @TestConfiguration(proxyBeanMethods = false)

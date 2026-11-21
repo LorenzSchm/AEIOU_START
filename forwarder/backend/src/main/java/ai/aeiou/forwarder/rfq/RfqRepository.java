@@ -1,5 +1,6 @@
 package ai.aeiou.forwarder.rfq;
 
+import ai.aeiou.forwarder.writer.Money;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;

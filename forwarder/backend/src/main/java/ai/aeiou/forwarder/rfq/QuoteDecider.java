@@ -1,5 +1,6 @@
 package ai.aeiou.forwarder.rfq;
 
+import ai.aeiou.forwarder.writer.Money;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -81,7 +82,7 @@ public final class QuoteDecider {
             air.forEach(c -> verdicts.put(c, Verdict.reject("priced door-to-port as a combined option")));
             pool = air.stream().map(a -> combine(a, t)).toList();
             order.addAll(pool);
-            reasoning.add("cheapest trucker " + t.label() + " EUR " + Money.format(t.totalEur()) + " added to " + pool.size() + " air options");
+            reasoning.add("cheapest trucker " + t.label() + " EUR " + Money.amount(t.totalEur()) + " added to " + pool.size() + " air options");
         } else {
             trucks.forEach(c -> verdicts.put(c, Verdict.reject("no door pickup requested")));
         }
@@ -100,9 +101,9 @@ public final class QuoteDecider {
         for (Candidate c : ranked.subList(1, ranked.size())) {
             verdicts.put(c, Verdict.reject(FASTEST.equals(effectiveMode)
                     ? "slower than " + winner.label() + " (" + days(c) + " vs " + days(winner) + ")"
-                    : "pricier than " + winner.label() + " (EUR " + Money.format(c.totalEur()) + " vs " + Money.format(winner.totalEur()) + ")"));
+                    : "pricier than " + winner.label() + " (EUR " + Money.amount(c.totalEur()) + " vs " + Money.amount(winner.totalEur()) + ")"));
         }
-        reasoning.add("chosen " + winner.label() + " " + Money.label(winner.total(), winner.currency()) + ", " + days(winner));
+        reasoning.add("chosen " + winner.label() + " " + Money.format(winner.total(), winner.currency()) + ", " + days(winner));
         return new Decision(winner, toEvaluated(order, verdicts), String.join("; ", reasoning));
     }
 

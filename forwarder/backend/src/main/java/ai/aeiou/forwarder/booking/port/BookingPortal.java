@@ -1,7 +1,7 @@
 package ai.aeiou.forwarder.booking.port;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+import ai.aeiou.forwarder.fiveu.PortalModels.Booking;
+import ai.aeiou.forwarder.fiveu.PortalModels.Rate;
 import java.math.BigDecimal;
 
 /**
@@ -20,7 +20,7 @@ public interface BookingPortal {
     record RateQuery(String origin, String destination, String airline, BigDecimal weightKg, BigDecimal volumeCbm) {}
 
     /** {@code status}: 201 booked, 200 retry of the same pair, 404, 409, 410, 503, or {@link #UNREACHABLE}. */
-    record BookingResult(int status, BookingOut booking, String message) {
+    record BookingResult(int status, Booking booking, String message) {
         public boolean booked() {
             return (status == 200 || status == 201) && booking != null;
         }
@@ -31,27 +31,4 @@ public interface BookingPortal {
             return status == 200 && rate != null;
         }
     }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record BookingOut(
-            @JsonProperty("booking_reference") String bookingReference,
-            @JsonProperty("team_reference") String teamReference,
-            @JsonProperty("rate_id") String rateId,
-            @JsonProperty("airline") String airline,
-            @JsonProperty("airline_code") String airlineCode,
-            @JsonProperty("price") BigDecimal price,
-            @JsonProperty("currency") String currency,
-            @JsonProperty("status") String status) {}
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    record Rate(
-            @JsonProperty("rate_id") String rateId,
-            @JsonProperty("airline") String airline,
-            @JsonProperty("airline_code") String airlineCode,
-            @JsonProperty("origin") String origin,
-            @JsonProperty("destination") String destination,
-            @JsonProperty("total") BigDecimal total,
-            @JsonProperty("currency") String currency,
-            @JsonProperty("transit_days") Integer transitDays,
-            @JsonProperty("valid_until") String validUntil) {}
 }

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import ai.aeiou.forwarder.mail.OutgoingMail;
 import ai.aeiou.forwarder.mail.StoredMail;
+import ai.aeiou.forwarder.pricing.FxRates;
 import ai.aeiou.forwarder.pricing.PriceQuote;
 import ai.aeiou.forwarder.pricing.PricingService;
 import ai.aeiou.forwarder.rfq.RfqTestDoubles.FakeMailGateway;
@@ -29,6 +30,7 @@ import ai.aeiou.forwarder.writer.EmailWriter;
 import ai.aeiou.forwarder.writer.EmailWriter.MailIntent;
 import ai.aeiou.forwarder.writer.EmailWriter.Purpose;
 import ai.aeiou.forwarder.writer.EmailWriter.WrittenMail;
+import ai.aeiou.forwarder.writer.Money;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -113,7 +115,7 @@ class QuoteOrchestratorTest {
         settingsStore.values.put("autopilot", true); // most tests exercise the automatic path
         RfqSettings settings = new RfqSettings(settingsStore);
         RfqEvents events = new RfqEvents(eventLog, sessions, Clock.systemUTC());
-        FxRates fx = new FxRates(settings);
+        FxRates fx = new FxRates(settingsStore, new BigDecimal("0.92"));
         repo = new RfqRepository(jdbc, JsonMapper.builder().build());
         ReferenceRepository reference = new ReferenceRepository(jdbc);
         scheduler = new DecisionScheduler();
