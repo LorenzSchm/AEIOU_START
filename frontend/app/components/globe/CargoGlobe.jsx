@@ -131,11 +131,26 @@ export default function CargoGlobe({ routes = [], selectedId = null, onSelect, h
   }, []);
 
   // --- stop the WebGL render loop while the view is hidden (kept mounted for instant switching)
+  const warmed = useRef(false);
   useEffect(() => {
     const g = globeRef.current;
     if (!g || !ready) return;
-    if (paused) g.pauseAnimation?.();
-    else g.resumeAnimation?.();
+    if (!paused) {
+      g.resumeAnimation?.();
+      return;
+    }
+    if (warmed.current) {
+      g.pauseAnimation?.();
+      return;
+    }
+    // Pre-built while hidden: draw a couple of frames first so WebGL compiles its shaders now
+    // (during idle preload) instead of stalling the first visible frame.
+    warmed.current = true;
+    g.resumeAnimation?.();
+    let id = requestAnimationFrame(() => {
+      id = requestAnimationFrame(() => g.pauseAnimation?.());
+    });
+    return () => cancelAnimationFrame(id);
   }, [paused, ready]);
 
   // --- reduced motion

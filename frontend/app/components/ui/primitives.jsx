@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Icon from "./Icon";
 import { disclosure, spring } from "../../lib/motion";
 import { WINDOW_MS } from "../../lib/format";
+import { useNow } from "../../lib/clock";
 
 const toneIcon = { ok: "check", warn: "alert", bad: "alert", info: "send", accent: "bolt", muted: null };
 
@@ -68,9 +69,10 @@ export function Segmented({ options, value, onChange, label }) {
   );
 }
 
-/** Six-minute quote window as a ring. */
-export function CountdownRing({ received, now, size = 40, done }) {
+/** Six-minute quote window as a ring. Ticks on its own, and only while the window is open. */
+export function CountdownRing({ received, size = 40, done }) {
   const start = Date.parse(received);
+  const now = useNow(!done && start + WINDOW_MS > Date.now());
   const left = Math.max(0, start + WINDOW_MS - now);
   const frac = done ? 1 : left / WINDOW_MS;
   const r = size / 2 - 3;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { motion } from "motion/react";
 import Icon from "../ui/Icon";
 import { Chip, RouteBadge } from "../ui/primitives";
@@ -33,7 +33,7 @@ function Meter({ value }) {
 
 const SOURCE_COLORS = { portal: "var(--blue)", tariff: "var(--accent)", "email bid": "var(--ok)" };
 
-export default function Overview({ messages, now, onOpen, active = true }) {
+function Overview({ messages, onOpen, active = true }) {
   const s = useMemo(() => waveSummary(messages), [messages]);
   const routes = useMemo(
     () =>
@@ -99,7 +99,7 @@ export default function Overview({ messages, now, onOpen, active = true }) {
                   <li key={m.id}>
                     <button onClick={() => onOpen(m.id)}>
                       <RouteBadge origin={m.fields?.origin} destination={m.fields?.destination} size="sm" />
-                      <span className="mini-reason" title={m.review_reason || ""}>{m.review_reason || statusOf(m, now).label}</span>
+                      <span className="mini-reason" title={m.review_reason || ""}>{m.review_reason || statusOf(m).label}</span>
                       <Icon name="chevron" size={14} />
                     </button>
                   </li>
@@ -150,3 +150,5 @@ export default function Overview({ messages, now, onOpen, active = true }) {
     </div>
   );
 }
+
+export default memo(Overview);
