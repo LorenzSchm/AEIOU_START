@@ -151,3 +151,29 @@ Tests never call the real gateway. The one real test (`RealGatewayTest`, tag `re
 runs only with `./gradlew test -PrealGateway --tests '*RealGatewayTest'` and costs points.
 `NoOutboundCallsTest` fails if main code mentions mailbox, portal or booking endpoints, or
 opens HTTP outside the gateway client and the model download.
+
+## Photo reader (`ai.aeiou.edgelab.photo`, ticket 05)
+
+`image/*` (jpg, png, gif, bmp, tiff, webp, heic/heif) becomes one small JPEG and goes to the
+gateway vision model (`gpt-4o-mini`, low detail) with the fixed prompt
+`Gateway.COPY_TEXT_PROMPT`: copy all visible text, one table row per line, do not interpret.
+
+- Decoding: ImageIO plus TwelveMonkeys (WebP, TIFF, CMYK JPEG), pure Java. HEIC/HEIF goes
+  through the bundled ffmpeg (JavaCV); iPhone tile grids are stitched. First HEIC in a JVM
+  takes a few seconds (ffmpeg natives load), then under a second.
+- Before sending: EXIF orientation applied, longest edge cut to 1024 px (low detail looks at
+  512 px anyway, ~85 tokens per photo), transparency flattened onto white, JPEG q=0.85.
+- Confidence: the model's own `CONFIDENCE:` rating (0.6 if it gives none), lowered when fewer
+  than ~40 letters/digits come back. Empty answer, broken image or no key: `UNREADABLE` with a
+  note, e.g. `photo not read: TEAM_API_KEY not set`.
+- Scanned PDFs: `ScanAwareOfficeReader` wraps the office reader. Pages it flags as
+  "looks scanned" are rendered at 150 dpi (PDFBox) and read by the photo reader, at most 10
+  per file; blank pages are not sent. Their text is merged into the PDF's Reading in page order.
+- Fixtures in `src/test/resources/photo/`: the two Danube Wings tariff scans (start kit),
+  `example.heic` (libheif's example image), `rfq.webp` (made with `PhotoFixtures.main`). The
+  phone photo, EXIF-rotated photo, png/gif/bmp/tiff and the PDFs are drawn in the tests.
+
+```bash
+./gradlew -q read --args="../start-kit/danube-wings-cargo-tariff-2026-11-p1.jpg"   # needs TEAM_API_KEY
+./gradlew test -PrealGateway --tests '*PhotoRealGatewayTest'                       # real call, costs points
+```
