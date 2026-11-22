@@ -231,6 +231,9 @@ final class ShipmentDocuments {
     if (voiceAttachment(message) == null
         || !Ledger.str(message, "voice_transcript").isBlank()) return false;
     long id = Ledger.id(message.get("id"));
+    // The row may predate a transcript recorded earlier in this pass (attachedOffer transcribes
+    // before it checks), so a stored transcript means the voice part is done.
+    if (!recordedVoice(id).isBlank()) return false;
     // A positive claim also covers a transcript committed after this read of the message.
     var attempts = ledger.jdbc().queryForList(
         "SELECT after_epoch FROM retry WHERE action=?", Long.class, "voice-rfq:" + id);
