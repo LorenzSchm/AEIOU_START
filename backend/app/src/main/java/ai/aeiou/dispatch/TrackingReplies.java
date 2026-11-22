@@ -57,6 +57,8 @@ class TrackingReplies {
           ledger.stage(id, "tracking review", "Match this question to a verified booking.");
       } catch (WaveWorker.RetryLater wait) {
         // The existing send path honors the mailbox Retry-After header.
+      } catch (WaveWorker.Conflict review) {
+        if (!"tracking review".equals(q.get("stage"))) ledger.stage(id, "tracking review", review.getMessage());
       } catch (RuntimeException e) {
         log.warn("Tracking message {}: {}", id, e.getClass().getSimpleName());
       }
@@ -158,7 +160,8 @@ class TrackingReplies {
     if (Pattern.compile("(?i)\\b(?:weight|kg|gewicht)\\b").matcher(question).find())
       detail +=
           " The gross weight is " + s.weightKg().stripTrailingZeros().toPlainString() + " kg.";
-    return Greeting.at(q, clock.instant())
+    // Written in English, then rendered and verified in the language of the question.
+    String approved = Greeting.at(q, clock.instant())
         + "\n\nThe shipment from "
         + s.origin()
         + " to "
@@ -175,6 +178,7 @@ class TrackingReplies {
         + "”."
         + detail
         + "\n\nBest regards,\nTeam AEIOU";
+    return worker.inCustomerLanguage("reply:" + Ledger.id(q.get("id")), q, approved, List.of(airline));
   }
 
   private static boolean weighs(String question, Shipment s) {
