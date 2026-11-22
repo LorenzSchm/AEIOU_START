@@ -82,7 +82,11 @@ final class QuoteAttachments {
     }
   }
 
-  private record Field(String name, String value) {}
+  private record Field(String name, String value, boolean details) {
+    Field(String name, String value) {
+      this(name, value, false);
+    }
+  }
 
   static EnumSet<Format> requested(String subject, String body) {
     var result = EnumSet.noneOf(Format.class);
@@ -102,25 +106,57 @@ final class QuoteAttachments {
     return result;
   }
 
+  /** Title, reference, route ("%s to %s"), carrier, weight, total, validity and details labels. */
+  private static final Map<String, List<String>> LABELS = Map.ofEntries(
+      Map.entry("en", List.of("Air freight offer", "Reference", "Route", "%s to %s", "Carrier",
+          "Gross weight (kg)", "All-in total (EUR)", "Valid until", "Offer details")),
+      Map.entry("fr", List.of("Offre de fret aérien", "Référence", "Trajet", "%s à %s", "Transporteur",
+          "Poids brut (kg)", "Total tout compris (EUR)", "Valable jusqu’au", "Détails de l’offre")),
+      Map.entry("de", List.of("Luftfrachtangebot", "Referenz", "Strecke", "%s nach %s", "Fluggesellschaft",
+          "Bruttogewicht (kg)", "Gesamtpreis (EUR)", "Gültig bis", "Angebotsdetails")),
+      Map.entry("es", List.of("Oferta de carga aérea", "Referencia", "Ruta", "%s a %s", "Transportista",
+          "Peso bruto (kg)", "Total todo incluido (EUR)", "Válida hasta", "Detalles de la oferta")),
+      Map.entry("it", List.of("Offerta di trasporto aereo", "Riferimento", "Tratta", "%s a %s", "Vettore",
+          "Peso lordo (kg)", "Totale tutto incluso (EUR)", "Valida fino al", "Dettagli dell’offerta")),
+      Map.entry("pt", List.of("Oferta de carga aérea", "Referência", "Rota", "%s para %s", "Transportadora",
+          "Peso bruto (kg)", "Total com tudo incluído (EUR)", "Válida até", "Detalhes da oferta")),
+      Map.entry("nl", List.of("Luchtvrachtofferte", "Referentie", "Route", "%s naar %s", "Vervoerder",
+          "Brutogewicht (kg)", "Totaal all-in (EUR)", "Geldig tot", "Details van de offerte")),
+      Map.entry("tr", List.of("Hava kargo teklifi", "Referans", "Güzergâh", "%s - %s", "Taşıyıcı",
+          "Brüt ağırlık (kg)", "Her şey dahil toplam (EUR)", "Geçerlilik", "Teklif ayrıntıları")),
+      Map.entry("zh", List.of("空运报价", "参考号", "航线", "%s 至 %s", "承运人",
+          "毛重（公斤）", "全包总价（EUR）", "有效期至", "报价详情")),
+      Map.entry("ja", List.of("航空貨物見積書", "参照番号", "区間", "%s → %s", "航空会社",
+          "総重量（kg）", "総額（EUR）", "有効期限", "見積内容")),
+      Map.entry("ko", List.of("항공 화물 견적서", "참조 번호", "구간", "%s → %s", "항공사",
+          "총중량(kg)", "총액(EUR)", "유효 기한", "견적 상세")));
+
   static List<Map<String, String>> generate(long id, Map<String, Object> request, Shipment shipment,
       WaveWorker.Draft draft) {
+    return generate(id, request, shipment, draft, "en");
+  }
+
+  /** The attachment carries the reply text already rendered for the customer and labels in {@code language}. */
+  static List<Map<String, String>> generate(long id, Map<String, Object> request, Shipment shipment,
+      WaveWorker.Draft draft, String language) {
     var formats = requested(Ledger.str(request, "subject"), Ledger.str(request, "body"));
     if (formats.isEmpty()) return List.of();
     if (formats.size() > 5) throw new WaveWorker.Conflict("5U accepts at most five quote attachments.");
+    var label = LABELS.getOrDefault(MessageLanguage.primary(language), LABELS.get("en"));
     var offer = draft.offer();
     String reference = "AEIOU-" + id;
-    String title = "AEIOU | Air freight offer";
-    var fields = new ArrayList<>(List.of(new Field("Reference", reference),
-        new Field("Route", shipment.origin() + " to " + shipment.destination()),
-        new Field("Carrier", offer.airline()),
-        new Field("Gross weight (kg)", shipment.weightKg().stripTrailingZeros().toPlainString()),
-        new Field("All-in total (EUR)", offer.totalEur().toPlainString())));
-    if (offer.validUntil() != null) fields.add(new Field("Valid until", UTC.format(offer.validUntil())));
-    fields.add(new Field("Offer details", draft.body()));
+    String title = "AEIOU | " + label.get(0);
+    var fields = new ArrayList<>(List.of(new Field(label.get(1), reference),
+        new Field(label.get(2), label.get(3).formatted(shipment.origin(), shipment.destination())),
+        new Field(label.get(4), offer.airline()),
+        new Field(label.get(5), shipment.weightKg().stripTrailingZeros().toPlainString()),
+        new Field(label.get(6), offer.totalEur().toPlainString())));
+    if (offer.validUntil() != null) fields.add(new Field(label.get(7), UTC.format(offer.validUntil())));
+    fields.add(new Field(label.get(8), draft.body(), true));
 
     var lines = new ArrayList<String>(List.of(title, ""));
     for (var field : fields) {
-      if (field.name().equals("Offer details")) {
+      if (field.details()) {
         lines.add("");
         lines.addAll(field.value().lines().toList());
       } else {
@@ -250,7 +286,7 @@ final class QuoteAttachments {
         var value = row.createCell(1);
         value.setCellValue(field.value());
         value.setCellStyle(wrapped);
-        if (field.name().equals("Offer details")) {
+        if (field.details()) {
           long lines = field.value().lines().mapToLong(line -> Math.max(1, (line.length() + 74) / 75)).sum();
           row.setHeightInPoints(Math.min(390, 15 * lines));
         }

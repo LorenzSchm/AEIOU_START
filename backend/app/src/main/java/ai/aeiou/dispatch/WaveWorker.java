@@ -386,6 +386,11 @@ class WaveWorker {
     }
   }
 
+  /** Renders a reply Java wrote in English into the language of the customer's thread. */
+  String inCustomerLanguage(String action, Map<String, Object> mail, String approved, List<String> names) {
+    return gateway.customerCopy(action, mail, CustomerLanguage.ENGLISH, approved, names).body();
+  }
+
   String followUpBody(String action, Map<String, Object> mail, CustomerLanguage language,
       String question, Long replyId) {
     return followUpBody(action, mail, language, new CustomerClarifications.Question(question), replyId);
@@ -1830,6 +1835,15 @@ class WaveWorker {
       throw ex;
     }
     var copy = gateway.customerCopy(key, m, details.language(), body, List.of(d.offer().airline()));
+    if (!copy.body().equals(body)) {
+      // The customer reads the rendered text, so the price checks run on it as well.
+      try {
+        QuoteChecks.verify(details, shipment, d, copy.body());
+      } catch (Conflict ex) {
+        ledger.stage(id, "review", ex.getMessage());
+        throw ex;
+      }
+    }
     if (!copy.body().equals(d.body())) {
       d = d.withOffer(d.offer(), d.alternatives(), copy.body());
       greetingChanged = true;
@@ -1843,7 +1857,7 @@ class WaveWorker {
     reply.put("in_reply_to", id);
     reply.put("subject", "Re: " + m.get("subject"));
     reply.put("body", quoteHtml ? cloudline(d, shipment, copy.language()) : d.body());
-    var attachments = QuoteAttachments.generate(id, details.message(), shipment, d);
+    var attachments = QuoteAttachments.generate(id, details.message(), shipment, d, copy.language());
     if (!attachments.isEmpty()) reply.put("attachments", attachments);
     if (!clock.instant().isBefore(ageLimit(m)))
       throw new Conflict("The quote window closed before the reply was ready.");
@@ -2197,13 +2211,14 @@ class WaveWorker {
     body = body.substring(0, introduction + 2) + confirmation + "\n\n" + body.substring(introduction + 2);
     QuoteChecks.verify(details, shipment, draft, body, insurance);
     var copy = gateway.customerCopy(action, request, language, body, List.of(draft.offer().airline()));
+    if (!copy.body().equals(body)) QuoteChecks.verify(details, shipment, draft, copy.body(), insurance);
     var revisedDraft = draft.withOffer(draft.offer(), draft.alternatives(), copy.body());
     var message = new HashMap<String, Object>();
     message.put("to", sender);
     message.put("subject", "Re: " + request.get("subject"));
     message.put("in_reply_to", replyId);
     message.put("body", quoteHtml ? cloudline(revisedDraft, shipment, copy.language()) : copy.body());
-    var attachments = QuoteAttachments.generate(id, details.message(), shipment, revisedDraft);
+    var attachments = QuoteAttachments.generate(id, details.message(), shipment, revisedDraft, copy.language());
     if (!attachments.isEmpty()) message.put("attachments", attachments);
     var saved = new HashMap<>(message);
     saved.put("updated_quote", revisedDraft);

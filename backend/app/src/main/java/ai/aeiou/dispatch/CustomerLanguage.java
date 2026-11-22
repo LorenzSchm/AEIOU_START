@@ -14,10 +14,24 @@ enum CustomerLanguage {
   CHINESE("zh", "空运|詢價|询价|全包价|全包價|提货|提貨|您好|谢谢|謝謝"),
   TURKISH("tr", "\\b(?:merhaba|hava navlun|havalimanı|teslim edeceğiz|teklifinizi|en ucuz|en ekonomik)\\b");
 
+  private static final Map<String, String> LANGUAGE_NAMES = Map.ofEntries(
+      Map.entry("english", "en"), Map.entry("anglais", "en"), Map.entry("englisch", "en"),
+      Map.entry("inglés", "en"), Map.entry("ingles", "en"), Map.entry("inglese", "en"),
+      Map.entry("engels", "en"), Map.entry("angielsku", "en"), Map.entry("ingilizce", "en"),
+      Map.entry("french", "fr"), Map.entry("français", "fr"),
+      Map.entry("francais", "fr"), Map.entry("französisch", "fr"), Map.entry("francés", "fr"),
+      Map.entry("german", "de"), Map.entry("allemand", "de"), Map.entry("deutsch", "de"),
+      Map.entry("alemán", "de"), Map.entry("tedesco", "de"), Map.entry("chinese", "zh"),
+      Map.entry("chinois", "zh"), Map.entry("chinesisch", "zh"), Map.entry("spanish", "es"),
+      Map.entry("español", "es"), Map.entry("espagnol", "es"), Map.entry("spanisch", "es"),
+      Map.entry("italian", "it"), Map.entry("italiano", "it"), Map.entry("italienisch", "it"),
+      Map.entry("portuguese", "pt"), Map.entry("português", "pt"), Map.entry("dutch", "nl"),
+      Map.entry("nederlands", "nl"), Map.entry("polish", "pl"), Map.entry("polski", "pl"),
+      Map.entry("turkish", "tr"), Map.entry("türkçe", "tr"), Map.entry("korean", "ko"),
+      Map.entry("japanese", "ja"), Map.entry("russian", "ru"), Map.entry("arabic", "ar"));
   private static final Pattern REPLY_IN = Pattern.compile(
-      "(?iu)\\b(?:reply|respond|quote|antworten sie|r[ée]pondez)(?: please)? "
-          + "(?:in|auf|en) (english|anglais|englisch|french|fran[çc]ais|französisch|"
-          + "german|allemand|deutsch|chinese|chinois|chinesisch)\\b");
+      "(?iu)\\b(?:reply|respond|answer|write|quote|antworten sie|r[ée]pondez|responda|rispondete|rispondi)"
+          + "(?: to us| us)?(?: please| bitte)? (?:in|auf|en) (" + String.join("|", LANGUAGE_NAMES.keySet()) + ")\\b");
   private static final Pattern WAITING_CHARGE = Pattern.compile(
       "The first (\\d+) minutes of waiting at pickup are included\\. Longer waits incur a charge of EUR"
           + " ([0-9.]+) per hour\\.");
@@ -29,23 +43,59 @@ enum CustomerLanguage {
     this.markers = Pattern.compile(markers, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
   }
 
-  static CustomerLanguage of(Map<?, ?> original) {
+  /**
+   * The language to answer this customer message in: one the customer asked for, otherwise the
+   * language of their own authored text (quoted history, forwarded mails and signatures removed),
+   * then the current subject. Null when none of that is conclusive.
+   */
+  static String replyTag(Map<?, ?> original) {
     String raw = Ledger.str(original, "body");
-    String body = MailParser.authoredText(raw);
-    String transcript = Ledger.str(original, "voice_transcript");
+    String body = authored(original);
+    String requested = requested(body);
+    if (requested != null) return requested;
+    String detected = MessageLanguage.detect(body);
+    if (detected != null) return detected;
+    // A forwarded subject belongs to the quoted mail, not to the customer.
+    String subject = Ledger.str(original, "subject");
+    if (!MailParser.currentSubject(subject, raw).equals(subject)) subject = "";
+    subject = subject.replaceAll("(?iu)^\\s*(?:(?:re|aw|fw|fwd|wg|tr|rv|sv|vs)\\s*:\\s*)+", "");
+    detected = MessageLanguage.detectProse(subject + "\n" + body);
+    if (detected != null) return detected;
+    CustomerLanguage marked = marked(subject, body);
+    return marked == null ? null : marked.tag;
+  }
+
+  /** A reply language the customer asked for explicitly, such as "please reply in English". */
+  static String requestedTag(Map<?, ?> message) {
+    return requested(authored(message));
+  }
+
+  private static String requested(String authored) {
+    var requested = REPLY_IN.matcher(authored);
+    return requested.find() ? LANGUAGE_NAMES.get(requested.group(1).toLowerCase(Locale.ROOT)) : null;
+  }
+
+  private static String authored(Map<?, ?> message) {
+    String body = MailParser.authoredText(Ledger.str(message, "body"));
+    String transcript = Ledger.str(message, "voice_transcript");
     if (!transcript.isBlank() && !body.contains(transcript))
       body += "\n" + MailParser.authoredText(transcript);
-    var requested = REPLY_IN.matcher(body);
-    if (requested.find()) {
-      return switch (requested.group(1).toLowerCase(Locale.ROOT)) {
-        case "french", "français", "francais", "französisch" -> FRENCH;
-        case "german", "allemand", "deutsch" -> GERMAN;
-        case "chinese", "chinois", "chinesisch" -> CHINESE;
-        default -> ENGLISH;
-      };
-    }
-    String subject = MailParser.currentSubject(Ledger.str(original, "subject"), raw);
-    CustomerLanguage selected = ENGLISH;
+    return body;
+  }
+
+  /** The hand-written templates for a reply tag. Other languages start from English and are rendered. */
+  static CustomerLanguage forTag(String tag) {
+    String primary = MessageLanguage.primary(tag);
+    for (var language : values()) if (language.tag.equals(primary)) return language;
+    return ENGLISH;
+  }
+
+  static CustomerLanguage of(Map<?, ?> original) {
+    return forTag(replyTag(original));
+  }
+
+  private static CustomerLanguage marked(String subject, String body) {
+    CustomerLanguage selected = null;
     long best = 0;
     for (var language : values()) {
       long score = 2 * language.markers.matcher(subject).results().count()

@@ -1508,6 +1508,107 @@ class WaveWorkerTest {
     assertTrue(quote.contains("EUR 2230.00") && quote.contains("우편번호 55274"));
   }
 
+  private static final String REQUEST_48586 = """
+      안녕하세요.
+
+      Germany Dortmund 44780에 있는 저희 사업장에서 픽업하여 DFW (Dallas, US)까지 보내는 항공화물 견적을 부탁드립니다. 출발 공항까지의 트럭 운송도 귀사에서安排해 주시기 바랍니다.
+
+      화물은 스포츠 장비 4개이며, 총중량은 159 kg, 부피는 1.44 cbm입니다. 2026-11-24부터 픽업 가능합니다.
+
+      가장 저렴한 옵션으로 부탁드립니다. 픽업과 공항까지의 트럭 운송을 포함해 모든 비용이 포함된 총액을 EUR로 알려주시기 바랍니다.
+
+      Viele Gruesse / Many greetings
+      Deniz Yilmaz
+      Rheintal Elektronik GmbH
+      """;
+
+  /** Runs request #48586 up to the quote; {@code korean} decides whether a rendering may be Korean. */
+  private String quote48586(java.util.function.IntPredicate korean) throws Exception {
+    String customer = "rheintal-elektronik@hackloop.mail";
+    var parsed = MailParser.request("DFW행 항공운임 견적 요청", REQUEST_48586, false, catalog);
+    assertNull(parsed.issue());
+    receive(7, customer, "DFW행 항공운임 견적 요청", REQUEST_48586, null);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer(
+        "Meridian Freightways", 4, new BigDecimal("900.00"), parsed.shipment().chargeableKg(),
+        "portal", "DFW-KOREAN", START.plusSeconds(900))), true));
+    when(upstream.directLlm()).thenReturn(true);
+    var calls = new AtomicInteger();
+    when(upstream.parseRfq(argThat(payload -> payload.toString().contains("name=customer_reply"))))
+        .thenAnswer(call -> {
+          Map<String, Object> payload = call.getArgument(0);
+          List<Map<String, String>> messages = (List<Map<String, String>>) payload.get("messages");
+          var input = mapper.readTree(messages.get(1).get("content"));
+          assertTrue(input.path("reply_language").asText().startsWith("ko"));
+          boolean inKorean = korean.test(calls.incrementAndGet());
+          var paragraphs = mapper.createArrayNode();
+          for (var paragraph : input.path("approved_reply")) {
+            var tokens = java.util.regex.Pattern.compile("\\[T[0-9]+\\]").matcher(paragraph.asText())
+                .results().map(match -> match.group()).toList();
+            // The live rendering answered "ko" but returned the English paragraphs unchanged.
+            paragraphs.add(inKorean ? "견적 내용을 안내해 드립니다 " + String.join(" ", tokens) + " 감사합니다"
+                : paragraph.asText());
+          }
+          return gatewayResponse(mapper.createObjectNode().put("language", "ko")
+              .set("paragraphs", paragraphs).toString());
+        });
+    worker.work();
+    var truck = outbound.stream().filter(message -> message.get("subject").toString().contains("pickup"))
+        .findFirst().orElseThrow();
+    replyWithTruckBid(103, truck.get("to").toString(), "130.00", 22);
+    for (int second = 76; second < 90 && !"sent".equals(ledger.delivery("quote:7")); second += 3) {
+      clock.current = START.plusSeconds(second);
+      worker.work();
+    }
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertEquals("ko", ledger.jdbc().queryForObject("SELECT language FROM thread_language WHERE root=7", String.class));
+    return outbound.getLast().get("body").toString();
+  }
+
+  @Test
+  void request48586RejectsAnEnglishRenderingLabelledKorean() throws Exception {
+    String quote = quote48586(call -> call > 1);
+    assertTrue(quote.startsWith("견적 내용을 안내해 드립니다"), quote);
+    assertTrue(quote.contains("EUR 1030.00") && quote.contains("Meridian Freightways"), quote);
+    assertFalse(quote.contains("The lowest rate"), quote);
+  }
+
+  @Test
+  void request48586FallsBackToVerifiedEnglishWithAKoreanNotice() throws Exception {
+    String quote = quote48586(call -> false);
+    assertTrue(quote.startsWith(RfqGateway.ENGLISH_NOTICE.get("ko") + "\n\n"), quote);
+    assertTrue(quote.contains("EUR 1030.00") && quote.contains("Meridian Freightways"), quote);
+  }
+
+  @Test
+  void request19529KeepsFrenchAfterTheCustomerAnswersInEnglish() {
+    String customer = "weidner-spielwaren@hackloop.mail";
+    receive(7, customer, "Devis fret aérien – option la plus rapide", """
+        Bonjour,
+
+        Nous souhaitons l’option la plus rapide en fret aérien pour 100 kg et 0.2 cbm vers RUH.
+        Merci d’organiser l’enlèvement dans notre entrepôt. Pouvez-vous me communiquer votre tarif
+        tout compris en EUR ainsi que le délai de transit ?
+
+        Merci d’avance et bonne journée !
+
+        Cheers,
+        Klaus Weidner
+        Weidner Spielwaren GmbH, Nuremberg
+        """, null);
+    worker.work();
+    var question = outbound.getFirst();
+    assertTrue(question.get("body").toString().contains("code postal"), question.get("body").toString());
+    receive(2001, customer, "Re: Devis fret aérien – option la plus rapide",
+        "Thanks for your message. I need to check that and will come back to you.\n\nCheers,\nKlaus Weidner",
+        Ledger.id(question.get("id")));
+    clock.current = START.plusSeconds(5);
+    worker.work();
+    var again = outbound.getLast();
+    assertNotSame(question, again);
+    assertTrue(again.get("body").toString().contains("code postal"), again.get("body").toString());
+    assertEquals("fr", ledger.jdbc().queryForObject("SELECT language FROM thread_language WHERE root=7", String.class));
+  }
+
   @Test
   void extractsKoreanPickupAddressAndConfirmationFromRound149() {
     String body = "2026-11-27에 독일 Fulda 36030에 있는 저희 사업장에서 픽업 가능합니다.";
