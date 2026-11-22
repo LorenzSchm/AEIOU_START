@@ -15,18 +15,15 @@ class DispatchController {
   private final FiveU upstream;
   private final PortalBookings bookings;
   private final CarrierTariffs tariffs;
-  private final WriterLease lease;
-  private final PostgresReplica replica;
-  private final com.fasterxml.jackson.databind.ObjectMapper json;
+  private final DeskStatus status;
+  private final InboxFeed feed;
 
   DispatchController(
       Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings,
-      CarrierTariffs tariffs, WriterLease lease, PostgresReplica replica,
-      com.fasterxml.jackson.databind.ObjectMapper json) {
+      CarrierTariffs tariffs, DeskStatus status, InboxFeed feed) {
     this.bookings = bookings;
-    this.lease = lease;
-    this.replica = replica;
-    this.json = json;
+    this.status = status;
+    this.feed = feed;
     this.ledger = ledger;
     this.wave = wave;
     this.catalog = catalog;
@@ -37,13 +34,32 @@ class DispatchController {
   /** Worker status. A read-only desk adds when its replica last synced from the writer's Postgres. */
   @GetMapping("/status")
   Map<String, Object> status() {
-    Map<String, Object> status = json.convertValue(wave.status(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
-    status.put("read_only", lease.readOnly());
-    if (lease.readOnly()) {
-      status.put("replica_synced", replica.lastSync() == null ? null : replica.lastSync().toString());
-      status.put("replica_error", replica.error());
-    }
-    return status;
+    return status.current();
+  }
+
+  /** Live desk data: a snapshot, then only what changes. See {@link InboxFeed}. */
+  @GetMapping(path = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  org.springframework.web.servlet.mvc.method.annotation.SseEmitter events(
+      jakarta.servlet.http.HttpServletResponse response) {
+    // no-transform keeps compressing proxies (Next's rewrite, nginx) from buffering the stream.
+    response.setHeader("Cache-Control", "no-cache, no-transform");
+    response.setHeader("X-Accel-Buffering", "no");
+    return feed.subscribe();
+  }
+
+  /**
+   * Cursor-paged messages, newest first. Pass the returned {@code next_before} as {@code before} for
+   * the next page; it is null on the last page.
+   */
+  @GetMapping("/messages/page")
+  Map<String, Object> messagePage(@RequestParam(defaultValue = "100") int limit,
+      @RequestParam(required = false) Long before) {
+    if (limit < 1 || limit > 500) throw new IllegalArgumentException("limit must be between 1 and 500.");
+    var page = ledger.inboxPage(before, limit);
+    var result = new LinkedHashMap<String, Object>();
+    result.put("messages", page);
+    result.put("next_before", page.size() < limit ? null : Ledger.id(page.getLast().get("id")));
+    return result;
   }
 
   @GetMapping("/messages")

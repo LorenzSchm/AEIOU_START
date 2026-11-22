@@ -670,12 +670,21 @@ class Ledger {
   }
 
   List<Map<String, Object>> inbox() {
+    return inboxPage(null, Integer.MAX_VALUE);
+  }
+
+  /**
+   * One page of the inbox, newest first: messages with an id below {@code before} (all when null),
+   * at most {@code limit}. Keyset paging by id stays stable while new mail arrives.
+   */
+  List<Map<String, Object>> inboxPage(Long before, int limit) {
     var rows =
         db.queryForList(
             "SELECT m.*,s.result AS board_result,COALESCE(w.reason,CASE WHEN m.booking IS NULL THEN b.issue END) AS"
                 + " review_reason FROM mail m LEFT JOIN wave_case w ON w.id=m.id LEFT JOIN"
                 + " booking_attempt b ON b.request_id=m.id LEFT JOIN board_result s"
-                + " ON m.kind='request' AND s.received=m.received ORDER BY m.id DESC");
+                + " ON m.kind='request' AND s.received=m.received WHERE (? IS NULL OR m.id<?)"
+                + " ORDER BY m.id DESC LIMIT ?", before, before, limit);
     Map<Long, Long> parents = new HashMap<>();
     for (var row : rows) {
       long mid = id(row.get("id"));
