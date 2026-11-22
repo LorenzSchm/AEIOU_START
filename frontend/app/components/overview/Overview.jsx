@@ -33,8 +33,10 @@ function Meter({ value }) {
 
 const SOURCE_COLORS = { portal: "var(--blue)", tariff: "var(--accent)", "email bid": "var(--ok)" };
 
-function Overview({ messages, onOpen, active = true }) {
-  const s = useMemo(() => waveSummary(messages), [messages]);
+/** Figures come from the server summary (GET /summary, live over /events); the local model is the fallback. */
+function Overview({ messages, summary, onOpen, active = true }) {
+  const local = useMemo(() => (summary?.overview ? null : waveSummary(messages)), [messages, summary]);
+  const s = summary?.overview ?? local;
   const routes = useMemo(
     () =>
       messages
@@ -53,7 +55,9 @@ function Overview({ messages, onOpen, active = true }) {
   );
   const attention = messages.filter(needsAttention).slice(0, 4);
   // Business figures only; the 5U challenge's scoring lives on the Scoreboard view.
-  const crm = useMemo(() => crmModel(messages), [messages]);
+  const localCrm = useMemo(() => (summary?.shipments ? null : crmModel(messages)), [messages, summary]);
+  const kpis = summary?.shipments?.kpis ?? localCrm.kpis;
+  const bookedCount = summary?.shipments ? summary.shipments.funnel.find((f) => f.key === "booked").n : localCrm.bookings.length;
   const sources = Object.entries(s.bySource || {}).filter(([, n]) => n > 0);
   const sourceTotal = sources.reduce((a, [, n]) => a + n, 0) || 1;
   const topDest = (s.byDestination || []).slice(0, 5);
@@ -62,10 +66,10 @@ function Overview({ messages, onOpen, active = true }) {
   return (
     <div className="overview">
       <div className="tiles">
-        <Tile i={0} wide icon="euro" label="Booked value" value={crm.bookings.length ? eur(crm.kpis.bookedValue) : "—"}
-              tone={crm.bookings.length ? "ok" : undefined}
-              sub={crm.bookings.length
-                ? eur(crm.kpis.quotedValue) + " quoted · " + Math.round((crm.kpis.conversion ?? 0) * 100) + "% of requests booked"
+        <Tile i={0} wide icon="euro" label="Booked value" value={bookedCount ? eur(kpis.bookedValue) : "—"}
+              tone={bookedCount ? "ok" : undefined}
+              sub={bookedCount
+                ? eur(kpis.quotedValue) + " quoted · " + Math.round((kpis.conversion ?? 0) * 100) + "% of requests booked"
                 : "no bookings yet"} />
         <Tile i={1} icon="mail" label="Requests" value={s.requests ?? 0} sub={(s.inProgress ?? 0) + " in progress"} />
         <Tile i={2} icon="send" label="Quoted" value={s.quoted ?? 0}

@@ -89,14 +89,18 @@ export function useDispatchData() {
     return cache.current;
   }, []);
   const refresh = useCallback(async () => {
-    const [status, messages, dir] = await Promise.all([api("/status"), api("/messages"), directory()]);
+    const [status, messages, dir, summary] = await Promise.all([
+      api("/status"), api("/messages"), directory(), MOCK ? Promise.resolve(null) : api("/summary").catch(() => null),
+    ]);
     setData((old) => {
       const next = {
         status: shareValue(old?.status, status),
         messages: shareMessages(old?.messages, messages),
         directory: dir,
+        summary: shareValue(old?.summary, summary),
       };
-      return old && next.status === old.status && next.messages === old.messages && next.directory === old.directory ? old : next;
+      return old && next.status === old.status && next.messages === old.messages && next.directory === old.directory
+        && next.summary === old.summary ? old : next;
     });
     setError("");
   }, [directory]);
@@ -139,12 +143,14 @@ export function useDispatchData() {
         status: shareValue(old?.status, s.status),
         messages: shareMessages(old?.messages, s.messages),
         directory: dir,
+        summary: s.summary ?? null,
       }));
       setError("");
     });
     on("message", ({ message }) => setData((old) => old && { ...old, messages: upsertMessage(old.messages, message) }));
     on("removed", ({ id }) => setData((old) => old && { ...old, messages: old.messages.filter((m) => m.id !== id) }));
     on("status", ({ status }) => setData((old) => old && { ...old, status: shareValue(old.status, status) }));
+    on("summary", ({ summary }) => setData((old) => old && { ...old, summary }));
     source.onerror = () => {
       if (!active) return;
       // EventSource reconnects by itself and gets a fresh snapshot. Only give up after repeated failures.

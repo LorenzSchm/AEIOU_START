@@ -68,7 +68,7 @@ function Losses({ losses, total, onOpen }) {
     <ul className="sc-losses">
       {losses.map((l) => (
         <li key={l.label}>
-          <button type="button" onClick={() => onOpen(l.rounds.at(-1).id)} title={"Open the latest: request #" + l.rounds.at(-1).id}>
+          <button type="button" onClick={() => onOpen(l.latestId ?? l.rounds.at(-1).id)} title={"Open the latest: request #" + (l.latestId ?? l.rounds.at(-1).id)}>
             <span className="sc-loss-label">{l.label}</span>
             <span className="sc-loss-track"><span className={"sc-loss-fill" + (l.unanswered ? " muted" : "")} style={{ width: (l.n / max) * 100 + "%" }} /></span>
             <b className="mono">{l.n}</b>
@@ -100,8 +100,17 @@ function Rounds({ rounds, maxTotal, onOpen }) {
   );
 }
 
-function Scoreboard({ messages, onOpen }) {
-  const s = useMemo(() => scoreModel(messages), [messages]);
+/** Server rounds are compact ({ id, received, round_no, verdict, total }); give them the local model's shape. */
+function fromServer(score) {
+  return {
+    ...score,
+    rounds: score.rounds.map((r) => ({ id: r.id, received: r.received, total: r.total, result: { round_no: r.round_no, verdict: r.verdict } })),
+  };
+}
+
+/** Figures come from the server summary (live over /events); the local model is the fallback. */
+function Scoreboard({ messages, summary, onOpen }) {
+  const s = useMemo(() => (summary?.score ? fromServer(summary.score) : scoreModel(messages)), [messages, summary]);
   const scored = s.rounds.length;
   return (
     <div className="score">

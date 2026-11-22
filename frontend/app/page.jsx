@@ -250,7 +250,7 @@ export default function Page() {
           <>
             {seen.current.has("overview") && (
               <KeptView name="overview" active={nav.view === "overview"}>
-                <Overview messages={messages} active={nav.view === "overview"} onOpen={openCase} />
+                <Overview messages={messages} summary={data.summary} active={nav.view === "overview"} onOpen={openCase} />
               </KeptView>
             )}
             {seen.current.has("queue") && (
@@ -261,7 +261,7 @@ export default function Page() {
             )}
             {seen.current.has("score") && (
               <KeptView name="score" active={nav.view === "score"}>
-                <Scoreboard messages={messages} onOpen={openCase} />
+                <Scoreboard messages={messages} summary={data.summary} onOpen={openCase} />
               </KeptView>
             )}
             {seen.current.has("crm") && (
