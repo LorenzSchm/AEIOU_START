@@ -783,6 +783,7 @@ class Ledger implements AutoCloseable {
     Map<Long, List<Map<String, Object>>> tendersByRequest = new HashMap<>();
     for (var t : db.queryForList("SELECT * FROM tender ORDER BY request_id, email"))
       tendersByRequest.computeIfAbsent(id(t.get("request_id")), k -> new ArrayList<>()).add(t);
+    var legsByRequest = shipmentBookings();
     for (var row : rows) {
       long mid = id(row.get("id"));
       for (String k : List.of("fields", "attachments", "proposal", "booking", "board_result"))
@@ -802,7 +803,46 @@ class Ledger implements AutoCloseable {
                 : states.get(bidAction(t)));
       }
       row.put("bid_requests", bids);
+      var legs = legsByRequest.get(mid);
+      if (legs != null && "request".equals(row.get("kind"))) {
+        row.put("shipment_bookings", legs);
+        row.put("shipment_booking_state", shipmentBookingState(legs));
+      }
     }
     return rows;
+  }
+
+  /**
+   * Each separately priced shipment of a request with its portal booking, by request id. Such
+   * shipments are booked on their own shipment_leg row while the request's mail.booking stays the
+   * single-shipment booking, so the desk reads these instead.
+   */
+  private Map<Long, List<Map<String, Object>>> shipmentBookings() {
+    Map<Long, List<Map<String, Object>>> result = new HashMap<>();
+    for (var leg : db.queryForList(
+        "SELECT request_id,number,shipment,proposal,booking FROM shipment_leg ORDER BY request_id,number")) {
+      Map<?, ?> shipment = Objects.requireNonNullElse(read(leg.get("shipment"), Map.class), Map.of());
+      Map<?, ?> proposal = Objects.requireNonNullElse(read(leg.get("proposal"), Map.class), Map.of());
+      Map<?, ?> booking = read(leg.get("booking"), Map.class);
+      boolean booked = booking != null && !str(booking, "booking_reference").isBlank();
+      var row = new LinkedHashMap<String, Object>();
+      row.put("number", leg.get("number"));
+      row.put("origin", shipment.get("origin"));
+      row.put("destination", shipment.get("destination"));
+      row.put("weight_kg", shipment.get("weight_kg"));
+      for (String k : List.of("booking_reference", "team_reference", "airline", "airline_code", "price",
+          "currency", "status"))
+        row.put(k, booked ? booking.get(k) : null);
+      row.put("pickup_eur", proposal.get("pickup_eur"));
+      row.put("total_eur", proposal.get("offer") instanceof Map<?, ?> offer ? offer.get("total_eur") : null);
+      result.computeIfAbsent(id(leg.get("request_id")), k -> new ArrayList<>()).add(row);
+    }
+    return result;
+  }
+
+  /** "booked" when every shipment is booked, "partly booked" when some are, else null. */
+  static String shipmentBookingState(List<Map<String, Object>> legs) {
+    long booked = legs.stream().filter(l -> l.get("booking_reference") != null).count();
+    return booked == 0 ? null : booked == legs.size() ? "booked" : "partly booked";
   }
 }

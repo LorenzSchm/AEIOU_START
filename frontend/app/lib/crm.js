@@ -56,8 +56,35 @@ function bookedAtOf(quoteTime, followUps) {
  * Where a request ended up. group: "won" | "lost" | "open".
  * key/label group the loss reasons; tone follows the chip palette.
  */
+/**
+ * DeskSummary.bookingOf: the request's own booking, else one entry over its separately booked
+ * shipments (references and airlines joined, air prices added, status "booked 1/2" while partial).
+ */
+function bookingOf(r) {
+  if (r.booking?.booking_reference) return r.booking;
+  const legs = r.shipment_bookings || [];
+  const booked = legs.filter((l) => l.booking_reference);
+  if (!booked.length) return null;
+  const distinct = (key) => [...new Set(booked.map((l) => l[key]).filter(Boolean))];
+  const prices = booked.map((l) => num(l.price));
+  const codes = distinct("airline_code"), currencies = distinct("currency");
+  return {
+    booking_reference: booked.map((l) => l.booking_reference).join(" · "),
+    team_reference: distinct("team_reference").join(" · ") || null,
+    airline: distinct("airline").join(" · ") || null,
+    airline_code: codes.length === 1 ? codes[0] : null,
+    price: prices.some((p) => p == null) ? null : prices.reduce((s, p) => s + p, 0),
+    currency: currencies.length === 1 ? currencies[0] : null,
+    status: booked.length === legs.length ? "booked" : "booked " + booked.length + "/" + legs.length,
+    shipments_booked: booked.length,
+    shipments: legs.length,
+  };
+}
+
 function resultOf(r, { quoted, followUpsAfterQuote, now }) {
   if (r.booking?.booking_reference) return { group: "won", key: "booked", label: "Booked", tone: "ok" };
+  const split = bookingOf(r);
+  if (split) return { group: "won", key: "booked", label: split.status === "booked" ? "Booked" : "Booked " + split.shipments_booked + "/" + split.shipments, tone: "ok" };
   const b = r.board_result;
   const verdict = String(b?.verdict || "").toLowerCase();
   if (verdict === "rejected") {
@@ -113,7 +140,14 @@ export function crmModel(messages = [], now = Date.now()) {
       const pickup = num(r.proposal?.pickup_eur) ?? 0;
       const airPrice = num(r.booking?.price);
       // Booked all-in: air price actually booked plus the quoted pickup leg (falls back to the quote).
-      const bookedAllIn = r.booking ? (airPrice != null ? airPrice + pickup : allIn) : null;
+      const booking = bookingOf(r);
+      const bookedAllIn = booking && booking !== r.booking
+        // Separately booked shipments: each booked air price plus that shipment's quoted pickup.
+        ? (r.shipment_bookings || []).filter((l) => l.booking_reference).reduce((s, l) => {
+          const air = num(l.price);
+          return s + (air != null ? air + (num(l.pickup_eur) ?? 0) : num(l.total_eur) ?? 0);
+        }, 0)
+        : r.booking ? (airPrice != null ? airPrice + pickup : allIn) : null;
       const lastActivity = Math.max(
         ...thread.map((m) => ms(m.received) ?? 0),
         ...(r.outgoing || []).map((o) => ms(o.time) ?? 0),
@@ -133,12 +167,12 @@ export function crmModel(messages = [], now = Date.now()) {
         quoteSec: quoted && firstQuote != null && received != null ? (firstQuote - received) / 1000 : null,
         allIn,
         bookedAllIn,
-        carrier: r.booking?.airline || offer?.airline || null,
+        carrier: booking?.airline || r.booking?.airline || offer?.airline || null,
         days: num(offer?.days),
         accepted: quoted && String(r.board_result?.verdict || "").toLowerCase() === "accepted",
         board: r.board_result || null,
-        booking: r.booking?.booking_reference ? r.booking : null,
-        bookedAt: r.booking?.booking_reference ? bookedAtOf(firstQuote, followUps) : null,
+        booking,
+        bookedAt: booking ? bookedAtOf(firstQuote, followUps) : null,
         lastActivity: lastActivity || null,
         result: resultOf(r, { quoted, followUpsAfterQuote, now }),
       };

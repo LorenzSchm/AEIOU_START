@@ -3188,6 +3188,71 @@ class WaveWorkerTest {
     assertTrue(laneReplies.getLast().get("body").toString().contains("BK-SMMUWG2S"));
   }
 
+  /** Request 7 split like live request 58757: shipment 1 booked on its own leg, shipment 2 not. */
+  private void bookShipmentOneOfTwo() {
+    request("");
+    String insert = "INSERT INTO shipment_leg(leg_id,request_id,number,shipment,proposal,booking) VALUES(?,7,?,?,?,?)";
+    ledger.jdbc().update(insert, Ledger.shipmentQuoteLeg(7, 1), 1, """
+        {"origin":"MUC","destination":"BKK","weight_kg":1190,"volume_cbm":2.92,"preference":"cheapest",\
+        "pickup_zone":"85","pickup_eur":null,"pickup_days":0.0}""",
+        "{\"offer\":{\"airline\":\"Polaris Air Logistics\",\"total_eur\":3584.90},\"pickup_eur\":324.30}", """
+        {"booking_reference":"BK-W85WV9Z9","team_reference":"AEIOU-7-1","rate_id":"R-fBw4NDmUP4MQHeOY",\
+        "airline":"Polaris Air Logistics","airline_code":"PL","price":"3260.60","currency":"EUR","status":"booked"}""");
+    ledger.jdbc().update(insert, Ledger.shipmentQuoteLeg(7, 2), 2, """
+        {"origin":"MUC","destination":"SIN","weight_kg":145,"volume_cbm":1.14,"preference":"cheapest",\
+        "pickup_zone":"85","pickup_eur":null,"pickup_days":0.0}""",
+        "{\"offer\":{\"airline\":\"Kestrel Airways\",\"total_eur\":881.61},\"pickup_eur\":154.36}", null);
+  }
+
+  @Test
+  void inboxShowsEachSeparatelyBookedShipmentWithoutTouchingTheRequestBooking() {
+    bookShipmentOneOfTwo();
+    var row = ledger.inbox().stream().filter(m -> Ledger.id(m.get("id")) == 7).findFirst().orElseThrow();
+    assertNull(row.get("booking"), "mail.booking stays the single-shipment booking");
+    assertEquals("partly booked", row.get("shipment_booking_state"));
+    @SuppressWarnings("unchecked") var legs = (List<Map<String, Object>>) row.get("shipment_bookings");
+    assertEquals(2, legs.size());
+    assertEquals("BK-W85WV9Z9", legs.get(0).get("booking_reference"));
+    assertEquals("AEIOU-7-1", legs.get(0).get("team_reference"));
+    assertEquals("BKK", legs.get(0).get("destination"));
+    assertNull(legs.get(1).get("booking_reference"));
+    assertEquals("SIN", legs.get(1).get("destination"));
+
+    var tree = mapper.valueToTree(ledger.inbox());
+    var deal = DeskSummary.deals(tree, clock.instant().toEpochMilli()).stream().filter(d -> d.id() == 7)
+        .findFirst().orElseThrow();
+    assertEquals("Booked 1/2", deal.result().label());
+    assertEquals(3584.90, deal.bookedAllIn(), 1e-9);
+
+    ledger.jdbc().update("UPDATE shipment_leg SET booking=json_object('booking_reference','BK-SECOND',"
+        + "'status','booked') WHERE leg_id=?", Ledger.shipmentQuoteLeg(7, 2));
+    row = ledger.inbox().stream().filter(m -> Ledger.id(m.get("id")) == 7).findFirst().orElseThrow();
+    assertEquals("booked", row.get("shipment_booking_state"));
+  }
+
+  @Test
+  void trackingAnswersFromABookedShipmentLeg() {
+    bookShipmentOneOfTwo();
+    var tracking = new TrackingReplies(ledger, worker, catalog, clock, true);
+    receive(2101, "tracking@hackloop.mail", "Where is BK-W85WV9Z9?", "Which airline has it?", null);
+    receive(2102, "tracking@hackloop.mail", "Status AEIOU-7-1", "What price did you book it at?", null);
+    receive(2103, "tracking@hackloop.mail", "Our shipment MUC to BKK, 1190 kg", "Where is it now?", null);
+    receive(2104, "tracking@hackloop.mail", "Our shipment MUC to SIN, 145 kg", "Where is it now?", null);
+    receive(2105, "tracking@hackloop.mail", "Status AEIOU-7-2", "Where is it?", null);
+    tracking.answer();
+    var replies = outbound.stream().filter(m -> "tracking@hackloop.mail".equals(m.get("to"))).toList();
+    assertEquals(List.of(2101L, 2102L, 2103L),
+        replies.stream().map(m -> ((Number) m.get("in_reply_to")).longValue()).toList());
+    for (var reply : replies) {
+      String text = reply.get("body").toString();
+      for (String expected : List.of("MUC to BKK", "Polaris Air Logistics", "BK-W85WV9Z9", "AEIOU-7-1", "booked"))
+        assertTrue(text.contains(expected), text);
+    }
+    assertTrue(replies.get(1).get("body").toString().contains("EUR 3260.60"));
+    assertEquals("tracking review", ledger.mail(2104).get("stage"), "shipment 2 is not booked");
+    assertEquals("tracking review", ledger.mail(2105).get("stage"));
+  }
+
   private Offer portalOffer(String airline, int euros, String rateId) {
     return new Offer(airline, 2, BigDecimal.valueOf(euros), BigDecimal.valueOf(100), "portal",
         rateId, START.plusSeconds(900));

@@ -41,8 +41,20 @@ export const needsAttention = (m, now = Date.now()) =>
   !answered(m) &&
   windowOpen(m, now);
 
+/**
+ * Separately priced shipments are booked one by one on their own leg (m.shipment_bookings), while
+ * m.booking stays the single-shipment booking. → { booked, total, legs }
+ */
+export function shipmentBookings(m) {
+  const legs = Array.isArray(m?.shipment_bookings) ? m.shipment_bookings : [];
+  return { booked: legs.filter((l) => l.booking_reference).length, total: legs.length, legs };
+}
+
 export function statusOf(m, now = Date.now()) {
   if (m.booking) return { label: "Booked", tone: "ok" };
+  const shipments = shipmentBookings(m);
+  if (shipments.booked)
+    return { label: shipments.booked === shipments.total ? "Booked" : `Booked ${shipments.booked}/${shipments.total}`, tone: "ok" };
   if (m.delivery === "sent") return { label: "Quoted", tone: "info" };
   if (m.delivery === "uncertain" || m.delivery === "pending") return { label: "Unconfirmed", tone: "warn" };
   if (m.stage === "declined") return { label: "Declined · done", tone: "ok" };

@@ -14,7 +14,7 @@ import { inWindow, useNow } from "../../lib/clock";
 import Timeline from "./Timeline";
 import { deriveProcess } from "../../lib/process";
 import { api } from "../../lib/api";
-import { answered, clock, eur, kindLabel, needsAttention, secondsLeft, statusOf, transitLabel } from "../../lib/format";
+import { answered, clock, eur, kindLabel, needsAttention, secondsLeft, shipmentBookings, statusOf, transitLabel } from "../../lib/format";
 import { spring } from "../../lib/motion";
 
 const RATE_PORTAL = "https://start-hack.5u.ai/portal/ui";
@@ -175,7 +175,8 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
   const canSend = proposal?.offer && !busy && !closed && !dirty;
   // Anything that needs a human opens the override controls straight away.
   const attention = needsAttention(m, now) || (Boolean(m.review_reason) && !closed);
-  const canBook = m.delivery === "sent" && proposal?.offer?.rate_id && !m.booking;
+  const shipments = shipmentBookings(m);
+  const canBook = m.delivery === "sent" && proposal?.offer?.rate_id && !m.booking && !shipments.booked;
 
   return (
     <>
@@ -237,6 +238,30 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
               {m.booking && <div><dt>Booking</dt><dd className="mono">{m.booking.booking_reference}</dd></div>}
             </dl>
           </div>
+        )}
+
+        {request && shipments.total > 0 && (
+          <Section
+            title="Shipment bookings"
+            icon="book"
+            defaultOpen
+            badge={shipments.booked + "/" + shipments.total}
+            summary={shipments.booked === shipments.total ? "All booked" : shipments.booked ? "Partly booked" : "Not booked"}
+          >
+            <ul className="bid-list">
+              {shipments.legs.map((l) => (
+                <li key={l.number}>
+                  <Icon name="plane" size={14} />
+                  <span>
+                    {l.number}. {l.origin || "?"} → {l.destination || "?"}
+                    {l.booking_reference && <> · <b className="mono">{l.booking_reference}</b> · {l.airline || "—"}
+                      {l.price != null && <> · {eur(l.price, 2)}</>}</>}
+                  </span>
+                  <Chip tone={l.booking_reference ? "ok" : "muted"}>{l.booking_reference ? l.status || "booked" : "not booked"}</Chip>
+                </li>
+              ))}
+            </ul>
+          </Section>
         )}
 
         {request && (

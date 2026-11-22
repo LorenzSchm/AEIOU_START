@@ -235,11 +235,67 @@ final class DeskSummary {
     return last;
   }
 
+  /**
+   * {booked, total} over a request's separately priced shipments (inbox shipment_bookings). Each is
+   * booked on its own, so a request with some of them booked counts as booked, noted "1/2".
+   */
+  static int[] shipmentsBooked(JsonNode r) {
+    int booked = 0, total = 0;
+    for (var leg : each(r.path("shipment_bookings"))) {
+      total++;
+      if (truthy(leg, "booking_reference")) booked++;
+    }
+    return new int[] {booked, total};
+  }
+
+  /** "" when every shipment is booked, else " 1/2". */
+  private static String shipmentsNote(int[] n) {
+    return n[0] == n[1] ? "" : " " + n[0] + "/" + n[1];
+  }
+
+  /**
+   * The request's booking as the Shipments views show it: its own booking, else one entry summing
+   * its booked shipments (references and airlines joined, air prices added).
+   */
+  static JsonNode bookingOf(JsonNode r) {
+    if (truthy(r.path("booking"), "booking_reference")) return r.path("booking");
+    var n = shipmentsBooked(r);
+    if (n[0] == 0) return null;
+    var refs = new ArrayList<String>();
+    var teams = new ArrayList<String>();
+    var airlines = new LinkedHashSet<String>();
+    var codes = new LinkedHashSet<String>();
+    var currencies = new LinkedHashSet<String>();
+    Double price = 0.0;
+    for (var leg : each(r.path("shipment_bookings"))) {
+      if (!truthy(leg, "booking_reference")) continue;
+      refs.add(text(leg, "booking_reference"));
+      if (truthy(leg, "team_reference")) teams.add(text(leg, "team_reference"));
+      if (truthy(leg, "airline")) airlines.add(text(leg, "airline"));
+      if (truthy(leg, "airline_code")) codes.add(text(leg, "airline_code"));
+      if (truthy(leg, "currency")) currencies.add(text(leg, "currency"));
+      Double p = num(leg.path("price"));
+      price = price == null || p == null ? null : price + p;
+    }
+    var b = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+    b.put("booking_reference", String.join(" · ", refs));
+    b.put("team_reference", teams.isEmpty() ? null : String.join(" · ", teams));
+    b.put("airline", airlines.isEmpty() ? null : String.join(" · ", airlines));
+    b.put("airline_code", codes.size() == 1 ? codes.getFirst() : null);
+    b.put("price", price);
+    b.put("currency", currencies.size() == 1 ? currencies.getFirst() : null);
+    b.put("status", "booked" + shipmentsNote(n));
+    b.put("shipments_booked", n[0]);
+    b.put("shipments", n[1]);
+    return b;
+  }
+
   /** Precedence: declined > booked > quoted > needs attention > expired > in progress. */
   static String outcomeOf(JsonNode r, long now) {
     String stage = text(r, "stage");
     if ("declined".equals(stage)) return "declined";
-    if (truthy(r.path("booking"), "booking_reference") || "booked".equals(stage)) return "booked";
+    if (truthy(r.path("booking"), "booking_reference") || "booked".equals(stage) || shipmentsBooked(r)[0] > 0)
+      return "booked";
     String delivery = truthy(r, "delivery") ? text(r, "delivery")
         : lastQuote(r) == null ? "" : text(lastQuote(r), "state");
     if ("sent".equals(delivery)) return "quoted";
@@ -339,6 +395,8 @@ final class DeskSummary {
 
   private static Result resultOf(JsonNode r, boolean quoted, int followUpsAfterQuote, long now) {
     if (truthy(r.path("booking"), "booking_reference")) return new Result("won", "booked", "Booked", "ok");
+    var shipments = shipmentsBooked(r);
+    if (shipments[0] > 0) return new Result("won", "booked", "Booked" + shipmentsNote(shipments), "ok");
     var b = r.path("board_result");
     String verdict = text(b, "verdict").toLowerCase(Locale.ROOT);
     if ("rejected".equals(verdict)) {
@@ -447,20 +505,33 @@ final class DeskSummary {
       Double airPrice = num(r.path("booking").path("price"));
       boolean hasBooking = r.path("booking").isObject();
       Double bookedAllIn = hasBooking ? (airPrice != null ? airPrice + pickup : allIn) : null;
+      var booking = bookingOf(r);
+      if (booking != null && booking != r.path("booking")) {
+        // Separately booked shipments: each booked air price plus that shipment's quoted pickup.
+        double sum = 0;
+        for (var leg : each(r.path("shipment_bookings"))) {
+          if (!truthy(leg, "booking_reference")) continue;
+          Double legAir = num(leg.path("price")), legPickup = num(leg.path("pickup_eur"));
+          Double legTotal = num(leg.path("total_eur"));
+          sum += legAir != null ? legAir + (legPickup == null ? 0 : legPickup) : legTotal == null ? 0 : legTotal;
+        }
+        bookedAllIn = sum;
+      }
       long lastActivity = received == null ? 0 : received;
       for (var m : thread) lastActivity = Math.max(lastActivity, Optional.ofNullable(ms(m.path("received"))).orElse(0L));
       for (var o : each(r.path("outgoing"))) lastActivity = Math.max(lastActivity, Optional.ofNullable(ms(o.path("time"))).orElse(0L));
       String verdict = text(r.path("board_result"), "verdict").toLowerCase(Locale.ROOT);
-      boolean booked = truthy(r.path("booking"), "booking_reference");
+      boolean booked = booking != null;
       var fields = r.path("fields");
-      String carrier = truthy(r.path("booking"), "airline") ? text(r.path("booking"), "airline")
+      String carrier = booked && truthy(booking, "airline") ? text(booking, "airline")
+          : truthy(r.path("booking"), "airline") ? text(r.path("booking"), "airline")
           : truthy(offer, "airline") ? text(offer, "airline") : null;
       deals.add(new Deal(r.path("id").asLong(), text(r, "sender").toLowerCase(Locale.ROOT), customerName(text(r, "sender")),
           truthy(fields, "origin") ? text(fields, "origin") : null,
           truthy(fields, "destination") ? text(fields, "destination") : null, num(fields.path("weight_kg")), received,
           quoted, firstQuote, quoted && firstQuote != null && received != null ? (firstQuote - received) / 1000.0 : null,
           allIn, bookedAllIn, carrier, num(offer.path("days")), quoted && "accepted".equals(verdict),
-          r.path("board_result").isObject() ? r.path("board_result") : null, booked ? r.path("booking") : null,
+          r.path("board_result").isObject() ? r.path("board_result") : null, booked ? booking : null,
           booked ? bookedAtOf(firstQuote, followUps) : null, lastActivity == 0 ? null : lastActivity,
           resultOf(r, quoted, afterQuote, now)));
     }

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 class TrackingReplies {
   private static final Logger log = LoggerFactory.getLogger(TrackingReplies.class);
   private static final Pattern REFERENCE =
-      Pattern.compile("(?i)\\b(?:BK-[A-Z0-9_-]+|AEIOU-[0-9]+)\\b");
+      Pattern.compile("(?i)\\b(?:BK-[A-Z0-9_-]+|AEIOU-[0-9]+(?:-[0-9]+)?)\\b");
   private static final Pattern WEIGHT = Pattern.compile("\\b(\\d+(?:[.,]\\d+)?)\\s*KG\\b");
   private static final Pattern STATUS = Pattern.compile("(?im)^Status:[ \\t]*([^\\r\\n]{1,150})$");
   private final Ledger ledger;
@@ -73,20 +73,15 @@ class TrackingReplies {
                 .split("(?im)^\\s*(?:>|On .+ wrote:|-----Original Message-----)", 2)[0];
     String upper = question.toUpperCase(Locale.ROOT);
     var refs = REFERENCE.matcher(upper).results().map(m -> m.group()).distinct().toList();
-    List<Map<String, Object>> matches = new ArrayList<>();
-    for (var m :
-        ledger
-            .jdbc()
-            .queryForList(
-                "SELECT id,fields,booking,proposal FROM mail WHERE kind='request' AND booking IS"
-                    + " NOT NULL")) {
-      Map<?, ?> b = ledger.read(m.get("booking"), Map.class);
+    List<Booked> matches = new ArrayList<>();
+    for (var m : bookings()) {
+      Map<?, ?> b = m.booking();
       String reference = Ledger.str(b, "booking_reference").toUpperCase(Locale.ROOT);
       String team = Ledger.str(b, "team_reference").toUpperCase(Locale.ROOT);
       if (reference.isBlank()
           || !Set.of("booked", "confirmed")
               .contains(Ledger.str(b, "status").toLowerCase(Locale.ROOT))) continue;
-      var s = ledger.read(m.get("fields"), Shipment.class);
+      var s = m.shipment();
       boolean lane =
           Pattern.compile(
                   "\\b"
@@ -112,7 +107,7 @@ class TrackingReplies {
                   .matcher(upper)
                   .find()
               && weighs(upper, s);
-      boolean sameThread = Objects.equals(q.get("root"), m.get("id"));
+      boolean sameThread = q.get("root") != null && Ledger.id(q.get("root")) == m.request();
       if (refs.isEmpty()
           ? lane || pickupLane || sameThread
           : refs.stream().allMatch(ref -> ref.equals(reference) || ref.equals(team)))
@@ -122,14 +117,14 @@ class TrackingReplies {
     if (matches.size() > 1) {
       var weighed =
           matches.stream()
-              .filter(m -> weighs(upper, ledger.read(m.get("fields"), Shipment.class)))
+              .filter(m -> weighs(upper, m.shipment()))
               .toList();
       if (!weighed.isEmpty()) matches = weighed;
     }
     if (matches.size() != 1) return null;
     var m = matches.getFirst();
-    var s = ledger.read(m.get("fields"), Shipment.class);
-    Map<?, ?> b = ledger.read(m.get("booking"), Map.class);
+    var s = m.shipment();
+    Map<?, ?> b = m.booking();
     String reference = Ledger.str(b, "booking_reference"), airline = Ledger.str(b, "airline");
     String status = Ledger.str(b, "status");
     for (var update :
@@ -179,6 +174,33 @@ class TrackingReplies {
         + detail
         + "\n\nBest regards,\nTeam AEIOU";
     return worker.inCustomerLanguage("reply:" + Ledger.id(q.get("id")), q, approved, List.of(airline));
+  }
+
+  /** A booked shipment: the request it belongs to, what was shipped and the portal booking. */
+  private record Booked(long request, Shipment shipment, Map<?, ?> booking) {}
+
+  /**
+   * Every booking a tracking question can be about: a request's own booking, and each separately
+   * priced shipment booked on its own shipment leg (team reference AEIOU-&lt;id&gt;-&lt;n&gt;).
+   */
+  private List<Booked> bookings() {
+    var result = new ArrayList<Booked>();
+    for (var m :
+        ledger
+            .jdbc()
+            .queryForList(
+                "SELECT id,fields,booking FROM mail WHERE kind='request' AND booking IS NOT NULL"))
+      result.add(new Booked(Ledger.id(m.get("id")), ledger.read(m.get("fields"), Shipment.class),
+          ledger.read(m.get("booking"), Map.class)));
+    for (var leg :
+        ledger
+            .jdbc()
+            .queryForList(
+                "SELECT request_id,shipment,booking FROM shipment_leg WHERE booking IS NOT NULL"
+                    + " AND shipment IS NOT NULL ORDER BY request_id,number"))
+      result.add(new Booked(Ledger.id(leg.get("request_id")),
+          ledger.read(leg.get("shipment"), Shipment.class), ledger.read(leg.get("booking"), Map.class)));
+    return result;
   }
 
   private static boolean weighs(String question, Shipment s) {

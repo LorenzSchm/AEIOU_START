@@ -27,6 +27,8 @@ const durationLabel = (sec) =>
 const earliest = (times) => times.map(ms).filter((t) => t != null).sort((a, b) => a - b)[0] ?? null;
 const latest = (times) => times.map(ms).filter((t) => t != null).sort((a, b) => b - a)[0] ?? null;
 const isoOf = (t) => (t == null ? undefined : new Date(t).toISOString());
+// Separately priced shipments booked on their own leg (request.booking stays the single booking).
+const bookedShipments = (request) => (request?.shipment_bookings || []).filter((l) => l.booking_reference);
 
 function isTrucker(email, directory) {
   const known = directory?.carriers?.find((c) => c.email?.toLowerCase() === String(email).toLowerCase());
@@ -51,7 +53,7 @@ function quoteState(request) {
 export function outcomeOf(request, now = Date.now()) {
   if (!request) return "in progress";
   if (request.stage === "declined") return "declined";
-  if (request.booking?.booking_reference || request.stage === "booked") return "booked";
+  if (request.booking?.booking_reference || request.stage === "booked" || bookedShipments(request).length) return "booked";
   const delivery = quoteState(request);
   if (delivery === "sent") return "quoted";
   if (ATTENTION_DELIVERY.includes(delivery) || ATTENTION_STAGES.includes(request.stage)) return "needs attention";
@@ -202,11 +204,15 @@ export function deriveProcess(request, allMessages = [], options = {}) {
 
   // 8. booked
   const rateId = request.booking?.rate_id || offer?.rate_id;
+  const legs = bookedShipments(request);
+  const legCount = request.shipment_bookings?.length || 0;
   steps.push({
     key: "booked", label: "Booked",
-    status: request.booking?.booking_reference ? "done" : rateId ? "pending" : "skipped",
+    status: request.booking?.booking_reference || legs.length ? "done" : rateId ? "pending" : "skipped",
     time: request.booking?.booked_at || request.booking?.time || undefined,
     detail: request.booking?.booking_reference ? clip(request.booking.booking_reference)
+      : legs.length ? clip((legs.length < legCount ? legs.length + " of " + legCount + " · " : "")
+        + legs.map((l) => l.booking_reference).join(", "))
       : rateId ? "on customer instruction" : "not bookable (no rate ID)",
   });
 

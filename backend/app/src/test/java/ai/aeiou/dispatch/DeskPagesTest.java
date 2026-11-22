@@ -60,6 +60,21 @@ class DeskPagesTest {
     assertEquals(java.util.Arrays.asList(2.0, 1.0, null), rows.stream().map(DeskSummary.Deal::weightKg).toList());
   }
 
+  @Test
+  void bookingsTableListsSeparatelyBookedShipmentsAndFindsThemByReference() throws Exception {
+    var deals = DeskSummary.deals(new ObjectMapper().readTree(DeskSummaryTest.SEPARATE),
+        java.time.Instant.parse("2026-11-21T16:00:00Z").toEpochMilli());
+    var page = DeskPages.shipments(deals, "bookings", null, null, null, null, -1, 50, 0);
+    assertEquals(2, page.get("total"));
+    var found = DeskPages.shipments(deals, "bookings", null, null, "bk-w85wv9z9", null, -1, 50, 0);
+    assertEquals(1, found.get("total"));
+    @SuppressWarnings("unchecked") var row = ((List<Map<String, Object>>) found.get("rows")).getFirst();
+    assertEquals(58757L, row.get("id"));
+    assertEquals("Booked 1/2", ((DeskSummary.Result) row.get("result")).label());
+    assertEquals(0, DeskPages.shipments(deals, "pipeline", null, null, null, null, -1, 50, 0).get("total"),
+        "a partly booked request is won, not open");
+  }
+
   @SuppressWarnings("unchecked")
   private static List<Long> ids(Map<String, Object> page) {
     return ((List<com.fasterxml.jackson.databind.JsonNode>) page.get("messages")).stream().map(m -> m.path("id").asLong()).toList();

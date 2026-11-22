@@ -33,7 +33,8 @@ final class LedgerWatch implements AutoCloseable {
   private static final Logger log = LoggerFactory.getLogger(LedgerWatch.class);
   /** Every table {@link Ledger#inboxPage} joins or loads. */
   static final List<String> INBOX_TABLES =
-      List.of("mail", "wave_case", "booking_attempt", "board_result", "deliveries", "tender");
+      List.of("mail", "wave_case", "booking_attempt", "board_result", "deliveries", "tender",
+          "shipment_leg");
 
   private final String file;
   private Connection connection;
