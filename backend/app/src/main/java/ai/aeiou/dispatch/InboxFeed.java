@@ -39,20 +39,23 @@ class InboxFeed {
   private final Ledger ledger;
   private final DeskStatus status;
   private final ObjectMapper json;
+  private final java.time.Clock clock;
   private final ScheduledExecutorService ticks;
   private final List<SseEmitter> desks = new CopyOnWriteArrayList<>();
 
   // Guarded by "this": the last snapshot every connected desk has been brought up to.
   private Map<Long, String> lastMessages = Map.of();
   private String lastStatus = "";
+  private String lastSummary = "";
   private long version;
   private long sinceHeartbeat;
 
-  InboxFeed(Ledger ledger, DeskStatus status, ObjectMapper json,
+  InboxFeed(Ledger ledger, DeskStatus status, ObjectMapper json, java.time.Clock clock,
       @Value("${dispatch.events-ms:1000}") long intervalMs) {
     this.ledger = ledger;
     this.status = status;
     this.json = json;
+    this.clock = clock;
     this.ticks = Executors.newSingleThreadScheduledExecutor(r -> {
       var thread = new Thread(r, "desk-events");
       thread.setDaemon(true);
@@ -71,14 +74,17 @@ class InboxFeed {
       try {
         var messages = ledger.inbox();
         var current = status.current();
+        var summary = summary(messages);
         // Bring the shared baseline up to date first, so the next tick only sends later changes.
         if (desks.isEmpty()) {
           lastMessages = InboxDiff.index(messages, this::write);
           lastStatus = write(current);
+          lastSummary = summaryKey(summary);
         }
         var snapshot = new LinkedHashMap<String, Object>();
         snapshot.put("version", version);
         snapshot.put("status", current);
+        snapshot.put("summary", summary);
         snapshot.put("messages", messages);
         send(desk, "snapshot", snapshot);
         desks.add(desk);
@@ -101,15 +107,21 @@ class InboxFeed {
       var changes = InboxDiff.between(lastMessages, next);
       String nextStatus = write(status.current());
       boolean statusChanged = !nextStatus.equals(lastStatus);
-      if (!changes.isEmpty() || statusChanged) {
+      // Summaries also move with the clock (a request expires after 6 minutes), so compare every tick.
+      var summary = summary(messages);
+      String nextSummary = summaryKey(summary);
+      boolean summaryChanged = !nextSummary.equals(lastSummary);
+      if (!changes.isEmpty() || statusChanged || summaryChanged) {
         version++;
         var byId = new java.util.HashMap<Long, Map<String, Object>>();
         for (var m : messages) byId.put(Ledger.id(m.get("id")), m);
         for (long id : changes.upserted()) broadcast("message", Map.of("version", version, "message", byId.get(id)));
         for (long id : changes.removed()) broadcast("removed", Map.of("version", version, "id", id));
         if (statusChanged) broadcast("status", Map.of("version", version, "status", json.readTree(nextStatus)));
+        if (summaryChanged) broadcast("summary", Map.of("version", version, "summary", summary));
         lastMessages = next;
         lastStatus = nextStatus;
+        lastSummary = nextSummary;
       }
       // Proxies and browsers drop idle streams; a comment every 15 s keeps them open.
       if (++sinceHeartbeat >= 15) {
@@ -125,6 +137,17 @@ class InboxFeed {
     } catch (RuntimeException | JsonProcessingException failed) {
       log.warn("Desk event update failed: {}", failed.getMessage());
     }
+  }
+
+  private Map<String, Object> summary(List<Map<String, Object>> messages) {
+    return DeskSummary.of(json.valueToTree(messages), clock.instant());
+  }
+
+  /** The summary without its timestamp, so an unchanged summary is not resent every second. */
+  private String summaryKey(Map<String, Object> summary) {
+    var copy = new LinkedHashMap<>(summary);
+    copy.remove("computed_at");
+    return write(copy);
   }
 
   private void broadcast(String name, Object payload) {

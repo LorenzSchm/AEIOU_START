@@ -17,13 +17,18 @@ class DispatchController {
   private final CarrierTariffs tariffs;
   private final DeskStatus status;
   private final InboxFeed feed;
+  private final com.fasterxml.jackson.databind.ObjectMapper json;
+  private final java.time.Clock clock;
 
   DispatchController(
       Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings,
-      CarrierTariffs tariffs, DeskStatus status, InboxFeed feed) {
+      CarrierTariffs tariffs, DeskStatus status, InboxFeed feed,
+      com.fasterxml.jackson.databind.ObjectMapper json, java.time.Clock clock) {
     this.bookings = bookings;
     this.status = status;
     this.feed = feed;
+    this.json = json;
+    this.clock = clock;
     this.ledger = ledger;
     this.wave = wave;
     this.catalog = catalog;
@@ -60,6 +65,21 @@ class DispatchController {
     result.put("messages", page);
     result.put("next_before", page.size() < limit ? null : Ledger.id(page.getLast().get("id")));
     return result;
+  }
+
+  /**
+   * Overview, Shipments and Scoreboard figures, computed on the server from the whole inbox (no LLM).
+   * {@code at} pins the clock (ISO instant) so a result can be reproduced; it defaults to now.
+   */
+  @GetMapping("/summary")
+  Map<String, Object> summary(@RequestParam(required = false) String at) {
+    java.time.Instant now;
+    try {
+      now = at == null ? clock.instant() : java.time.Instant.parse(at);
+    } catch (java.time.format.DateTimeParseException ex) {
+      throw new IllegalArgumentException("at must be an ISO instant such as 2026-11-22T03:00:00Z.");
+    }
+    return DeskSummary.of(json.valueToTree(ledger.inbox()), now);
   }
 
   @GetMapping("/messages")
