@@ -23,12 +23,17 @@ class PortalBookings {
       Pattern.compile(
           "(?iu)(?:(?:hi|hello|bonjour|bonsoir|guten (?:tag|morgen|abend)|dear team|good (?:morning|afternoon|evening)(?: team(?: aeiou)?)?)"
               + "[ ,!.]*\\s+)?(?:(?:thank you for (?:your|the)"
-              + " (?:offer|quote)|thanks|thank you|yes|that works for us|we would like to proceed|we accept (?:the|your)"
-              + " (?:offer|quote))[,.! ]+)*(?:(?:please )?(?:go ahead and |proceed to )?book"
-              + " (?:it|this|this shipment|the shipment|this option|the quoted option)(?: now)?|please"
-              + " proceed with (?:the |this )?booking|bitte (?:so |wie angeboten )?buchen"
-              + "|veuillez proc[ée]der [àa] la r[ée]servation)"
-              + "(?: (?:as quoted|under (?:these|the quoted) (?:terms|conditions)))?[.! ]*");
+              + " (?:offer|quote)|thanks|thank you|yes|ok|okay|great|perfect|sounds good|looks good|approved"
+              + "|confirmed|agreed|that works for us|we would like to proceed|we accept(?: (?:the|your)"
+              + " (?:offer|quote|price))?)[,.!–— -]+)*(?:(?:please )?(?:go ahead and |proceed to |kindly )?book"
+              + "(?: (?:it|this|this shipment|the shipment|this option|the quoted option|the offer|this offer))?"
+              + "(?: (?:now|right away|as soon as possible|asap))?"
+              + "|please proceed(?: with (?:the |this )?booking)?|(?:please )?go ahead(?: with (?:the |this )?booking"
+              + "| with (?:it|this|the shipment))?|let['’]s book(?: it| this)?"
+              + "|we(?:['’]d| would) like to book(?: it| this| this shipment| the shipment)?"
+              + "|bitte (?:so |wie angeboten )?buchen|veuillez proc[ée]der [àa] la r[ée]servation)"
+              + "(?: (?:as quoted|under (?:these|the quoted) (?:terms|conditions)))?"
+              + "(?:,? (?:please|thanks|thank you|danke(?: schön)?|merci))?[.! ]*");
   private static final Pattern TURKISH_APPROVAL = Pattern.compile(
       "(?iu)(?:merhaba[,.! ]+)?(?:(?:teklifiniz için teşekkür (?:ederiz|ediyorum|ediyoruz)|teklifiniz için teşekkürler|teşekkürler"
           + "|evet|(?:bu teklif|bu seçenek|bu) bizim için uygun(?:dur)?|bizim için uygun(?:dur)?"
@@ -53,7 +58,7 @@ class PortalBookings {
           + "si|sauf|attendre|annuler|pas|eğer|şartıyla|değil|iptal|bekleyin)\\b");
   private static final String SHIPMENT_TARGET =
       "(?:the )?(first|second|third|1st|2nd|3rd) (?:shipment|consignment|one)"
-          + "|shipment (?:no\\.? ?|number |#)?([1-9])"
+          + "|shipment (?:no\\.? ?|number |#)?([1-9]|(?-i:[A-H])\\b)"
           + "|(?:the )?(?:shipment|consignment) to ([a-z]{3})"
           + "|(?:the )?([a-z]{3}) (?:shipment|consignment)"
           + "|(both)(?: shipments| of them)?|(all)(?: (?:two|three))? shipments|them (both)";
@@ -61,9 +66,10 @@ class PortalBookings {
   private static final String TARGETS =
       "((?:" + SHIPMENT_TARGET + ")(?:(?:,| and|, and) (?:" + SHIPMENT_TARGET + "))*)";
   private static final Pattern SHIPMENT_BOOKING = Pattern.compile(
-      "(?iu)(?:(?:yes|great|perfect|thanks|thank you)[,!]? )?(?:please )?(?:go ahead and |proceed to )?book "
+      "(?iu)(?:(?:yes|great|perfect|thanks|thank you|ok|okay)[,!]? )?(?:please )?"
+          + "(?:(?:go ahead and |proceed to )?book|go ahead with|proceed with) "
           + TARGETS
-          + "(?: as well| too)?(?: now| right away| today)?(?: as quoted)?(?: please)?");
+          + "(?: only)?(?: as well| too)?(?: now| right away| today)?(?: as quoted)?(?:,? please)?(?:,? thanks)?");
   private static final Pattern SHIPMENT_DEFERRAL = Pattern.compile(
       "(?iu)we(?: will| shall|[’']ll) (?:confirm|decide on) " + TARGETS
           + " (?:later|separately|soon|shortly|in due course)");
@@ -164,7 +170,9 @@ class PortalBookings {
         default -> 3;
       };
     } else if (target.group(2) != null) {
-      number = Integer.parseInt(target.group(2));
+      // "shipment B" is the second shipment, in the order the customer listed them.
+      char label = target.group(2).charAt(0);
+      number = Character.isDigit(label) ? label - '0' : label - 'A' + 1;
     } else {
       String airport = (target.group(3) != null ? target.group(3) : target.group(4)).toUpperCase(Locale.ROOT);
       if (Collections.frequency(destinations, airport) != 1) return Set.of();
