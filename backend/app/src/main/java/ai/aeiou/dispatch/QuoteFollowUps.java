@@ -90,6 +90,67 @@ class QuoteFollowUps {
     }
   }
 
+  private static final java.util.regex.Pattern CANCELLATION = java.util.regex.Pattern.compile(
+      "(?iu)\\b(?:cancel|withdraw)(?:l?ing)?\\h+(?:the|this|our|my)\\h+(?:shipment|booking|order|request|enquiry|inquiry)\\b"
+          + "|\\bdo\\h+not\\h+(?:proceed\\h+with|go\\h+ahead\\h+with)\\h+(?:the\\h+|this\\h+)?booking\\b"
+          + "|\\b(?:bitte\\h+)?(?:die\\h+)?(?:sendung|buchung|anfrage)\\h+(?:bitte\\h+)?stornieren\\b"
+          + "|\\bannuler\\h+(?:l['’]envoi|la\\h+r[ée]servation|la\\h+demande)\\b");
+
+  private static final java.util.regex.Pattern NOT_CANCELLING = java.util.regex.Pattern.compile(
+      "(?iu)\\b(?:do\\h+not|don['’]t|no\\h+need\\h+to|won['’]t|will\\h+not|nicht)\\h+(?:\\p{L}+\\h+){0,2}"
+          + "(?:cancel|stornieren|annuler)");
+
+  /**
+   * A customer who withdraws after our quote and before any booking gets a short confirmation that
+   * nothing was booked (live #43292 and #53112 heard nothing). A shipment that is already booked is
+   * left to the desk: the portal offers no cancellation we could confirm here.
+   */
+  @Scheduled(fixedDelay = 5000)
+  void acknowledgeCancellations() {
+    var now = clock.instant();
+    if (!automatic || now.isBefore(start)) return;
+    var cases = ledger.jdbc().queryForList("""
+        SELECT m.*, f.id AS reply_id, f.body AS reply_body
+        FROM mail m
+        JOIN deliveries q ON q.action='quote:'||m.id AND q.state='sent'
+        JOIN mail f ON f.id=(SELECT max(x.id) FROM mail x WHERE x.kind='follow-up' AND x.sender=m.sender
+          AND x.id>json_extract(q.response,'$.id')
+          AND (x.root IN (m.id,json_extract(q.response,'$.id')) OR x.reply_to=json_extract(q.response,'$.id')))
+        WHERE m.kind='request' AND m.booking IS NULL AND m.sender<>''
+          AND julianday(m.received)>=julianday(?)
+          AND NOT EXISTS (SELECT 1 FROM deliveries c WHERE c.action='cancel-ack:'||m.id)
+          AND NOT EXISTS (SELECT 1 FROM shipment_leg l WHERE l.request_id=m.id AND l.booking IS NOT NULL)
+        ORDER BY m.id
+        """, start.toString());
+    for (var request : cases) {
+      String reply = ai.aeiou.freight.MailParser.authoredText(Ledger.str(request, "reply_body"));
+      if (!CANCELLATION.matcher(reply).find() || NOT_CANCELLING.matcher(reply).find()) continue;
+      long id = Ledger.id(request.get("id"));
+      String action = "cancel-ack:" + id;
+      String approved = Greeting.at(request, now) + "\n\n"
+          + "Thank you for letting us know. We have not booked the shipment and have closed your request,"
+          + " so there is nothing further you need to do.\n\n"
+          + "We would be glad to quote your next shipment.\n\n"
+          + "Best regards,\nTeam AEIOU";
+      try {
+        var mail = Map.<String, Object>of(
+            "to", request.get("sender"),
+            "in_reply_to", Ledger.id(request.get("reply_id")),
+            "subject", "Re: " + request.get("subject"),
+            "body", worker.inCustomerLanguage(action, request, approved, java.util.List.of()));
+        worker.send(action, mail, () -> ledger.jdbc().update("""
+            INSERT OR IGNORE INTO deliveries(action,state,payload,attempted_at)
+            SELECT ?,'pending',?,? WHERE (SELECT booking FROM mail WHERE id=?) IS NULL
+            """, action, ledger.write(mail), now.toString(), id));
+        log.info("RFQ {}: acknowledged the customer's cancellation", id);
+      } catch (WaveWorker.RetryLater ex) {
+        continue;
+      } catch (WaveWorker.Conflict ex) {
+        log.info("RFQ {} cancellation reply: {}", id, ex.getMessage());
+      }
+    }
+  }
+
   private int claim(long id, String action, Map<String, Object> mail) {
     var now = clock.instant();
     return ledger.jdbc().update("""

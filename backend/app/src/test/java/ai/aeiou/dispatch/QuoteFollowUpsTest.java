@@ -231,6 +231,37 @@ class QuoteFollowUpsTest {
     assertNull(ledger.mail(1).get("booking"));
   }
 
+  @Test
+  void live43292ConfirmsACancellationBeforeAnyBookingOnce() {
+    quote(1, 120, NOW.plusSeconds(600), "accepted");
+    when(upstream.post(eq("/v1/mailbox/messages"), anyMap())).thenReturn(Map.of("id", FOLLOW_UP_ID));
+    reply(1, "Thank you for your offer. We accept it. Please go ahead and book the shipment now.", 101);
+    ledger.ingest(Map.of("messages", List.of(Map.of("id", 202L, "from", customer(1), "subject", "Re: RFQ FRA to LAX",
+        "body", "Dear Sir or Madam,\n\nOur buyer has withdrawn the order, so we need to cancel the shipment."
+            + " Please do not proceed with the booking. If you have already booked the shipment, please cancel"
+            + " the booking.\n\nI apologise for the inconvenience.\n\nMit freundlichen Gruessen / Kind regards\n"
+            + "Jonas Kessler", "sent_at", NOW.toString(), "in_reply_to", 101L)), "next_since_id", 202L), catalog, NOW);
+
+    followUps.acknowledgeCancellations();
+    followUps.acknowledgeCancellations();
+    new PortalBookings(ledger, upstream, Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC), true).bookAccepted();
+
+    var send = ArgumentCaptor.<Map<String, Object>>captor();
+    verify(upstream).post(eq("/v1/mailbox/messages"), send.capture());
+    assertEquals(202L, send.getValue().get("in_reply_to"));
+    assertTrue(send.getValue().get("body").toString().contains("We have not booked the shipment"));
+    assertEquals("sent", ledger.delivery("cancel-ack:1"));
+    verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
+  }
+
+  @Test
+  void doesNotAcknowledgeAReplyThatKeepsTheBooking() {
+    quote(1, 120, NOW.plusSeconds(600), "accepted");
+    reply(1, "Please don't cancel the booking, we still need it.", 101);
+    followUps.acknowledgeCancellations();
+    verify(upstream, never()).post(eq("/v1/mailbox/messages"), anyMap());
+  }
+
   private Offer quote(long id, long age, Instant expiry, String verdict) {
     var sent = NOW.minusSeconds(age);
     var received = sent.minusSeconds(20 + id).toString();
