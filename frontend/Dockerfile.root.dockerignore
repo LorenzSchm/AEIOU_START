@@ -1,0 +1,10 @@
+# Used instead of the repo-root .dockerignore when building frontend/Dockerfile.root.
+# Only the frontend sources go into the context.
+*
+!frontend
+frontend/node_modules
+frontend/.next
+frontend/.vercel
+frontend/.env*
+**/*.key
+**/.DS_Store

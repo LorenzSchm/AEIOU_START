@@ -4,8 +4,11 @@
 .git
 **/.DS_Store
 
-# Frontend is not part of the backend image.
-frontend
+# The frontend image builds from the repo root too (frontend/Dockerfile.root); keep only its
+# sources in the context, never its dependencies or build output.
+frontend/node_modules
+frontend/.next
+frontend/.vercel
 
 # Gradle/Java build output and the heavy runtime state dir (jars + sqlite snapshots).
 backend/build
