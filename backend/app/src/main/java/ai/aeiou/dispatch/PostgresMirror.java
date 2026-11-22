@@ -45,20 +45,38 @@ class PostgresMirror {
   private long prunedAt;
   private Connection pg;
   private String error;
+  private final WriterLease lease;
+  // Lease generation the push cache belongs to; a new lease means another writer may have written.
+  private long generation = -1;
+  // Tables whose stale remote rows were removed since this process last took the lease.
+  private final Set<String> reconciled = new HashSet<>();
 
   @Autowired
-  PostgresMirror(Ledger ledger, @Value("${postgres.url}") String url) {
-    this(ledger.jdbc(), url);
+  PostgresMirror(Ledger ledger, @Value("${postgres.url}") String url, WriterLease lease) {
+    this(ledger.jdbc(), url, lease);
   }
 
   PostgresMirror(JdbcTemplate sqlite, String url) {
+    this(sqlite, url, null);
+  }
+
+  PostgresMirror(JdbcTemplate sqlite, String url, WriterLease lease) {
     this.sqlite = sqlite;
     this.postgres = Postgres.of(url);
+    this.lease = lease;
   }
 
   @Scheduled(fixedDelayString = "${postgres.sync-ms}")
   synchronized void sync() {
     if (postgres == null) return;
+    long current = lease == null ? 0 : lease.generation();
+    if (current != generation) {
+      // After a restart or a lease handover the cache no longer describes Postgres: push every row
+      // again and drop remote rows this writer does not have.
+      pushed.clear();
+      reconciled.clear();
+      generation = current;
+    }
     try {
       if (pg == null || !pg.isValid(3)) {
         Postgres.close(pg);
@@ -100,14 +118,19 @@ class PostgresMirror {
     var last = pushed.computeIfAbsent(table, t -> new HashMap<>());
     var current = new HashMap<String, String>();
     var changed = new ArrayList<Map<String, Object>>();
+    var keyValues = keys.stream().map(k -> new ArrayList<String>()).toList();
     for (var row : sqlite.queryForList("SELECT *, rowid AS " + ROWID + " FROM \"" + table + "\"")) {
       String key = keys.stream().map(k -> String.valueOf(row.get(k))).reduce((a, b) -> a + SEP + b).orElseThrow();
       String value = row.toString();
       current.put(key, value);
+      for (int i = 0; i < keys.size(); i++) keyValues.get(i).add(String.valueOf(row.get(keys.get(i))));
       if (!value.equals(last.get(key))) changed.add(row);
     }
     var gone = last.keySet().stream().filter(k -> !current.containsKey(k)).toList();
-    if (changed.isEmpty() && gone.isEmpty()) return;
+    if (changed.isEmpty() && gone.isEmpty()) {
+      if (!reconciled.contains(table)) reconcile(table, keys, keyValues);
+      return;
+    }
 
     String insert =
         "INSERT INTO " + quote(table) + " (" + String.join(",", columns.stream().map(this::quote).toList())
@@ -159,6 +182,32 @@ class PostgresMirror {
       pg.setAutoCommit(true);
     }
     pushed.put(table, current);
+    if (!reconciled.contains(table)) reconcile(table, keys, keyValues);
+  }
+
+  /**
+   * Deletes remote rows whose key no longer exists in SQLite, once per lease. The keys are compared
+   * in Postgres after casting to the column types, so a timestamptz or numeric key matches the
+   * text SQLite holds.
+   */
+  private void reconcile(String table, List<String> keys, List<? extends List<String>> keyValues)
+      throws SQLException {
+    var arrays = new ArrayList<String>();
+    var names = new ArrayList<String>();
+    for (int i = 0; i < keys.size(); i++) {
+      arrays.add("CAST(CAST(? AS text[]) AS " + typeOf(table, keys.get(i)) + "[])");
+      names.add("k" + i);
+    }
+    String sql = "DELETE FROM " + quote(table) + " WHERE (" + String.join(",", keys.stream().map(this::quote).toList())
+        + ") NOT IN (SELECT " + String.join(",", names) + " FROM unnest(" + String.join(",", arrays) + ") AS u("
+        + String.join(",", names) + "))";
+    try (var del = pg.prepareStatement(sql)) {
+      for (int i = 0; i < keys.size(); i++)
+        del.setArray(i + 1, pg.createArrayOf("text", keyValues.get(i).toArray()));
+      int removed = del.executeUpdate();
+      if (removed > 0) log.info("Postgres mirror removed {} stale {} rows", removed, table);
+    }
+    reconciled.add(table);
   }
 
   private Map<String, String> ensureTable(String table, List<Map<String, Object>> info, List<String> keys)
