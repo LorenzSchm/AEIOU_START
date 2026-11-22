@@ -82,6 +82,28 @@ class DispatchController {
     return DeskSummary.of(json.valueToTree(ledger.inbox()), now);
   }
 
+  /** One page of the queue (attention, requests or all mail), with the threads its rows need. */
+  @GetMapping("/queue")
+  Map<String, Object> queue(@RequestParam(defaultValue = "attention") String scope,
+      @RequestParam(required = false) String q, @RequestParam(required = false) Long before,
+      @RequestParam(defaultValue = "50") int limit) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be between 1 and 200.");
+    return DeskPages.queue(json.valueToTree(ledger.inbox()), scope, q, before, limit);
+  }
+
+  /** One sorted, filtered page of the Shipments Bookings or Lost & open table. */
+  @GetMapping("/shipments/rows")
+  Map<String, Object> shipmentRows(@RequestParam(defaultValue = "bookings") String tab,
+      @RequestParam(required = false) String customer, @RequestParam(required = false) String reason,
+      @RequestParam(required = false) String q, @RequestParam(required = false) String sort,
+      @RequestParam(defaultValue = "-1") int dir, @RequestParam(defaultValue = "50") int limit,
+      @RequestParam(defaultValue = "0") int offset) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be between 1 and 200.");
+    if (offset < 0) throw new IllegalArgumentException("offset must not be negative.");
+    var deals = DeskSummary.deals(json.valueToTree(ledger.inbox()), clock.instant().toEpochMilli());
+    return DeskPages.shipments(deals, tab, customer, reason, q, sort, dir, limit, offset);
+  }
+
   @GetMapping("/messages")
   List<Map<String, Object>> messages() {
     return ledger.inbox();

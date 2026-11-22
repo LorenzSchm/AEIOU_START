@@ -1,7 +1,6 @@
 package ai.aeiou.dispatch;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import java.text.Collator;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -24,7 +23,6 @@ final class DeskSummary {
   private static final Set<String> ATTENTION_STAGES =
       Set.of("review", "operator review", "waiting for pickup", "waiting for air price");
   private static final Set<String> ATTENTION_DELIVERY = Set.of("uncertain", "pending", "rejected");
-  private static final Collator LABELS = Collator.getInstance(Locale.ENGLISH);
 
   /** All three summaries for one inbox snapshot at one instant. */
   static Map<String, Object> of(JsonNode messages, Instant now) {
@@ -37,6 +35,37 @@ final class DeskSummary {
   }
 
   /* ---------------- JavaScript-compatible value helpers ---------------- */
+
+  /**
+   * String.prototype.localeCompare as the desk's browser does it (ICU, English): accents and case are
+   * ignored first, spaces and punctuation sort before digits and digits before letters (Java's
+   * Collator would ignore spaces and punctuation instead), and on a tie lowercase comes first.
+   */
+  static int localeCompare(String a, String b) {
+    String pa = primary(a), pb = primary(b);
+    for (int i = 0; i < Math.min(pa.length(), pb.length()); i++) {
+      int c = Integer.compare(rank(pa.charAt(i)), rank(pb.charAt(i)));
+      if (c != 0) return c;
+    }
+    if (pa.length() != pb.length()) return Integer.compare(pa.length(), pb.length());
+    for (int i = 0; i < Math.min(a.length(), b.length()); i++) {
+      char x = a.charAt(i), y = b.charAt(i);
+      if (x != y && Character.toLowerCase(x) == Character.toLowerCase(y)) return Character.isLowerCase(x) ? -1 : 1;
+    }
+    return a.compareTo(b) == 0 ? 0 : Integer.signum(a.compareTo(b));
+  }
+
+  private static String primary(String text) {
+    return java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+        .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+  }
+
+  private static int rank(char c) {
+    if (Character.isWhitespace(c)) return c;
+    if (Character.isLetter(c)) return 0x30000 + c;
+    if (Character.isDigit(c)) return 0x20000 + c;
+    return 0x10000 + c; // punctuation and symbols
+  }
 
   /** Date.parse: epoch millis, or null when absent or unparseable. */
   static Long ms(JsonNode value) {
@@ -241,10 +270,57 @@ final class DeskSummary {
     return new Result("open", "awaiting", "Awaiting customer", "info");
   }
 
-  private record Deal(long id, String email, String customer, String destination, boolean quoted, Double quoteSec,
-      Double allIn, Double bookedAllIn, boolean accepted, boolean booking, Long lastActivity, Result result) {}
+  private static final Pattern CONFIRM = Pattern.compile("(?i)\\b(book|buchen|gebucht|réserv|reserv|proceed|go ahead|confirm)");
 
-  static Map<String, Object> shipments(JsonNode messages, long now) {
+  /** One customer request with its commercial outcome (crm.js deal row). */
+  record Deal(long id, String email, String customer, String origin, String destination, Double weightKg, Long received,
+      boolean quoted, Long quotedAt, Double quoteSec, Double allIn, Double bookedAllIn, String carrier, Double days,
+      boolean accepted, JsonNode board, JsonNode booking, Long bookedAt, Long lastActivity, Result result) {
+    boolean booked() {
+      return booking != null;
+    }
+
+    /** The row the Shipments tables render, in the same shape the desk's local model produced. */
+    Map<String, Object> row() {
+      var row = new LinkedHashMap<String, Object>();
+      row.put("id", id);
+      row.put("email", email);
+      row.put("customer", customer);
+      row.put("origin", origin);
+      row.put("destination", destination);
+      row.put("weightKg", weightKg);
+      row.put("received", received);
+      row.put("quoted", quoted);
+      row.put("quotedAt", quotedAt);
+      row.put("quoteSec", quoteSec);
+      row.put("allIn", allIn);
+      row.put("bookedAllIn", bookedAllIn);
+      row.put("carrier", carrier);
+      row.put("days", days);
+      row.put("accepted", accepted);
+      row.put("board", board);
+      row.put("booking", booking);
+      row.put("bookedAt", bookedAt);
+      row.put("lastActivity", lastActivity);
+      row.put("result", result);
+      return row;
+    }
+  }
+
+  /**
+   * Booking time is not stored. Best proxy: the customer's booking instruction, i.e. the first
+   * follow-up after the quote that asks to book (else the first follow-up after it).
+   */
+  private static Long bookedAtOf(Long quoteTime, List<JsonNode> followUps) {
+    var after = followUps.stream()
+        .filter(f -> quoteTime == null || Optional.ofNullable(ms(f.path("received"))).orElse(0L) >= quoteTime).toList();
+    var hit = after.stream().filter(f -> CONFIRM.matcher(text(f, "body")).find()).findFirst()
+        .orElse(after.isEmpty() ? null : after.getFirst());
+    return hit == null ? null : ms(hit.path("received"));
+  }
+
+  /** Every customer request as a deal row, newest first. */
+  static List<Deal> deals(JsonNode messages, long now) {
     var byThread = new LinkedHashMap<Long, List<JsonNode>>();
     for (var m : each(messages)) byThread.computeIfAbsent(threadOf(m), k -> new ArrayList<>()).add(m);
 
@@ -279,14 +355,25 @@ final class DeskSummary {
       for (var m : thread) lastActivity = Math.max(lastActivity, Optional.ofNullable(ms(m.path("received"))).orElse(0L));
       for (var o : each(r.path("outgoing"))) lastActivity = Math.max(lastActivity, Optional.ofNullable(ms(o.path("time"))).orElse(0L));
       String verdict = text(r.path("board_result"), "verdict").toLowerCase(Locale.ROOT);
+      boolean booked = truthy(r.path("booking"), "booking_reference");
+      var fields = r.path("fields");
+      String carrier = truthy(r.path("booking"), "airline") ? text(r.path("booking"), "airline")
+          : truthy(offer, "airline") ? text(offer, "airline") : null;
       deals.add(new Deal(r.path("id").asLong(), text(r, "sender").toLowerCase(Locale.ROOT), customerName(text(r, "sender")),
-          truthy(r.path("fields"), "destination") ? text(r.path("fields"), "destination") : null, quoted,
-          quoted && firstQuote != null && received != null ? (firstQuote - received) / 1000.0 : null,
-          allIn, bookedAllIn, quoted && "accepted".equals(verdict), truthy(r.path("booking"), "booking_reference"),
-          lastActivity == 0 ? null : lastActivity, resultOf(r, quoted, afterQuote, now)));
+          truthy(fields, "origin") ? text(fields, "origin") : null,
+          truthy(fields, "destination") ? text(fields, "destination") : null, num(fields.path("weight_kg")), received,
+          quoted, firstQuote, quoted && firstQuote != null && received != null ? (firstQuote - received) / 1000.0 : null,
+          allIn, bookedAllIn, carrier, num(offer.path("days")), quoted && "accepted".equals(verdict),
+          r.path("board_result").isObject() ? r.path("board_result") : null, booked ? r.path("booking") : null,
+          booked ? bookedAtOf(firstQuote, followUps) : null, lastActivity == 0 ? null : lastActivity,
+          resultOf(r, quoted, afterQuote, now)));
     }
+    return deals;
+  }
 
-    var bookings = deals.stream().filter(Deal::booking).toList();
+  static Map<String, Object> shipments(JsonNode messages, long now) {
+    var deals = deals(messages, now);
+    var bookings = deals.stream().filter(Deal::booked).toList();
 
     var customers = new LinkedHashMap<String, Map<String, Object>>();
     var lanes = new HashMap<String, LinkedHashMap<String, Integer>>();
@@ -358,7 +445,7 @@ final class DeskSummary {
     }
     var reasons = new ArrayList<>(reasonMap.values());
     reasons.sort((a, b) -> (int) b.get("n") != (int) a.get("n") ? (int) b.get("n") - (int) a.get("n")
-        : LABELS.compare((String) a.get("label"), (String) b.get("label")));
+        : localeCompare((String) a.get("label"), (String) b.get("label")));
 
     var quoteSecs = deals.stream().map(Deal::quoteSec).filter(Objects::nonNull).sorted().toList();
     double bookedValue = bookings.stream().mapToDouble(d -> d.bookedAllIn() == null ? 0 : d.bookedAllIn()).sum();
