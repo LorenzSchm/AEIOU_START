@@ -4929,4 +4929,48 @@ class WaveWorkerTest {
     assertEquals(2, outbound.size());
     assertEquals(CustomerClarifications.WAITING, ledger.mail(7).get("stage"));
   }
+
+  @Test
+  void live47982DeclinesAnAirImportIntoGermanyInsteadOfAskingOrQuotingItBackwards() throws Exception {
+    restart(false, true);
+    recordedExtraction("""
+        {"origin":null,"destination":"HAM","weight_kg":1741,"volume_cbm":12.61,"preference":null,
+         "pickup_required":false,"pickup_zone":null,"needs_review":false,"reply_language":"en"}
+        """);
+    receive(7, "nordlicht-audio@hackloop.mail", "Air import quote: NRT to HAM", """
+        Hi,
+
+        Could you quote an all-in price in EUR for an airport-to-airport air import from Tokyo airport (NRT), JP, to Hamburg airport (HAM), Germany? Our supplier will hand over the goods at NRT, and we’re the receiver in Germany.
+
+        The furniture samples will be ready on 2026-11-26: 6 pieces, 1741 kg gross, 12.61 cbm.
+
+        Thanks!
+
+        Mira Petersen
+        Nordlicht Audio""", null);
+    worker.work();
+    worker.work();
+    assertEquals("sent", ledger.delivery("decline:7"), () -> String.valueOf(outbound));
+    assertEquals("declined", ledger.mail(7).get("stage"));
+    assertNull(ledger.delivery("rfq-info:7"));
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals(1, outbound.size(), () -> String.valueOf(outbound));
+    assertTrue(outbound.getFirst().get("body").toString().contains("exports from Germany only"));
+    assertTrue(outbound.getFirst().get("body").toString().contains("import shipment into HAM"));
+  }
+
+  @Test
+  void anExportForABuyersImportIsStillQuoted() {
+    recordedExtraction("""
+        {"origin":"MUC","destination":"LAX","weight_kg":350,"volume_cbm":3.33,"preference":"fastest",
+         "pickup_required":false,"pickup_zone":null,"needs_review":false,"reply_language":"en"}
+        """);
+    receive(7, "lindqvist@hackloop.mail", "MUC to LAX import quote", "Hi,\n\nI’m arranging air freight from"
+        + " Germany for our buyer’s import at LAX. We’ll deliver to MUC ourselves; the goods will be ready on"
+        + " 2026-11-29.\n\nThe import shipment is 12 pieces of electronic control units, 350 kg gross and 3.33 cbm."
+        + " Could you quote the fastest option with an all-in price in EUR?\n\nSara\nLindqvist Medtech", null);
+    worker.work();
+    assertNull(ledger.delivery("decline:7"));
+    assertNotEquals("declined", ledger.mail(7).get("stage"));
+  }
 }

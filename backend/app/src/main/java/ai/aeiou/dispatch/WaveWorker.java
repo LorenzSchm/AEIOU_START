@@ -428,16 +428,28 @@ class WaveWorker {
 
   /** We quote air freight only: answer a sea, road or rail request once with a polite decline. */
   private void declineNonAir(long id, Map<String, Object> m, String mode) {
+    decline(id, m, "Not an air freight request (" + mode + "). Declined.",
+        "We specialise in air freight only, so we are unable to offer a quote for this " + mode + " shipment.",
+        "If you have an air freight shipment, we would be glad to quote it.");
+  }
+
+  /** We quote air exports from Germany: an import into a German airport gets one polite decline. */
+  private void declineImport(long id, Map<String, Object> m, String destination) {
+    decline(id, m, "Air import into " + destination + ". We quote air exports from Germany only. Declined.",
+        "We quote air freight exports from Germany only, so we are unable to offer a quote for this"
+            + " import shipment into " + destination + ".",
+        "If you have an export shipment from Germany, we would be glad to quote it.");
+  }
+
+  private void decline(long id, Map<String, Object> m, String reason, String explanation, String offer) {
     String action = "decline:" + id;
-    String reason = "Not an air freight request (" + mode + "). Declined.";
     if (ledger.delivery(action) != null) {
       if (!"declined".equals(m.get("stage"))) ledger.stage(id, "declined", reason);
       return;
     }
     String approved = Greeting.at(m, clock.instant()) + "\n\n"
-        + "Thank you for your request. We specialise in air freight only, so we are unable to offer a"
-        + " quote for this " + mode + " shipment.\n\n"
-        + "If you have an air freight shipment, we would be glad to quote it.\n\n"
+        + "Thank you for your request. " + explanation + "\n\n"
+        + offer + "\n\n"
         + "Best regards,\nTeam AEIOU";
     String body = inCustomerLanguage(action, m, approved, List.of());
     ledger.stage(id, "declined", reason);
@@ -583,6 +595,10 @@ class WaveWorker {
     if (Set.of("new", "review").contains(m.get("stage")) && w.get("reason") != null)
       issue = w.get("reason").toString();
     if (CustomerClarifications.WAITING.equals(m.get("stage"))) issue = local.issue();
+    if (issue != null && issue.startsWith(RfqGateway.IMPORT_ISSUE)) {
+      declineImport(id, m, issue.substring(RfqGateway.IMPORT_ISSUE.length()).strip());
+      return;
+    }
     missingPostcode = clarifications.needsPostcode(details, s, issue);
     if (issue != null || missingPostcode) {
       var question = clarifications.question(s, issue, missingPostcode, details.language());

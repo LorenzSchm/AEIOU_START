@@ -19,6 +19,7 @@ class RfqGateway {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RfqGateway.class);
   private static final int INPUT_CHARS = 8000;
   private static final long GATEWAY_RETRY_SECONDS = 10;
+  static final String IMPORT_ISSUE = "Air import into a German airport:";
   private static final String UNVERIFIED_STANDARD_DATES =
       "Confirm the cargo ready date and arrival deadline flagged by the gateway.";
   private static final String PROMPT =
@@ -1254,6 +1255,13 @@ class RfqGateway {
         || differs(known.preference(), s.preference())
         || differs(known.pickupZone(), zone))
       issue = "Gateway extraction conflicts with shipment details. Confirm the fields.";
+    // The model read a German departure airport as the destination: an import (live #47982,
+    // "Air import quote: NRT to HAM", which Java read the wrong way round). We quote exports only.
+    String extractedDestination = matching(text(response, "destination"), AIRPORT);
+    if (extractedDestination != null && catalog.zones.containsValue(extractedDestination)
+        && !catalog.destinations.contains(extractedDestination)
+        && (origin == null || !catalog.zones.containsValue(origin) || origin.equals(extractedDestination)))
+      issue = IMPORT_ISSUE + " " + extractedDestination;
     return new MailParser.Parsed(s, issue);
   }
 
