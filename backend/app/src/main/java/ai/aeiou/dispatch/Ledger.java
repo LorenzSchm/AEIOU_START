@@ -310,9 +310,11 @@ class Ledger implements AutoCloseable {
           AND (reply_to=? OR root IN (?,?) OR EXISTS (
             SELECT 1 FROM deliveries s WHERE s.action=? AND s.state='sent'
               AND json_extract(s.payload,'$.in_reply_to')=?
-              AND json_extract(s.response,'$.id') IN (mail.root,mail.reply_to)))
+              AND json_extract(s.response,'$.id') IN (mail.root,mail.reply_to))
+            OR root IN {price_match} OR reply_to IN {price_match})
         ORDER BY id DESC
-        """, sender, quote, quote, request, quote, "schedule-update:" + request, quote);
+        """.replace("{price_match}", PriceMatchReplies.sentAnswers(Long.toString(request))),
+        sender, quote, quote, request, quote, "schedule-update:" + request, quote);
   }
 
   boolean counterAnswered(long request) {

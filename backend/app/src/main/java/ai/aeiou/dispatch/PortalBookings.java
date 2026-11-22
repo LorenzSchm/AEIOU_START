@@ -102,9 +102,10 @@ class PortalBookings {
                     json_extract(CASE WHEN revised.action IS NULL THEN d.response ELSE revised.response END,'$.id')
                 JOIN mail f ON f.id=(SELECT max(x.id) FROM mail x WHERE x.kind='follow-up'
                   AND x.sender=r.sender AND (
-                    (revised.action IS NULL AND x.root IN (
+                    (revised.action IS NULL AND (x.root IN (
                       r.id,json_extract(d.response,'$.id'),json_extract(reminder.response,'$.id'),
                       json_extract(schedule.response,'$.id'))
+                      OR x.root IN {price_match} OR x.reply_to IN {price_match})
                       AND x.id>json_extract(d.response,'$.id'))
                     OR (revised.state='sent' AND (x.reply_to=json_extract(revised.response,'$.id')
                       OR x.root IN (r.id,json_extract(revised.response,'$.id'),json_extract(schedule.response,'$.id')))
@@ -118,7 +119,7 @@ class PortalBookings {
                   AND json_extract(r.proposal,'$.insurance') IS NULL
                   AND (COALESCE(a.retry_at,0)<=? OR (revised.state='sent' AND a.submitted=0
                     AND a.quote_id IS NOT json_extract(revised.response,'$.id')))
-                """,
+                """.replace("{price_match}", PriceMatchReplies.sentAnswers("r.id")),
                 clock.instant().getEpochSecond());
     for (var row : candidates) {
       long replyId = Ledger.id(row.get("reply_id"));
@@ -151,6 +152,8 @@ class PortalBookings {
 
   private boolean approval(long replyId, Map<String, Object> reply) {
     String body = Ledger.str(reply, "body");
+    // A price-match request is answered by PriceMatchReplies and never authorizes booking.
+    if (PriceMatchReplies.requested(body)) return false;
     return accepted(body) || (gateway != null && gateway.bookingApproval(replyId, body));
   }
 
@@ -259,8 +262,10 @@ class PortalBookings {
                 FROM deliveries WHERE action=? AND state='sent')) OR EXISTS (
                   SELECT 1 FROM deliveries s WHERE s.action=? AND s.state='sent'
                     AND json_extract(s.payload,'$.in_reply_to')=?
-                    AND json_extract(s.response,'$.id') IN (f.root,f.reply_to)))
-            """, Long.class, sender, approvedQuote, approvedQuote, id, approvedQuote, "reply:" + id,
+                    AND json_extract(s.response,'$.id') IN (f.root,f.reply_to))
+              OR f.root IN {price_match} OR f.reply_to IN {price_match})
+            """.replace("{price_match}", PriceMatchReplies.sentAnswers(Long.toString(id))),
+            Long.class, sender, approvedQuote, approvedQuote, id, approvedQuote, "reply:" + id,
             "schedule-update:" + id, approvedQuote);
         if (!approvalReply.equals(latest)) throw new WaveWorker.RetryLater("The customer reply changed before booking.");
       }
