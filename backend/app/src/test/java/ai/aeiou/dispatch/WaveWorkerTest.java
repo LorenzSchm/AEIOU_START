@@ -4493,4 +4493,188 @@ class WaveWorkerTest {
     assertNotEquals("review", ledger.mail(7).get("stage"),
         () -> ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=7", String.class));
   }
+
+  /** Firm truck bids from earlier Cologne requests (live #53794, #36823, #48201, #20148, #31473). */
+  private void seedCologneTruckHistory(Instant at) {
+    Object[][] bids = {
+        {53794, "maintal-transport-logistik", "153.73", 13, "343.0020142703", "1.54015328613888", "51"},
+        {53794, "elbkante-logistik", "91.01", 29, "343.0020142703", "1.54015328613888", "51"},
+        {53794, "westfalenroute", "145.16", 11, "343.0020142703", "1.54015328613888", "51"},
+        {53794, "bodenseefracht", "169.88", 12, "343.0020142703", "1.54015328613888", "51"},
+        {48201, "kranich-kurier", "136.06", 17, "246", "1.1", "50"},
+        {48201, "ruhrpott-express", "108.06", 20, "246", "1.1", "50"},
+        {48201, "hansekogge-trucking", "80.22", 25, "246", "1.1", "50"},
+        {48201, "sternmeile-logistik", "137.52", 12, "246", "1.1", "50"},
+        {36823, "maintal-transport-logistik", "202.35", 13, "785", "3.01", "51"},
+        {36823, "elbkante-logistik", "121.95", 29, "785", "3.01", "51"},
+        {36823, "westfalenroute", "198.20", 11, "785", "3.01", "51"},
+        {36823, "bodenseefracht", "240.60", 12, "785", "3.01", "51"},
+        {20148, "hansekogge-trucking", "112.28", 25, "704", "3.08", "50"},
+        {20148, "ruhrpott-express", "158.44", 20, "704", "3.08", "50"},
+        {31473, "hansekogge-trucking", "203.00", 25, "2000", "11.02", "50"},
+        {31473, "ruhrpott-express", "301.00", 20, "2000", "11.02", "50"},
+        {31473, "kranich-kurier", "329.00", 17, "2000", "11.02", "50"}};
+    long replyId = 40000;
+    for (var bid : bids) {
+      String email = bid[1] + "@hackloop.mail";
+      int hours = (Integer) bid[3];
+      String body = "Our all-in rate for collection and delivery to CGN is " + bid[2] + " EUR. Estimated transit"
+          + " time from actual pickup to airport delivery: " + hours + " hours.";
+      ledger.jdbc().update("""
+          INSERT INTO mail(id,root,sender,subject,body,received,kind,fields,attachments,stage,reply_to)
+          VALUES(?,?,?,?,?,?,'carrier','{}','[]','bid received',NULL)
+          """, ++replyId, bid[0], email, "Re: Rate request AEIOU-" + bid[0], body, at.toString());
+      ledger.jdbc().update(
+          "INSERT INTO tender(request_id,email,leg,reply_id,euros,days,terms) VALUES(?,?,'trucker',?,?,?,?)",
+          bid[0], email, replyId, bid[2], hours / 24.0,
+          "{\"origin\":\"CGN\",\"destination\":\"ORD\",\"weight_kg\":" + bid[4] + ",\"volume_cbm\":" + bid[5]
+              + ",\"preference\":null,\"pickup_zone\":\"" + bid[6] + "\",\"pickup_eur\":null,\"pickup_days\":0.0}");
+    }
+  }
+
+  private static final String LIVE_56801_REQUEST = "Hi,\n\nPlease quote the fastest air freight option to LIM,"
+      + " including truck pickup from our warehouse to the airport. The automotive sensors will be ready for pickup"
+      + " on 2026-11-30: 2 pieces, 633 kg gross, 2.73 cbm.\n\nPlease send your all-in price in EUR as a PDF attached"
+      + " to your reply so our purchasing department can file it.\n\nMira Petersen\nNordlicht Audio";
+  private static final String LIVE_56801_REFUSAL = "Hello,\n\nthank you for your request. To quote we need:\n"
+      + "- the pickup postcode\n\nPlease reply in this thread.\n\nBest regards\n%s\n%s";
+
+  /** Replays live #56801 up to the point where every trucker has refused the citywide request. */
+  private void replay56801UntilTheTruckersRefuse() {
+    String customer = "nordlicht-audio@hackloop.mail";
+    recordedExtraction("""
+        {"origin":null,"destination":"LIM","weight_kg":633,"volume_cbm":2.73,"preference":"fastest",\
+        "pickup_required":true,"pickup_zone":null,"needs_review":false,"reply_language":"en"}""");
+    receive(56801, customer, "Air freight quote to LIM", LIVE_56801_REQUEST, null);
+    worker.work();
+    assertEquals("sent", ledger.delivery("pickup-postcode:56801"), () -> String.valueOf(outbound));
+    var question = outbound.getLast();
+    var expiry = START.plusSeconds(920);
+    var kg = new BigDecimal("633");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(
+        new Offer("Nova Atlas Cargo", 3, new BigDecimal("2620.62"), kg, "portal", "R-hskK3xHzo_Wm0669", expiry),
+        new Offer("Xenon Cargo Airlines", 4, new BigDecimal("1943.31"), kg, "portal", "R-ZiEHGEopvvjXuccT", expiry)),
+        true));
+    clock.current = START.plusSeconds(17);
+    receive(56842, customer, "Re: Air freight quote to LIM",
+        "Sorry I left that out. The pickup location is Cologne, Germany.\n\nMira Petersen\nNordlicht Audio",
+        Ledger.id(question.get("id")));
+    worker.work();
+    clock.current = START.plusSeconds(20);
+    worker.work();
+    var shipment = ledger.read(ledger.mail(56801).get("fields"), Shipment.class);
+    assertEquals("CGN", shipment.origin());
+    assertEquals("50", shipment.pickupZone());
+    clock.current = START.plusSeconds(51);
+    var refused = new HashSet<String>();
+    long replyId = refuseTruckInvitations(refused, 56916);
+    assertFalse(refused.isEmpty(), () -> String.valueOf(outbound));
+    // The test worker waits 75 s after the first invitation (live: 32 s).
+    clock.current = START.plusSeconds(95);
+    worker.work();
+    // Live: Sternmeile, Hansekogge, Kranich and Ruhrpott, every trucker serving zone 50, all refused.
+    clock.current = START.plusSeconds(97);
+    refuseTruckInvitations(refused, replyId);
+    assertTrue(Set.of("sternmeile-logistik@hackloop.mail", "hansekogge-trucking@hackloop.mail",
+        "kranich-kurier@hackloop.mail", "ruhrpott-express@hackloop.mail").containsAll(refused), refused::toString);
+    assertNull(ledger.delivery("quote:56801"));
+    assertEquals("sent", ledger.delivery("airport-delivery:56801"), () -> String.valueOf(outbound));
+    clock.current = START.plusSeconds(100);
+    receive(56961, customer, "Re: Air freight quote to LIM", "Sorry I left out the pickup location: Cologne,"
+        + " Germany.\n\nFor anything else, please refer to my first email.\n\nMira Petersen\nNordlicht Audio",
+        Ledger.id(outbound.stream().filter(m -> customer.equals(m.get("to"))).toList().getLast().get("id")));
+    clock.current = START.plusSeconds(110);
+    worker.work();
+    assertNull(ledger.delivery("quote:56801"));
+  }
+
+  /** Answers every new citywide truck invitation with the live #56801 refusal; returns the next mail id. */
+  private long refuseTruckInvitations(Set<String> refused, long replyId) {
+    for (var truck : List.copyOf(outbound)) {
+      if (!truck.get("subject").toString().contains("pickup from Cologne to CGN")) continue;
+      String email = truck.get("to").toString();
+      if (!refused.add(email)) continue;
+      String name = catalog.contact(email).orElseThrow().name();
+      receive(replyId++, email, "Re: " + truck.get("subject"), LIVE_56801_REFUSAL.formatted(name, email),
+          Ledger.id(truck.get("id")));
+    }
+    return replyId;
+  }
+
+  private String case56801() {
+    return ledger.jdbc().queryForList(
+        "SELECT m.stage, w.reason FROM mail m JOIN wave_case w ON w.id=m.id WHERE m.id=56801").toString();
+  }
+
+  @Test
+  void live56801QuotesACityPickupFromRecentTruckBidsWhenTruckersNeedAPostcode() {
+    seedCologneTruckHistory(START.minusSeconds(6 * 3600));
+    replay56801UntilTheTruckersRefuse();
+    clock.current = START.plusSeconds(WaveWorker.PICKUP_ESTIMATE_SECONDS - 5);
+    worker.work();
+    assertNull(ledger.delivery("quote:56801"));
+
+    clock.current = START.plusSeconds(WaveWorker.PICKUP_ESTIMATE_SECONDS);
+    worker.work();
+
+    assertEquals("sent", ledger.delivery("quote:56801"), this::case56801);
+    assertEquals(0, ledger.jdbc().queryForObject("SELECT operator FROM wave_case WHERE id=56801", Integer.class));
+    var draft = ledger.read(ledger.mail(56801).get("proposal"), WaveWorker.Draft.class);
+    // Westfalenroute, the most balanced truck: 145.16 at 343 kg and 198.20 at 785 kg give 179.96 at 633 kg.
+    assertEquals(new BigDecimal("180.00"), draft.pickupEur());
+    assertEquals(11.0 / 24, draft.pickupDays(), 1e-9);
+    assertEquals("Cologne", draft.pickupEstimate());
+    assertNull(draft.trucker());
+    assertEquals("Nova Atlas Cargo", draft.offer().airline());
+    assertEquals("R-hskK3xHzo_Wm0669", draft.offer().rateId());
+    assertEquals(new BigDecimal("2800.62"), draft.offer().totalEur());
+    assertEquals(new BigDecimal("2620.62"), draft.airEur());
+    var quote = outbound.getLast();
+    assertEquals(56801L, quote.get("in_reply_to"));
+    String body = quote.get("body").toString();
+    assertTrue(body.contains("EUR 2800.62 all in"), body);
+    assertTrue(body.contains("That includes collection from Cologne."), body);
+    assertTrue(body.contains("based on recent Cologne rates; we will confirm it with the exact pickup address"), body);
+    assertTrue(body.contains("3 days and 11 hours from collection to arrival"), body);
+    assertFalse(Pattern.compile("\\b5\\d{4}\\b").matcher(body).find(), body);
+    @SuppressWarnings("unchecked")
+    var attachments = (List<Map<String, String>>) quote.get("attachments");
+    assertEquals(List.of("AEIOU-56801-offer.pdf"), attachments.stream().map(a -> a.get("filename")).toList());
+    // The booking only needs the portal rate: the stored shipment carries no trucker price.
+    var stored = ledger.read(ledger.mail(56801).get("fields"), Shipment.class);
+    assertNull(stored.pickupEur());
+    var booked = draft.allIn(stored, new Offer("Nova Atlas Cargo", 3, new BigDecimal("2620.62"),
+        new BigDecimal("633"), "portal", "R-hskK3xHzo_Wm0669", START.plusSeconds(920)));
+    assertTrue(draft.matchesQuotedTerms(booked));
+  }
+
+  @Test
+  void live56801KeepsWaitingForPickupWithoutRecentCologneTruckBids() {
+    seedCologneTruckHistory(START.minus(PickupEstimate.HISTORY).minusSeconds(60));
+    replay56801UntilTheTruckersRefuse();
+    clock.current = START.plusSeconds(WaveWorker.PICKUP_ESTIMATE_SECONDS + 10);
+    worker.work();
+    assertNull(ledger.delivery("quote:56801"));
+    assertEquals("waiting for pickup", ledger.mail(56801).get("stage"), this::case56801);
+  }
+
+  @Test
+  void aCitywideTruckerBidWinsOverTheCologneEstimate() {
+    seedCologneTruckHistory(START.minusSeconds(3600));
+    replay56801UntilTheTruckersRefuse();
+    var invitation = outbound.stream()
+        .filter(m -> "ruhrpott-express@hackloop.mail".equals(m.get("to"))).findFirst().orElseThrow();
+    clock.current = START.plusSeconds(150);
+    receive(57000, "ruhrpott-express@hackloop.mail", "Re: " + invitation.get("subject"),
+        "All-in EUR 120.00. Transit time from pickup to delivery: 9 hours. Valid for all of Cologne.",
+        Ledger.id(invitation.get("id")));
+    clock.current = START.plusSeconds(160);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:56801"), this::case56801);
+    var draft = ledger.read(ledger.mail(56801).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("Ruhrpott Express", draft.trucker());
+    assertNull(draft.pickupEstimate());
+    assertEquals(new BigDecimal("2740.62"), draft.offer().totalEur());
+    assertFalse(outbound.getLast().get("body").toString().contains("recent Cologne rates"));
+  }
 }
