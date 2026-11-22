@@ -4457,4 +4457,16 @@ class WaveWorkerTest {
         () -> selected.stream().map(c -> c.email()).toList().toString());
     assertTrue(selected.stream().filter(c -> !c.truck()).allMatch(c -> c.serves("YYZ")));
   }
+
+  @Test
+  void live56174TurkishFastestIsRecognised() {
+    String body = "Merhaba,\n\nFrankfurt (FRA) çıkışlı, Tel Aviv, IL (TLV) varışlı bir gönderimiz için hava kargo"
+        + " teklifi rica ediyorum.\n\nSpor ekipmanları 2026-11-26 tarihinde hazır olacak. Gönderiyi Frankfurt (FRA)"
+        + " havalimanına biz teslim edeceğiz. Toplam 7 parça, brüt ağırlığı 324 kg ve hacmi 1.96 cbm.\n\n"
+        + "Bu gönderi için en hızlı seçeneği istiyoruz. Teklifinizi tüm masraflar dahil EUR olarak iletebilirseniz sevinirim.";
+    var parsed = MailParser.request("FRA–TLV hava kargo teklifi", body, false, catalog);
+    assertEquals("fastest", parsed.shipment().preference(), () -> String.valueOf(parsed));
+    var cheap = MailParser.request("FRA–TLV hava kargo teklifi", body.replace("en hızlı", "en ucuz"), false, catalog);
+    assertEquals("cheapest", cheap.shipment().preference());
+  }
 }

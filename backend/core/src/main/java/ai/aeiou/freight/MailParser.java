@@ -190,7 +190,8 @@ public final class MailParser {
     if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "");
     return has(text, "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from|arrange (?:the |a )?truck|door["
         + " -]to|abhol|vorlauf|enl[èe]vement|collecte|上门提货|上門提貨|安排提货|安排提貨|"
-        + "픽업|ex[ -]?works|\\bEXW\\b");
+        + "픽업|ex[ -]?works|\\bEXW\\b|kamyon(?:la)?\\h+(?:nakliye|ta[şs][ıi]ma)|al[ıi]ma\\h+haz[ıi]r|"
+        + "teslim\\h+al[ıi]nmaya\\h+haz[ıi]r|bizden\\h+al[ıi]n");
   }
 
   private static Pattern pattern(String s) {
@@ -733,13 +734,13 @@ public final class MailParser {
         "(?iu)(?:\\b(?:rather than|instead of|au lieu de|plut[oô]t que|statt|anstelle)\\h+[^.!?\\r\\n]+"
             + "|而不是[^。！？\\r\\n]+|가장\\h*(?:빠른|저렴한)\\h+(?:옵션|서비스)보다(?:는)?)", "");
     boolean fast = has(priority, "fastest|quickest|shortest|schnellst|prioriti[sz]e speed|"
-        + "\\b(?:le|la|les) plus rapides?\\b|\\ben h[ıi]zl[ıi]\\b|最快|时效最短|時效最短|가장\\h*빠른");
+        + "\\b(?:le|la|les) plus rapides?\\b|(?<!\\p{L})en h[ıi]zl[ıi](?!\\p{L})|最快|时效最短|時效最短|가장\\h*빠른");
     boolean cheap =
         has(
             priority,
             "cheapest|lowest|economical|günstig|preiswert|best price|most economical|prioriti[sz]e"
                 + " (?:price|cost)|\\b(?:le|la|les) moins ch[èe]r(?:e|s|es)?\\b|"
-                + "\\b(?:le|la|les) plus [ée]conomiques?\\b|\\ben (?:ucuz|ekonomik)\\b|最便宜|最低价|最低價|最经济|最經濟"
+                + "\\b(?:le|la|les) plus [ée]conomiques?\\b|(?<!\\p{L})en (?:ucuz|ekonomik|uygun fiyatl[ıi]|d[üu][şs][üu]k fiyatl[ıi])(?!\\p{L})|最便宜|最低价|最低價|最经济|最經濟"
                 + "|가장\\h*저렴한|최저가");
     var arrival = arrivalWindow(body);
     if (arrival != null && has(priority,
