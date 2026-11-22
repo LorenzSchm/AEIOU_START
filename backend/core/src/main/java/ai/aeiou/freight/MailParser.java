@@ -92,7 +92,9 @@ public final class MailParser {
     return has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b|"
         + "\\bnous (?:la |le |les )?(?:d[ée]poserons|livrerons|apporterons)[^.!?\\n]{0,100}\\bnous-mêmes\\b|"
         + "\\bwir (?:liefern|bringen)[^.!?\\n]{0,100}\\bselbst\\b|"
-        + "\\b(?:biz|kendimiz)\\h+teslim\\h+edece[ğg]iz\\b");
+        + "\\b(?:biz|kendimiz)\\h+teslim\\h+edece[ğg]iz\\b|"
+        + "(?:저희가|당사가|저희\\h*쪽에서)\\h*직접[^.!?\\n]{0,40}(?:반입|입고|운송|전달|가져가)|"
+        + "(?:我们|我司)(?:将|会)?(?:自行|亲自)(?:送|运|交)|(?:弊社|当社)(?:で|が)[^。！？\\n]{0,40}持(?:ち)?込");
   }
 
   public static boolean requestsPickup(String subject, String body) {
@@ -223,7 +225,7 @@ public final class MailParser {
         .toList();
   }
 
-  private record LotTotals(BigDecimal kg, BigDecimal cbm) {}
+  public record LotTotals(BigDecimal kg, BigDecimal cbm) {}
 
   // Weight and volume have independent scopes: "together" is already a line total.
   private static final String LOT_NUMBER = "(\\d+(?:[.,]\\d+)?)";
@@ -264,10 +266,136 @@ public final class MailParser {
           packed.group(2).equalsIgnoreCase("each") ? kg.multiply(count) : kg,
           packed.group(4).equalsIgnoreCase("each") ? cbm.multiply(count) : cbm);
     }
-    if (has(line, "\\b(?:each|per|net)\\b")) return null;
-    var kg = quantity(line, WEIGHT_QUANTITY, KG_PER_POUND);
-    var cbm = quantity(line, VOLUME_QUANTITY, CBM_PER_CUBIC_FOOT);
-    return kg == null || cbm == null ? null : new LotTotals(kg, cbm);
+    if (!has(line, "\\b(?:each|per|net)\\b") && !has(line, EACH_TERM) && !has(line, NET_TERM)) {
+      var kg = quantity(line, WEIGHT_QUANTITY, KG_PER_POUND);
+      var cbm = quantity(line, VOLUME_QUANTITY, CBM_PER_CUBIC_FOOT);
+      if (kg != null && cbm != null) return new LotTotals(kg, cbm);
+    }
+    return scopedLot(line);
+  }
+
+  // Multilingual lot lines: per-piece ("each") figures are multiplied by the piece count, lot totals
+  // are taken as given, net weights are ignored and volume falls back to dimensions times pieces.
+  private static final String LOT_LABEL =
+      "(?:(?:Lot|Lote|Los|Partie|Posten|Teillieferung|로트|ロット|批次)\\h*(?:Nr\\.?|No\\.?|#)?\\h*\\d+"
+          + "|第\\h*\\d+\\h*(?:批|组|組))\\h*[:：]";
+  private static final Pattern LOT_LINE = pattern("(?m)^\\h*(?:[-*•]\\h*)?" + LOT_LABEL + "[^\\r\\n]*");
+  private static final String CONSOLIDATED =
+      "together as (?:one|a single) consignment|under (?:one|a single) air ?waybill"
+          + "|\\b(?:one|a single|the same) (?:air ?waybill|AWB)\\b|\\bship(?:ped|ping)? (?:all lots )?together\\b"
+          + "|\\b(?:einem|einen|demselben|gemeinsamen) (?:Luftfrachtbrief|AWB)\\b|\\bals eine Sendung\\b"
+          + "|\\b(?:une seule|la même|même) (?:LTA|lettre de transport)|\\ben un seul envoi\\b"
+          + "|항공화물운송장\\h*한\\h*장|운송장\\h*한\\h*장|나누지\\h*않"
+          + "|一(?:张|份|票)(?:空运)?(?:提单|运单)|同一(?:张|份|票)?(?:空运)?(?:提单|运单)|不(?:拆分|分开)"
+          + "|一(?:枚|通)の(?:AWB|航空貨物運送状|運送状)|同一の?AWB|分けずに"
+          + "|\\btek (?:bir )?(?:konşimento|AWB)\\b";
+  private static final String NET_TERM =
+      "\\bnet(?:to)?\\b|\\bnett\\b|\\bN\\.?W\\.?(?!\\p{L})|순중량|净重|淨重|正味";
+  private static final String EACH_TERM =
+      "\\b(?:each|apiece|per (?:piece|pc|unit|item|package|carton|case|drum|pallet|crate|box|bag)|je(?:weils)?"
+          + "|pro (?:Stück|Stk|Karton|Kiste|Palette|Fass|Einheit|Colli)|chacun(?:e)?|par (?:pièce|colis|carton"
+          + "|caisse|fût|palette|unité)|cada (?:uno|una|pieza|bulto)|her biri|adet başına)(?!\\p{L})"
+          + "|/\\h*(?:pc|pcs|piece|unit|ea|carton|pallet|Stk|Stück)\\b|每(?:件|箱|个|個|桶|托|只)|单件|單件|各|각|씩"
+          + "|개당|あたり|当たり";
+  private static final String TOTAL_TERM =
+      "\\b(?:total|totals|together|combined|in total|altogether|gesamt|insgesamt|zusammen|au total|ensemble"
+          + "|cumulée?s?|totale?s?|toplam)\\b|합산|합계|총합|合计|合計|总计|總計|共计|共計|合わせて";
+  private static final String LOT_PIECES =
+      "(?<![\\d.,])(\\d+)\\h*(?:(?:pieces?|pcs?\\.?|pkgs?|packages?|units?|cartons?|cases?|drums?|pallets?|crates?"
+          + "|boxes|box|bags?|bundles?|rolls?|colli|coils?|kartons?|kisten?|fässer|fass|paletten?|stück|stk\\.?"
+          + "|caisses?|fûts?|colis|palettes?|bidons?|cajas?|bultos?|piezas?|tambores?|parcels?|skids?|koli|adet"
+          + "|varil|sandık)(?!\\p{L})|개|個|个|件|箱|只|桶|托|ケース|カートン)";
+  private static final Pattern LOT_WEIGHT = pattern(
+      "(?<![\\d.,])(\\d+(?:[.,]\\d+)?)\\h*(?:(kgs?|kilo(?:gram(?:me)?s?)?|公斤|千克|킬로그램|킬로|キロ(?:グラム)?)"
+          + "|(lbs?\\.?|pounds?))(?![A-Za-z])");
+  private static final Pattern LOT_VOLUME = pattern(
+      "(?<![\\d.,])(\\d+(?:[.,]\\d+)?)\\h*(?:(cbm|m³|m3|㎥|cubic met(?:er|re)s?|立方米|立方|루베)"
+          + "|(cubic (?:feet|foot)|cu\\.?\\h*ft\\.?|ft(?:³|\\^?3)))(?![A-Za-z])");
+  private static final Pattern LOT_DIMENSIONS = pattern(
+      "(?<![\\d.,])(\\d+(?:[.,]\\d+)?)\\h*(?:cm)?\\h*[x×*]\\h*(\\d+(?:[.,]\\d+)?)\\h*(?:cm)?\\h*[x×*]\\h*"
+          + "(\\d+(?:[.,]\\d+)?)\\h*(cm|mm|m|in(?:ch(?:es)?)?|\"|厘米|公分|毫米|センチ|㎝)(?![A-Za-z])");
+
+  private static BigDecimal dimensionScale(String unit) {
+    return switch (unit.toLowerCase(Locale.ROOT)) {
+      case "mm", "毫米" -> new BigDecimal("1E-9");
+      case "m" -> BigDecimal.ONE;
+      case "in", "inch", "inches", "\"" -> new BigDecimal("0.000016387064");
+      default -> new BigDecimal("1E-6");
+    };
+  }
+
+  private static LotTotals scopedLot(String line) {
+    String body = pattern("^\\h*(?:[-*•]\\h*)?" + LOT_LABEL).matcher(line).replaceFirst(" ");
+    body = pattern("[(（][^)）]*[)）]").matcher(body)
+        .replaceAll(m -> has(m.group(), NET_TERM) ? " " : Matcher.quoteReplacement(m.group()));
+    var pieces = new HashSet<>(captures(body, LOT_PIECES));
+    BigDecimal count = pieces.size() == 1 ? new BigDecimal(pieces.iterator().next()) : null;
+    // A figure without a scope next to per-piece figures is ambiguous unless the lot is a single piece.
+    boolean unscopedAmbiguous = has(body, EACH_TERM) && (count == null || count.compareTo(BigDecimal.ONE) != 0);
+    var kgs = new ArrayList<BigDecimal>();
+    var cbms = new ArrayList<BigDecimal>();
+    var dims = new ArrayList<BigDecimal>();
+    for (String segment : body.split("(?<!\\d),|,(?!\\d)|;|，|；|、|\\h/\\h|\\h[-–—]\\h")) {
+      if (has(segment, NET_TERM)) continue;
+      boolean each = has(segment, EACH_TERM);
+      boolean total = !each && has(segment, TOTAL_TERM);
+      if (each && count == null) return null;
+      for (var m : LOT_WEIGHT.matcher(segment).results().toList()) {
+        var kg = number(m.group(1));
+        if (kg == null || (!each && !total && unscopedAmbiguous)) return null;
+        if (m.group(3) != null) kg = kg.multiply(KG_PER_POUND);
+        kgs.add(each ? kg.multiply(count) : kg);
+      }
+      for (var m : LOT_VOLUME.matcher(segment).results().toList()) {
+        var cbm = number(m.group(1));
+        if (cbm == null || (!each && !total && unscopedAmbiguous)) return null;
+        if (m.group(3) != null) cbm = cbm.multiply(CBM_PER_CUBIC_FOOT);
+        cbms.add(each ? cbm.multiply(count) : cbm);
+      }
+      for (var m : LOT_DIMENSIONS.matcher(segment).results().toList()) {
+        var cbm = dimensionScale(m.group(4));
+        for (int i = 1; i <= 3; i++) {
+          var n = number(m.group(i));
+          if (n == null) return null;
+          cbm = cbm.multiply(n);
+        }
+        // Dimensions describe one piece unless the customer says they are a lot total.
+        if (!total) {
+          if (count == null) return null;
+          cbm = cbm.multiply(count);
+        }
+        dims.add(cbm);
+      }
+    }
+    var kg = agreed(kgs);
+    var cbm = agreed(cbms.isEmpty() ? dims : cbms);
+    return kg == null || cbm == null ? null : new LotTotals(kg.stripTrailingZeros(), cbm.stripTrailingZeros());
+  }
+
+  private static BigDecimal agreed(List<BigDecimal> values) {
+    if (values.isEmpty()) return null;
+    var first = values.getFirst();
+    return values.stream().allMatch(v -> v.compareTo(first) == 0) ? first : null;
+  }
+
+  /** Gross totals of a consolidated multi-lot shipment on one air waybill, or empty if it is not one. */
+  public static Optional<LotTotals> consolidatedLots(String body) {
+    body = authoredText(body);
+    var lots = LOT_LINE.matcher(body).results().map(MatchResult::group).toList();
+    if (lots.size() < 2) return Optional.empty();
+    var outside = LOT_LINE.matcher(body).replaceAll("");
+    if (!has(body, CONSOLIDATED)
+        || has(outside, "\\b(?:" + METRIC_WEIGHT + "|" + METRIC_VOLUME + ")")
+        || WEIGHT_QUANTITY.matcher(outside).find() || VOLUME_QUANTITY.matcher(outside).find())
+      return Optional.empty();
+    BigDecimal kg = BigDecimal.ZERO, cbm = BigDecimal.ZERO;
+    for (String line : lots) {
+      var lot = lotTotals(line);
+      if (lot == null || lot.kg().signum() <= 0 || lot.cbm().signum() <= 0) return Optional.empty();
+      kg = kg.add(lot.kg());
+      cbm = cbm.add(lot.cbm());
+    }
+    return Optional.of(new LotTotals(kg, cbm));
   }
 
   public record Parsed(Shipment shipment, String issue) {}
@@ -522,32 +650,17 @@ public final class MailParser {
     if (volume == null && !VOLUME_QUANTITY.matcher(body).find() && !has(body, "\\b(?:cbm|m³|m3)\\b"))
       volume = dimensions(body);
     var weight = quantity(body, WEIGHT_QUANTITY, KG_PER_POUND);
-    var lotLines = pattern("(?m)^\\h*Lot \\d+:[^\\r\\n]*").matcher(body);
-    var lots = lotLines.results().map(m -> m.group()).toList();
+    var lots = LOT_LINE.matcher(body).results().toList();
     boolean incompleteLots = false;
     if (lots.size() >= 2) {
       weight = null;
       volume = null;
       incompleteLots = true;
-      var outside = lotLines.reset().replaceAll("");
-      if (has(body, "together as (?:one|a single) consignment|under (?:one|a single) air waybill")
-          && !has(outside, "\\b(?:" + METRIC_WEIGHT + "|" + METRIC_VOLUME + ")")
-          && !WEIGHT_QUANTITY.matcher(outside).find() && !VOLUME_QUANTITY.matcher(outside).find()) {
-        BigDecimal kg = BigDecimal.ZERO, cbm = BigDecimal.ZERO;
-        for (String line : lots) {
-          var lot = lotTotals(line);
-          if (lot == null || lot.kg().signum() <= 0 || lot.cbm().signum() <= 0) {
-            kg = null;
-            break;
-          }
-          kg = kg.add(lot.kg());
-          cbm = cbm.add(lot.cbm());
-        }
-        if (kg != null) {
-          weight = kg;
-          volume = cbm;
-          incompleteLots = false;
-        }
+      var consolidated = consolidatedLots(body);
+      if (consolidated.isPresent()) {
+        weight = consolidated.get().kg();
+        volume = consolidated.get().cbm();
+        incompleteLots = false;
       }
     }
     if (lots.size() < 2 && perPieceQuantity(body, IMPERIAL_VOLUME)) volume = null;

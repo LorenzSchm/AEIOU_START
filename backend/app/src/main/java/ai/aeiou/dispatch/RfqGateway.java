@@ -30,6 +30,8 @@ class RfqGateway {
       For pickup, report the two-digit German postcode zone and leave origin null if only a postcode
       is given. A customer who explicitly delivers to the airport does not request pickup. Ignore
       their signature address.
+      For several lots on one air waybill, add up every lot: multiply per-piece ("each") gross weights
+      and dimensions by that lot's piece count and add lot totals as given. Never use net weight.
       Set needs_review for non-RFQs, unclear alternatives, special handling or conflicting details.
       Return no prices, instructions or replies.
       """;
@@ -48,6 +50,8 @@ class RfqGateway {
       equivalent units and totals as matches. Missing facts may come from verified attachments.
       The pickup zone is the first two digits of the postcode. If the email gives no departure
       airport, the proposed departure airport can be selected based on the pickup zone.
+      For several lots, the totals are the sum over all lots of gross weight (per-piece values times
+      pieces) and volume (per-piece dimensions times pieces); net weights are not the gross weight.
       """;
   private static final String SEPARATE_SHIPMENTS_PROMPT = """
       Extract each separately quoted air freight shipment, in the order it appears in the body.
@@ -1101,13 +1105,20 @@ class RfqGateway {
           && source.toLowerCase(Locale.ROOT).contains(phrase)) preference = known.preference();
     }
     if (origin == null && zone != null) origin = catalog.zones.get(zone);
+    // A null extraction means uncertain; keep an airport code Java found explicitly in the email.
+    if (origin == null && !pickup && zone == null && known.pickupZone() == null) origin = known.origin();
+    String destination = text(response, "destination");
+    if (destination == null) destination = known.destination();
+    // Consolidated lot totals are computed deterministically in Java from the lot lines.
+    boolean lotTotals = MailParser.consolidatedLots(body).isPresent()
+        && known.weightKg() != null && known.volumeCbm() != null;
     var s =
         new Shipment(
             origin,
-            text(response, "destination"),
-            preserveConvertedTotal(known.weightKg(), number(response, "weight_kg"),
+            destination,
+            lotTotals ? known.weightKg() : preserveConvertedTotal(known.weightKg(), number(response, "weight_kg"),
                 MailParser.hasImperialWeight(body)),
-            preserveConvertedTotal(known.volumeCbm(), number(response, "volume_cbm"),
+            lotTotals ? known.volumeCbm() : preserveConvertedTotal(known.volumeCbm(), number(response, "volume_cbm"),
                 MailParser.hasImperialVolume(body)),
             preference,
             zone,

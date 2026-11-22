@@ -3165,6 +3165,98 @@ class WaveWorkerTest {
     assertEquals("2.39", parsed.shipment().volumeCbm().toPlainString());
   }
 
+  // Live request #50482, verbatim.
+  static final String LIVE_50482_SUBJECT = "CGN → SCL 최단 소요시간 항공운임 견적 문의";
+  static final String LIVE_50482_BODY = """
+      안녕하세요,
+
+      잘 지내시죠? 인쇄 홍보물 항공 운송 건으로 견적 부탁드립니다. 화물은 2026-11-26에 출고 가능하고, Cologne 공항(CGN)까지는 저희가 직접 반입하겠습니다. 도착 공항은 SCL (Santiago, CL)입니다. 이번에는 가장 빠른 옵션으로 부탁드립니다.
+
+      화물 내역은 아래와 같습니다. 개별 포장 기준 수치에는 each를 표시했습니다.
+
+      로트 1: 카톤 4개, 총중량 each 162 kg (순중량 each 147 kg), 크기 each 60 x 40 x 134 cm
+      로트 2: 케이스 6개, 총중량 each 28 kg (순중량 each 25 kg), 크기 each 80 x 60 x 150 cm
+      로트 3: 드럼 3개, 합산 총중량 407 kg (합산 순중량 382 kg), 합산 부피 3.62 cbm
+
+      로트는 나누지 않고 항공화물운송장 한 장으로 함께 보내려고 합니다. 모든 비용을 포함한 EUR 금액 하나로 견적 부탁드립니다.
+
+      구매팀에서 견적서를 보관해야 해서, 회신하실 때 PDF로 첨부해 주시면 감사하겠습니다.
+
+      좋은 하루 보내세요!
+
+      Cheers,
+      Klaus Weidner
+      Weidner Spielwaren GmbH, Nuremberg""";
+
+  @Test
+  void live50482SumsKoreanPerPieceLotsIntoOneGrossShipment() {
+    var parsed = MailParser.request(LIVE_50482_SUBJECT, LIVE_50482_BODY, false, catalog);
+    assertNull(parsed.issue());
+    var s = parsed.shipment();
+    assertEquals("CGN", s.origin());
+    assertEquals("SCL", s.destination());
+    assertEquals(0, new BigDecimal("1223").compareTo(s.weightKg()));
+    assertEquals(0, new BigDecimal("9.2264").compareTo(s.volumeCbm()));
+    assertEquals("fastest", s.preference());
+    assertNull(s.pickupZone());
+    assertTrue(MailParser.selfDelivery(LIVE_50482_BODY));
+  }
+
+  @Test
+  void live50482KeepsJavaAirportAndLotTotalsOverTheRecordedGatewayExtraction() throws Exception {
+    restart(false, true);
+    receive(7, "weidner@hackloop.mail", LIVE_50482_SUBJECT, LIVE_50482_BODY, null);
+    // The extraction the live gateway returned for #50482.
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      var payload = mapper.valueToTree(call.getArgument(0, Map.class));
+      if ("quote_check".equals(payload.at("/response_format/json_schema/name").asText()))
+        return gatewayResponse("{\"contradiction\":false}");
+      return gatewayResponse("""
+          {"origin":"null","destination":"SCL","weight_kg":600.0000000000001,"volume_cbm":4.052,
+           "preference":"fastest","pickup_required":false,"pickup_zone":"null","needs_review":false,
+           "ready_date":null,"arrive_by":null,"arrival_deadline_requested":false}
+          """);
+    });
+    worker.work();
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("CGN", s.origin());
+    assertEquals(0, new BigDecimal("1223").compareTo(s.weightKg()));
+    assertEquals(0, new BigDecimal("9.2264").compareTo(s.volumeCbm()));
+    assertNull(ledger.delivery("rfq-info:7"));
+    assertTrue(outbound.stream().noneMatch(m -> String.valueOf(m.get("body")).contains("공항")));
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+    verify(upstream, atLeastOnce()).parseRfq(anyMap());
+  }
+
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', quoteCharacter = '"', textBlock = """
+      Lot 1: 2 pallets, 150 kg each gross (140 kg net each), 120 x 80 x 100 cm each\\nLot 2: 3 cartons, total 90 kg, total 0.5 cbm\\nPlease ship together under one air waybill. | 390 | 2.42
+      Los 1: 4 Kisten, je 50 kg brutto (je 45 kg netto), je 100 x 50 x 40 cm\\nLos 2: 2 Paletten, gesamt 300 kg, gesamt 2,4 m³\\nBitte alles zusammen mit einem Luftfrachtbrief versenden. | 500 | 3.2
+      Lot 1 : 5 cartons, 20 kg chacun, 50 x 40 x 30 cm chacun\\nLot 2 : 1 palette, 400 kg au total, 1,2 m3\\nMerci d'expédier le tout sous une seule LTA. | 500 | 1.5
+      第1批：纸箱10箱，每件毛重15公斤（净重13公斤），每件尺寸50×40×30厘米\\n第2批：木箱2件，合计毛重300公斤，合计体积1.8立方米\\n所有货物用同一张提单发运。 | 450 | 2.4
+      ロット1：段ボール8個、各12 kg、各40 x 30 x 30 cm\\nロット2：パレット1枚、合計250 kg、合計1.1 m3\\n2ロットは分けずに1枚のAWBで発送します。 | 346 | 1.388
+      Lot 1: 2 crates, 220 lb each, 40 x 40 x 40 in each\\nLot 2: 1 pallet, 500 kg, 1.0 cbm\\nShip together under one air waybill. | 699.5806428 | 3.097544192
+      Lot 1: 4 cartons, gross weight 80 kg per piece, 600 x 400 x 500 mm per piece\\nLot 2: 1 crate, 100 kg, 0.3 cbm\\nBoth lots ship together on one AWB. | 420 | 0.78
+      """)
+  void consolidatedLotsUseGrossPerPieceFiguresTimesPiecesInAnyLanguage(String body, String kg, String cbm) {
+    var lots = MailParser.consolidatedLots(body.replace("\\n", "\n")).orElseThrow();
+    assertEquals(0, new BigDecimal(kg).compareTo(lots.kg()), lots.toString());
+    assertEquals(0, new BigDecimal(cbm).compareTo(lots.cbm()), lots.toString());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+    // No single air waybill: the lots may be separate shipments.
+    "Lot 1: 4 cartons, each 162 kg, each 60 x 40 x 134 cm\nLot 2: 1 drum, 100 kg, 0.5 cbm",
+    // Only net weights.
+    "Lot 1: 4 cartons, net 150 kg each, each 60 x 40 x 50 cm\nLot 2: 1 drum, 100 kg, 0.5 cbm\nShip together under one air waybill.",
+    // Per-piece figures without a piece count.
+    "Lot 1: cartons, each 162 kg, each 60 x 40 x 134 cm\nLot 2: 1 drum, 100 kg, 0.5 cbm\nShip together under one air waybill."
+  })
+  void unclearLotsAreNotSummed(String body) {
+    assertTrue(MailParser.consolidatedLots(body).isEmpty());
+  }
+
   @Test
   void resumesPortalSearchFromVerifiedRatesAfterRestart() throws Exception {
     var successfulReads = new ArrayList<String>();
