@@ -32,7 +32,11 @@ class PriceMatchReplies {
           + "|\\b\\d+(?:[.,]\\d+)?\\h*(?:%|percent|per\\h+cent)\\h+(?:less|lower|cheaper|below)\\b"
           + "|\\b(?:lower|reduce|drop|improve|revisit)\\h+(?:(?:your|the|this|that|our)\\h+)?(?:price|rate|offer)\\b"
           + "|\\b(?:a|any|some)\\h+(?:room\\h+for\\h+(?:a\\h+)?)?discount\\b"
-          + "|\\b(?:cheaper|lower)\\h+(?:rate|price|offer|quote)\\b");
+          + "|\\b(?:cheaper|lower)\\h+(?:rate|price|offer|quote)\\b"
+          // "Can you match 1450 EUR?", "Can you beat EUR 900?", "Can you do better?", "any flexibility?"
+          + "|\\b(?:match|beat)\\h+(?:EUR|€|USD|\\$)?\\h*\\d"
+          + "|\\b(?:can|could)\\h+you\\h+do\\h+(?:any\\h+|a\\h+(?:bit|little)\\h+)?better\\b"
+          + "|\\b(?:any|some)\\h+(?:flexibility\\b|room\\h+(?:on|in|with)\\h+(?:the\\h+|your\\h+)?(?:price|rate)\\b)");
   private static final Pattern DECLINE = Pattern.compile(
       "(?iu)\\b(?:we|i)\\h+(?:will not|won['’]t|cannot|can['’]t|do not|don['’]t)\\h+"
           + "(?:go ahead|proceed|book|accept)\\b");

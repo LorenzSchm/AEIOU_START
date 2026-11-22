@@ -1576,7 +1576,7 @@ class WaveWorkerTest {
   void standardRfqsUseOneGatewayExtractionBeforeInvitingCarriers(String variant) throws Exception {
     restart(false, true);
     request("unverified_deadline".equals(variant)
-        ? "The cargo will be ready on 2026-11-26. De lading moet uiterlijk op 2026-12-01 op de bestemming aankomen."
+        ? "The cargo will be ready on 2026-11-26. Lasten måste vara framme senast 2026-12-01."
         : "The cargo will be ready on 2026-11-26 and must arrive at LAX by 2026-12-01.");
     when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
       var payload = mapper.valueToTree(call.getArgument(0, Map.class));

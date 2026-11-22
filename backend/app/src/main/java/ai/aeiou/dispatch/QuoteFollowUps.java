@@ -91,14 +91,29 @@ class QuoteFollowUps {
   }
 
   private static final java.util.regex.Pattern CANCELLATION = java.util.regex.Pattern.compile(
-      "(?iu)\\b(?:cancel|withdraw)(?:l?ing)?\\h+(?:the|this|our|my)\\h+(?:shipment|booking|order|request|enquiry|inquiry)\\b"
+      "(?imu)\\b(?:cancel|withdraw)(?:l?ing)?\\h+(?:the|this|our|my)\\h+(?:shipment|booking|order|request|enquiry|inquiry)\\b"
           + "|\\bdo\\h+not\\h+(?:proceed\\h+with|go\\h+ahead\\h+with)\\h+(?:the\\h+|this\\h+)?booking\\b"
           + "|\\b(?:bitte\\h+)?(?:die\\h+)?(?:sendung|buchung|anfrage)\\h+(?:bitte\\h+)?stornieren\\b"
-          + "|\\bannuler\\h+(?:l['’]envoi|la\\h+r[ée]servation|la\\h+demande)\\b");
+          + "|\\bannuler\\h+(?:l['’]envoi|la\\h+r[ée]servation|la\\h+demande)\\b"
+          // "Cancel please.", "Please cancel it.", "We no longer need the shipment.", "Storno bitte."
+          + "|(?:^|[.!?]\\h*)\\h*(?:(?:please|pls|kindly)\\h+)?cancel(?:\\h+(?:it|that|this|everything|the\\h+(?:quote|offer"
+          + "|order)))?(?:,?\\h+(?:please|thanks|thank you))?\\h*[.!]?\\h*$"
+          + "|\\b(?:we|i)\\h+(?:need|want|would\\h+like|have|must)\\h+to\\h+cancel(?:\\h+(?:it|this|the\\h+(?:shipment"
+          + "|booking|order|request)))?\\h*[.!]?\\h*$"
+          + "|\\bwe\\h+(?:no\\h+longer|don['’]t|do\\h+not)\\h+need\\h+(?:it|the\\h+(?:shipment|booking|transport))"
+          + "(?:\\h+any\\h*more)?\\b(?!\\h+(?:to|until|before))"
+          + "|(?:^|[.!?]\\h*)\\h*(?:bitte\\h+)?storn(?:o|ieren)(?:\\h+bitte)?\\h*[.!]?\\h*$"
+          + "|\\b(?:veuillez\\h+)?annulez(?:\\h+(?:la|le|l['’])\\p{L}*)?\\b|(?<!\\p{L})(?:cancelar|annullare|cancelen)(?!\\p{L})");
 
   private static final java.util.regex.Pattern NOT_CANCELLING = java.util.regex.Pattern.compile(
-      "(?iu)\\b(?:do\\h+not|don['’]t|no\\h+need\\h+to|won['’]t|will\\h+not|nicht)\\h+(?:\\p{L}+\\h+){0,2}"
-          + "(?:cancel|stornieren|annuler)");
+      "(?iu)\\b(?:do\\h+not|don['’]t|no\\h+need\\h+to|no|non|won['’]t|will\\h+not|nicht)\\h+(?:\\p{L}+\\h+){0,2}"
+          + "(?:cancel|stornieren|annuler|cancelar|annullare)");
+
+  /** Whether the customer's own reply withdraws the request. */
+  static boolean cancels(String body) {
+    String reply = ai.aeiou.freight.MailParser.authoredText(body);
+    return CANCELLATION.matcher(reply).find() && !NOT_CANCELLING.matcher(reply).find();
+  }
 
   /**
    * A customer who withdraws after our quote and before any booking gets a short confirmation that
@@ -123,8 +138,7 @@ class QuoteFollowUps {
         ORDER BY m.id
         """, start.toString());
     for (var request : cases) {
-      String reply = ai.aeiou.freight.MailParser.authoredText(Ledger.str(request, "reply_body"));
-      if (!CANCELLATION.matcher(reply).find() || NOT_CANCELLING.matcher(reply).find()) continue;
+      if (!cancels(Ledger.str(request, "reply_body"))) continue;
       long id = Ledger.id(request.get("id"));
       String action = "cancel-ack:" + id;
       String approved = Greeting.at(request, now) + "\n\n"

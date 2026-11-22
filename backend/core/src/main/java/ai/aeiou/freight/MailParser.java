@@ -27,6 +27,11 @@ public final class MailParser {
       "\\bready for (?:pickup|collection) at\\h+[^.!?;\\r\\n]{1,120}?\\bon\\h+(" + ISO_DATE + ")");
   private static final Pattern GERMAN_READY_DATE = pattern(
       "\\b(?:steht|stehen|ist|sind)\\h+(?:am|ab)\\h+(" + ISO_DATE + ")\\h+(?:zur Abholung\\h+)?(?:abhol)?bereit\\b");
+  // "bereit ab 2026-11-26", "klaar op", "prêt le", "listo el", "pronto il", "pronto em", "gotowe od".
+  private static final Pattern OTHER_READY_DATE = pattern(
+      "(?<!\\p{L})(?:bereit|abholbereit|versandbereit|verfügbar|klaar|beschikbaar|pr[êe]te?s?|disponibles?"
+          + "|list[oa]s?|pront[oiae]s?|gotow\\p{L}*|dostępn\\p{L}*)(?!\\p{L})\\h+"
+          + "(?:(?:ab|am|op|vanaf|le|à partir du|el|il|dal|em|a partir de|od|dnia)\\h+)?(" + ISO_DATE + ")");
   private static final Pattern TURKISH_READY_DATE = pattern(
       "\\b(" + ISO_DATE + ")\\h+tarihinde\\h+(?:teslime\\h+)?haz[ıi]r\\b");
   private static final Pattern KOREAN_PICKUP_READY_DATE = pattern(
@@ -42,8 +47,8 @@ public final class MailParser {
           + "|\\b(?:arrange|cancel|change|switch) (?:the |our |to )?(?:pickup|collection|destination|service)\\b"
           + "|\\b(?:dangerous goods|hazardous|lithium|dry ice|refrigerated|temperature.controlled)\\b");
   private static final Pattern ARRIVAL_DEADLINE = pattern(
-      "\\b(?:arriv(?:e|es|al)|reach|delivered|delivery)\\b[^.!?;\\r\\n]{0,65}?\\b"
-          + "(?:no later than|on or before|by(?=\\h+(?:\\d|today\\b|tomorrow\\b|next\\b|"
+      "\\b(?:arriv(?:e|es|al)|reach|deliver|delivered|delivery|land)\\b[^.!?;\\r\\n]{0,65}?\\b"
+          + "(?:no later than|on or before|by(?:\\h+(?:the\\h+)?latest)?(?=\\h+(?:\\d|today\\b|tomorrow\\b|next\\b|"
           + "(?:mon|tue|wed|thu|fri|sat|sun|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\p{L}*\\b)))"
           + "\\h+(" + ISO_DATE + ")?");
   private static final Pattern GERMAN_ARRIVAL_DEADLINE = pattern(
@@ -68,7 +73,14 @@ public final class MailParser {
       pattern("\\b(?:deve|devono|arriv\\p{L}*|consegn\\p{L}*)\\b[^.!?;\\r\\n]{0,60}?"
           + "\\b(?:entro|al pi[uù] tardi)\\h+(?:il\\h+)?(" + ISO_DATE + ")"),
       pattern("\\b(?:muss|müssen|soll|sollen|Ankunft|Zustellung|Liefertermin)\\b[^.!?;\\r\\n]{0,60}?"
-          + "\\b(?:bis\\h+(?:spätestens\\h+)?|spätestens\\h+(?:am\\h+|bis\\h+(?:zum\\h+)?)?)(" + ISO_DATE + ")"));
+          + "\\b(?:bis\\h+(?:spätestens\\h+)?|spätestens\\h+(?:am\\h+|bis\\h+(?:zum\\h+)?)?)(" + ISO_DATE + ")"),
+      pattern("\\b(?:moet|moeten|dient|aankomst|levering|aankomen|geleverd)\\b[^.!?;\\r\\n]{0,60}?"
+          + "\\b(?:uiterlijk|niet later dan)\\h+(?:op\\h+)?(" + ISO_DATE + ")"),
+      pattern("(?<!\\p{L})(?:musi|muszą|powinn\\p{L}*|dotrze\\p{L}*|dostaw\\p{L}*)(?!\\p{L})[^.!?;\\r\\n]{0,60}?"
+          + "(?<!\\p{L})najpóźniej\\h+(?:do\\h+)?(" + ISO_DATE + ")"),
+      pattern("(?<!\\p{L})(?:deve|devem|chegar|entreg\\p{L}*)(?!\\p{L})[^.!?;\\r\\n]{0,60}?"
+          + "(?<!\\p{L})(?:o mais tardar (?:em|até)|até no máximo|até)\\h+(?:o dia\\h+|dia\\h+)?(" + ISO_DATE + ")"),
+      pattern("(?<!\\p{L})en\\h+geç\\h+(" + ISO_DATE + ")(?:\\h*(?:tarihine\\h+kadar|tarihinde|'?(?:e|a|ye|ya)\\h+kadar))?"));
   private static final Pattern NOT_AN_ARRIVAL = pattern(
       "\\b(?:ready|available|pick(?:ed)?[ -]?up|collect\\p{L}*|abhol\\p{L}*|bereit|abholbereit|"
           + "enl[èe]vement|ramass\\p{L}*|pr[êe]te?s?|recog\\p{L}*|listo|ritiro|pronto|"
@@ -143,6 +155,8 @@ public final class MailParser {
 
   public static boolean selfDelivery(String body) {
     return has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b|"
+        + "\\bwe(?: will|'ll|’ll)? (?:bring|truck|take|drop(?: off)?|hand(?: over)?|deliver)\\b[^.!?\\n]{0,60}"
+        + "\\b(?:to|at) (?:the )?(?-i:[A-Z]{3})\\b[^.!?\\n]{0,40}\\bourselves\\b|"
         + "\\bwe(?: will|'ll|’ll) (?:deliver|bring|drop off|truck)[^.!?\\n]{0,80}\\b(?:directly )?to (?:the )?"
         + "(?:[\\p{L}.'’ -]{0,40}\\b(?:airport|Flughafen)\\b|airport\\b)|"
         + "\\bnous (?:la |le |les )?(?:d[ée]poserons|livrerons|apporterons)[^.!?\\n]{0,100}\\bnous-mêmes\\b|"
@@ -154,6 +168,10 @@ public final class MailParser {
 
   private static final Pattern SEA_MODE = Pattern.compile(
       "(?iu)\\b(?:sea|ocean)[ -]?freight\\b|\\bport[ -]to[ -]port\\b|\\b(?:FCL|LCL)\\b"
+          + "|\\b(?:by|via) (?:sea|ocean|vessel|ship)\\b|\\bcontainer ?(?:ship|vessel)\\b|\\bper Schiff\\b"
+          // Phrases, not bare words: a "Maritime GmbH" signature must not decline an air request.
+          + "|(?<!\\p{L})(?:(?:transporte|envío|frete|transporte|via) mar[ií]tim[oa]|(?:trasporto|spedizione|via)"
+          + " marittim[oa]|zeevracht|(?:fracht|transport\\p{L}*) morsk\\p{L}*|auf dem Seeweg)(?!\\p{L})|海上(?:輸送|运输|運輸)|船便"
           + "|\\b(?:20|40|45)\\h*(?:'|’|ft\\b|foot\\b|feet\\b|f\\b|HC\\b|HQ\\b|DV\\b|GP\\b)"
           + "|\\bSeefracht\\b|\\bfret maritime\\b|\\bflete mar[ií]timo\\b|海运|海運|해상\\h*운송|해상운임|deniz\\h*yolu");
   private static final Pattern ROAD_MODE = Pattern.compile(
@@ -187,12 +205,41 @@ public final class MailParser {
             + "|(?:don['’]t|doesn['’]t|won['’]t) (?:need|require) (?:a |any |the )?(?:truck |warehouse )?(?:pick[ -]?up|collection)"
             + "|without (?:a |any )?(?:truck |warehouse )?(?:pick[ -]?up|collection)"
             + "|(?:pas besoin d['’]|aucun )enl[èe]vement|keine? (?:abholung|vorlauf))\\b", "");
-    if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "");
-    return has(text, "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from|arrange (?:the |a )?truck|door["
-        + " -]to|abhol|vorlauf|enl[èe]vement|collecte|上门提货|上門提貨|安排提货|安排提貨|"
-        + "픽업|ex[ -]?works|\\bEXW\\b|kamyon(?:la)?\\h+(?:nakliye|ta[şs][ıi]ma)|al[ıi]ma\\h+haz[ıi]r|"
-        + "teslim\\h+al[ıi]nmaya\\h+haz[ıi]r|bizden\\h+al[ıi]n");
+    if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for (?:pick[ -]?up|collection)\\b", "");
+    for (var term : PICKUP_TERM.matcher(text).results().toList()) {
+      if (!negated(text, term.start(), term.end())) return true;
+    }
+    return false;
   }
+
+  /** A pickup mention negated by one of the three words before it or by the words right after it. */
+  private static boolean negated(String text, int start, int end) {
+    int from = start;
+    while (from > 0 && ".!?;。！？\r\n".indexOf(text.charAt(from - 1)) < 0) from--;
+    String[] words = text.substring(from, start).strip().split("\\s+");
+    String before = String.join(" ", Arrays.copyOfRange(words, Math.max(0, words.length - 3), words.length));
+    // "abhol" stands for "Abholung": the words after the term start after the whole word.
+    while (end < text.length() && Character.isLetter(text.charAt(end))) end++;
+    int to = end;
+    while (to < text.length() && ".!?;。！？\r\n".indexOf(text.charAt(to)) < 0) to++;
+    return NEGATION.matcher(before).find() || NEGATED_AFTER.matcher(text.substring(end, to)).lookingAt();
+  }
+
+  private static final String PICKUP_TERMS = "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from"
+      + "|arrange (?:the |a )?truck|door[ -]to|abhol|vorlauf|enl[èe]vement|collecte|上门提货|上門提貨|安排提货|安排提貨|"
+      + "픽업|ex[ -]?works|\\bEXW\\b|kamyon(?:la)?\\h+(?:nakliye|ta[şs][ıi]ma)|al[ıi]ma\\h+haz[ıi]r|"
+      + "teslim\\h+al[ıi]nmaya\\h+haz[ıi]r|bizden\\h+al[ıi]n";
+  private static final Pattern PICKUP_TERM = pattern(PICKUP_TERMS);
+  // Negated pickups: "do not arrange collection", "No need to collect", "Pas d'enlèvement" (before),
+  // "Pickup: not required", "Abholung nicht erforderlich", "Kamyonla taşıma gerekmiyor" (after).
+  private static final Pattern NEGATION = pattern(
+      "\\b(?:no|not|none|never|don['’]t|doesn['’]t|won['’]t|without|nicht|kein\\p{L}*|ohne|pas|aucun\\p{L}*|sans"
+          + "|niet|geen|zonder|nie|bez|nessun\\p{L}*)\\b|(?<!\\p{L})(?:ningún|ninguna|não)(?!\\p{L})"
+          + "|不需要|无需|無需|不用");
+  private static final Pattern NEGATED_AFTER = pattern(
+      "[\\h:|=–-]*(?:(?:is|are|will be|ist|wird|est|n['’]est)\\h+)?(?:\\(?\\h*)?"
+          + "(?:not\\b|no\\b|none\\b|n/a\\b|nicht\\b|nein\\b|kein\\p{L}*|non\\b|pas\\b|niet\\b|nie\\b|"
+          + "gerek(?:mi)?yor|gerekmez|gerek\\h+yok|yok\\b|değil|필요\\h*(?:없|하지\\h*않)|不需要|无需|無需|不要)");
 
   private static Pattern pattern(String s) {
     return Pattern.compile(s, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
@@ -364,7 +411,8 @@ public final class MailParser {
   // Multilingual lot lines: per-piece ("each") figures are multiplied by the piece count, lot totals
   // are taken as given, net weights are ignored and volume falls back to dimensions times pieces.
   private static final String LOT_LABEL =
-      "(?:(?:Lot|Lote|Los|Partie|Posten|Teillieferung|로트|ロット|批次)\\h*(?:Nr\\.?|No\\.?|#)?\\h*\\d+"
+      "(?:(?:Lot|Lote|Los|Partie|Posten|Teillieferung|로트|ロット|批次)\\h*(?:Nr\\.?|No\\.?|#)?\\h*"
+          + "(?:\\d+|(?:IX|IV|V?I{1,3}|VI{0,3}|X)(?![\\p{L}\\d])|[A-H](?![\\p{L}\\d]))"
           + "|第\\h*\\d+\\h*(?:批|组|組))\\h*[:：]";
   private static final Pattern LOT_LINE = pattern("(?m)^\\h*(?:[-*•]\\h*)?" + LOT_LABEL + "[^\\r\\n]*");
   private static final String CONSOLIDATED =
@@ -379,9 +427,12 @@ public final class MailParser {
   private static final String NET_TERM =
       "\\bnet(?:to)?\\b|\\bnett\\b|\\bN\\.?W\\.?(?!\\p{L})|순중량|净重|淨重|正味";
   private static final String EACH_TERM =
-      "\\b(?:each|apiece|per (?:piece|pc|unit|item|package|carton|case|drum|pallet|crate|box|bag)|je(?:weils)?"
+      "\\b(?:each|apiece|per (?:piece|pc|unit|item|package|carton|case|drum|pallet|crate|box|bag)"
+          // German "je 250 kg" but not French "je" (I): "je" needs a figure or a piece word after it.
+          + "|jeweils|je(?=\\h*\\d)|je (?:Stück|Stk|Palette|Karton|Kiste|Colli|Einheit)"
           + "|pro (?:Stück|Stk|Karton|Kiste|Palette|Fass|Einheit|Colli)|chacun(?:e)?|par (?:pièce|colis|carton"
-          + "|caisse|fût|palette|unité)|cada (?:uno|una|pieza|bulto)|her biri|adet başına)(?!\\p{L})"
+          + "|caisse|fût|palette|unité)|cada (?:uno|una|pieza|bulto)|ciascun[oa]|cadauno|per stuk|her biri"
+          + "|adet başına)(?!\\p{L})|(?<!\\p{L})(?:à(?=\\h*\\d)|każd\\p{L}*)"
           + "|/\\h*(?:pc|pcs|piece|unit|ea|carton|pallet|Stk|Stück)\\b|每(?:件|箱|个|個|桶|托|只)|单件|單件|各|각|씩"
           + "|개당|あたり|当たり";
   private static final String TOTAL_TERM =
@@ -411,6 +462,14 @@ public final class MailParser {
     };
   }
 
+  /** A weight or volume in the same clause as a per-piece word: "je 250 kg", "à 250 kg", "0,3 m3 cada una". */
+  private static boolean eachScoped(String text, Pattern quantity) {
+    for (String segment : text.split("(?<!\\d),|,(?!\\d)|;|，|；|、|\\R|(?<=[.!?])\\h")) {
+      if (has(segment, EACH_TERM) && !has(segment, TOTAL_TERM) && quantity.matcher(segment).find()) return true;
+    }
+    return false;
+  }
+
   private static LotTotals scopedLot(String line) {
     String body = pattern("^\\h*(?:[-*•]\\h*)?" + LOT_LABEL).matcher(line).replaceFirst(" ");
     body = pattern("[(（][^)）]*[)）]").matcher(body)
@@ -426,7 +485,8 @@ public final class MailParser {
       if (has(segment, NET_TERM)) continue;
       boolean each = has(segment, EACH_TERM);
       boolean total = !each && has(segment, TOTAL_TERM);
-      if (each && count == null) return null;
+      // "100 lb together and 10 cubic feet each": one clause with both scopes is ambiguous.
+      if (each && (count == null || has(segment, TOTAL_TERM))) return null;
       for (var m : LOT_WEIGHT.matcher(segment).results().toList()) {
         var kg = number(m.group(1));
         if (kg == null || (!each && !total && unscopedAmbiguous)) return null;
@@ -506,8 +566,89 @@ public final class MailParser {
     }
   }
 
+  private static final Pattern NUMERIC_DATE = Pattern.compile(
+      "(?<![\\d./-])(\\d{1,2})([./])(\\d{1,2})(?:\\2(\\d{4})|\\.?)(?![\\d/]|\\.\\d)");
+  private static final Pattern NAMED_DATE = pattern(
+      "(?<![\\p{L}\\d])(?:(\\d{1,2})(?:st|nd|rd|th)?\\.?\\h+(?:of\\h+)?(\\p{L}{3,9})\\.?|(\\p{L}{3,9})\\.?\\h+(\\d{1,2})"
+          + "(?:st|nd|rd|th)?)(?:,?\\h+(\\d{4}))?(?![\\p{L}\\d])");
+  private static final Pattern DATE_WORD_BEFORE = pattern(
+      "(?<!\\p{L})(?:by|on|until|till|before|latest|from|ready|due|ab|am|bis|zum|vor|le|avant|el|antes|il|entro"
+          + "|op|uiterlijk|do|najpóźniej|até)\\h*[:.,]?\\h*$");
+  private static final Pattern MONTH_END = pattern(
+      "(?:the\\h+)?end\\h+of\\h+(?:the|this)\\h+month|Monatsende|Ende\\h+(?:des|dieses)\\h+Monats"
+          + "|(?:la\\h+)?fin\\h+(?:du|de)\\h+mois|(?:la\\h+)?fine\\h+(?:del\\h+)?mese|(?:el\\h+)?final\\h+de(?:l)?\\h+mes");
+  private static final Map<String, Integer> MONTHS = months();
+
+  private static Map<String, Integer> months() {
+    var names = new HashMap<String, Integer>();
+    String[][] languages = {
+        {"january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+            "november", "december"},
+        {"januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september", "oktober",
+            "november", "dezember"},
+        {"janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
+            "novembre", "décembre"}};
+    for (var language : languages)
+      for (int month = 0; month < 12; month++) {
+        names.put(language[month], month + 1);
+        if (language[month].length() > 3) names.putIfAbsent(language[month].substring(0, 3), month + 1);
+      }
+    names.put("sept", 9);
+    return Map.copyOf(names);
+  }
+
+  /**
+   * The text with unambiguous dates rewritten as ISO dates, so date patterns read them: 30.11.2026,
+   * 30/11/2026, 11/30/2026, 30 November 2026, Nov 30, 2026. A date without a year (28/11, 28.11.)
+   * takes the year of the only ISO date written. Slash dates whose day and month could swap stay.
+   */
+  public static String withIsoDates(String text) {
+    String year = only(ISO_YEAR_MONTH.matcher(text).results().map(m -> m.group(1)).toList());
+    String source = text;
+    text = NUMERIC_DATE.matcher(text).replaceAll(m -> {
+      int first = Integer.parseInt(m.group(1)), second = Integer.parseInt(m.group(3));
+      String y = m.group(4) != null ? m.group(4) : year;
+      // A date without a year ("by latest 28/11", "bis 28.11.") only counts right after a date word,
+      // so "24/7 service" or "1.5." stays a number.
+      if (m.group(4) == null && (y == null || (m.group(2).equals(".") && (!m.group().endsWith(".")
+          || m.group(3).length() != 2)) || !DATE_WORD_BEFORE.matcher(
+              source.substring(Math.max(0, m.start() - 24), m.start())).find())) return m.group();
+      int day = first, month = second;
+      if (m.group(2).equals("/")) {
+        if (first <= 12 && second <= 12 && first != second) return m.group();
+        if (first <= 12 && second > 12) {
+          day = second;
+          month = first;
+        }
+      }
+      return Matcher.quoteReplacement(iso(y, month, day, m.group()));
+    });
+    text = NAMED_DATE.matcher(text).replaceAll(m -> {
+      String name = (m.group(2) != null ? m.group(2) : m.group(3)).toLowerCase(Locale.ROOT);
+      Integer month = MONTHS.get(name);
+      String y = m.group(5) != null ? m.group(5) : year;
+      if (month == null || y == null) return Matcher.quoteReplacement(m.group());
+      int day = Integer.parseInt(m.group(1) != null ? m.group(1) : m.group(4));
+      return Matcher.quoteReplacement(iso(y, month, day, m.group()));
+    });
+    // "by the end of the month" is the last day of the month of the one date written.
+    String yearMonth = only(ISO_YEAR_MONTH.matcher(text).results().map(m -> m.group(1) + "-" + m.group(2)).toList());
+    return yearMonth == null ? text
+        : MONTH_END.matcher(text).replaceAll(YearMonth.parse(yearMonth).atEndOfMonth().toString());
+  }
+
+  private static final Pattern ISO_YEAR_MONTH = Pattern.compile("(?<!\\d)(\\d{4})-(\\d{2})-\\d{2}(?!\\d)");
+
+  private static String iso(String year, int month, int day, String original) {
+    try {
+      return LocalDate.of(Integer.parseInt(year), month, day).toString();
+    } catch (DateTimeException ex) {
+      return original;
+    }
+  }
+
   public static ArrivalWindow arrivalWindow(String body) {
-    String text = authoredText(body);
+    String text = withIsoDates(authoredText(body));
     var others = OTHER_ARRIVAL_DEADLINES.stream().flatMap(p -> p.matcher(text).results())
         .filter(match -> !NOT_AN_ARRIVAL.matcher(sentence(text, match)).find());
     var deadlines = java.util.stream.Stream.of(ARRIVAL_DEADLINE.matcher(text).results(),
@@ -528,8 +669,8 @@ public final class MailParser {
   }
 
   public static LocalDate cargoReadyDate(String body) {
-    String text = authoredText(body);
-    return onlyDate(java.util.stream.Stream.of(READY_DATE, READY_AT_LOCATION_DATE, GERMAN_READY_DATE,
+    String text = withIsoDates(authoredText(body));
+    return onlyDate(java.util.stream.Stream.of(READY_DATE, READY_AT_LOCATION_DATE, GERMAN_READY_DATE, OTHER_READY_DATE,
         TURKISH_READY_DATE, KOREAN_PICKUP_READY_DATE, KOREAN_READY_AT_LOCATION_DATE)
         .flatMap(pattern -> pattern.matcher(text).results()).map(match -> match.group(1)).toList());
   }
@@ -567,7 +708,12 @@ public final class MailParser {
   }
 
   private static final Pattern SEPARATE_SHIPMENTS = pattern(
-      "\\b(?:both|two|three|multiple|several|separate|each of (?:these|the)) (?:\\w+ )?shipments\\b"
+      "\\b(?:both|two|three|multiple|several|separate|each of (?:these|the)) (?:\\w+ )?(?:shipments|consignments)\\b"
+          // The same in the customers' other languages; the gateway then splits and verifies the blocks.
+          + "|\\b(?:zwei|drei|beide|mehrere|getrennte|separate) (?:\\p{L}+ )?Sendungen\\b|\\bgetrennte (?:Preise|Angebote)\\b"
+          + "|\\b(?:deux|trois|plusieurs) (?:envois|expéditions)\\b|\\b(?:dos|tres|varios) env[ií]os\\b"
+          + "|\\b(?:due|tre) spedizioni\\b|\\b(?:twee|drie) zendingen\\b|\\b(?:dwie|trzy) przesyłki\\b"
+          + "|\\b(?:iki|üç) (?:ayrı )?gönderi|두\\h*건|两票|兩票|2つの(?:貨物|出荷)"
           + "|\\bboth quotes\\b[^.!?\\n]{0,110}\\b(?:same|one|single) (?:email|reply|message)\\b"
           + "|\\bseparate (?:all[ -]in )?(?:prices?|quotes?)\\b[^.!?\\n]{0,90}\\b(?:each shipment|both shipments)\\b");
   private static final Pattern SHIPMENT_COUNT = pattern("\\b(both|two|three|four|five|six|seven|eight|[2-8])"
@@ -773,6 +919,21 @@ public final class MailParser {
       }
     }
     if (lots.size() < 2 && perPieceQuantity(body, IMPERIAL_VOLUME)) volume = null;
+    boolean perPieceWeight = lots.size() < 2 && (perPieceQuantity(body, METRIC_WEIGHT + "|" + IMPERIAL_WEIGHT)
+        || eachScoped(body, LOT_WEIGHT));
+    boolean perPieceVolume = lots.size() < 2 && eachScoped(body, LOT_VOLUME);
+    if (perPieceWeight || perPieceVolume) {
+      // "4 pallets, each 250 kg", "4 Paletten je 250 kg", "5 cajas de 40 kg cada una, 0,3 m3 cada una":
+      // one piece count times the per-piece figures, as for a lot line.
+      var single = scopedLot(body);
+      if (single != null && (perPieceVolume || volume == null || volume.compareTo(single.cbm()) == 0)) {
+        weight = single.kg();
+        volume = single.cbm();
+        perPieceWeight = false;
+      } else if (perPieceVolume) {
+        volume = null;
+      }
+    }
     var shipment =
         new Shipment(
             origin,
@@ -794,17 +955,24 @@ public final class MailParser {
     else if (customerDeliveryAirport == null && (pickup || !zones.isEmpty()) && zone == null)
       issue = "Pickup requested. Confirm the pickup postcode or zone.";
     else if (incompleteLots) issue = "Confirm gross weight and volume for every lot.";
-    else if (lots.size() < 2 && perPieceQuantity(body, METRIC_WEIGHT + "|" + IMPERIAL_WEIGHT))
+    else if (perPieceWeight)
       issue = "Confirm total gross weight. The request gives a per-piece weight.";
     else if (arrival != null && !arrival.complete()) issue = ARRIVAL_DATES_ISSUE;
     else if (!has(text, FREIGHT_TERMS))
-      issue = "Confirm that this message requests a freight quote.";
+      issue = NOT_A_QUOTE_REQUEST_ISSUE;
     return new Parsed(shipment, issue);
   }
 
+  public static final String NOT_A_QUOTE_REQUEST_ISSUE = "Confirm that this message requests a freight quote.";
+  // Quote words in the languages customers write in, and common misspellings ("qoute",
+  // "airfreigth"). Non-ASCII words need letter lookarounds: Java's \b only knows ASCII letters.
   private static final String FREIGHT_TERMS =
       "\\b(?:rfq|quot(?:e|ation)|rat(?:e|es)|pric(?:e|ing)|angebot|anfrage|luftfracht(?:anfrage)?|"
-          + "freight|airfreight|versand|devis|fret a[ée]rien|hava navlun|hava kargo)\\b|空运|空運|항공\\h*(?:운송|화물)|견적";
+          + "freight|airfreight|versand|devis|fret a[ée]rien|hava navlun|hava kargo|qoutes?|qoutation"
+          + "|air ?fr[ei]{2}g(?:ht|th)|tarif[fa]?|flete|oferta|presupuesto|quotazione|preventivo|offerta"
+          + "|spedizione|offerte|luchtvracht|vracht|wycen\\p{L}*|ofert\\p{L}*|fracht|frete|kargo|navlun)\\b"
+          + "|(?<!\\p{L})(?:cotizaci[oó]n|cota[çc][ãa]o|or[çc]amento|teklif\\p{L}*|fiyat\\p{L}*)(?!\\p{L})"
+          + "|空运|空運|항공\\h*(?:운송|화물)|견적|운임|見積|航空貨物|航空輸送|報價|报价|询价|詢價";
   private static final String CARGO_TERMS =
       "\\b(?:kgs?|kilograms?|cbm|m3|m³|pallets?|paletten|pieces|pcs|crates?|kisten|cartons?|colli|awb"
           + "|air ?waybill|consignment|shipment|sendung|cargo)\\b";
@@ -938,7 +1106,7 @@ public final class MailParser {
           + FROM_PICKUP_TO_DELIVERY + ")?|" + FROM_PICKUP_TO_DELIVERY + ")";
   private static final String TIMING_SEPARATOR = "\\s*(?:is\\s+|of\\s+|takes\\s+|[:=]\\s*)?";
   private static final String DURATION_NUMBER = "\\d{1,4}(?:[.,]\\d{1,2})?";
-  private static final String DURATION_UNIT = "hours?|hrs?|h|minutes?|mins?|days?|tage?";
+  private static final String DURATION_UNIT = "hours?|hrs?|h|stunden|std\\.?|minutes?|mins?|minuten|days?|tage?";
   private static final String DURATION =
       "(" + DURATION_NUMBER + ")\\s*(" + DURATION_UNIT + ")\\b";
   private static final String DURATION_RANGE =
@@ -1000,7 +1168,7 @@ public final class MailParser {
   private static double durationDays(MatchResult match) {
     double duration = Double.parseDouble(match.group(1).replace(',', '.'));
     String unit = match.group(2).toLowerCase(Locale.ROOT);
-    if (unit.startsWith("h")) return duration / 24;
+    if (unit.startsWith("h") || unit.startsWith("st")) return duration / 24;
     if (unit.startsWith("min")) return duration / (24 * 60);
     return duration;
   }
@@ -1058,8 +1226,17 @@ public final class MailParser {
             + "indicative|provisional|unconfirmed|unavailable|unable|cannot|can[’']t|decline|separately|additional"
             + " charges|starting at|extras"
             + " apply)\\b|\\+\\s*(?:VAT|fuel|security)|(?:per|/)\\s*(?:kg|km|pallet)|"
-            + "\\bnot\\s+(?:part\\s+of\\s+(?:this\\s+offer|the\\s+total)|included)\\b|\\bsubject"
-            + " to\\b|\\b(?:rate|price|cost|total) (?:is )?(?:not (?:yet )?confirmed|pending confirmation)\\b"))
+            + "\\bnot\\s+(?:part\\s+of\\s+(?:this\\s+offer|the\\s+total)|incl(?:uded|\\.|\\b))|\\bsubject to\\b"
+            // A charge left out of the price: "excl. fuel", "zzgl. Maut", "net of fuel", "w/o fuel
+            // surcharge", "sans surcharge", "fuel extra", "fuel surcharge additional", "+ toll".
+            + "|\\b(?:excl|exkl|zzgl|zuzügl)\\.|\\b(?:excl|exkl|zzgl|zuzüglich|exclusive of|net of|w/o|ohne|sans|hors"
+            + "|sin(?=\\h+recargo)|senza|zonder|bez|hariç)\\h+(?:(?:the|any|de|la|le|die|der)\\h+)?(?:fuel|toll|tolls|maut|surcharges?"
+            + "|zuschl\\p{L}*|treibstoff\\p{L}*|kraftstoff\\p{L}*|diesel\\p{L}*|carburant|recargo|combustible|mwst|vat"
+            + "|tax(?:es)?|security|customs|zoll|péage|peaje|pedaggio|tol|yakıt)"
+            + "|\\b(?:fuel|toll|tolls|maut|surcharges?|treibstoffzuschlag|mwst|vat)\\h+(?:\\(?\\h*)?(?:extra|additional"
+            + "|on top|excluded|not incl\\p{L}*|separate(?:ly)?|zusätzlich|extra berechnet)\\b"
+            + "|\\+\\h*(?:toll|tolls|maut|mwst|surcharge|zuschlag|tax)"
+            + "|\\b(?:rate|price|cost|total) (?:is )?(?:not (?:yet )?confirmed|pending confirmation)\\b"))
       return Optional.empty();
     var amounts = new ArrayList<>(captures(text, "(?:\\bEUR\\s*|€\\s*)" + NUM));
     amounts.addAll(captures(text, NUM + "\\s*(?:EUR\\b|€)"));

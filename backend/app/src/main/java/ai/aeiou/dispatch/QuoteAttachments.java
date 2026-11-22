@@ -35,20 +35,31 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 final class QuoteAttachments {
   private static final Pattern OFFER = Pattern.compile(
       "(?iu)\\b(?:quote|quotation|offer|bid|price|pricing|rate|devis|offre|cotation|prix|tarif|angebot|preis|"
-          + "offerte|prijs|precio|prezzo|teklif\\p{L}*|fiyat\\p{L}*)\\b|报价|報價|价格|價格|価格|가격");
+          + "offerte|prijs|precio|prezzo|teklif\\p{L}*|fiyat\\p{L}*|oferta|cotizaci[oó]n|presupuesto|offerta"
+          + "|preventivo|quotazione|wycen\\p{L}*|ofert\\p{L}*|cota[çc][ãa]o|or[çc]amento)(?!\\p{L})"
+          + "|报价|報價|价格|價格|価格|가격|견적|見積");
   private static final Pattern OUTPUT_REQUEST = Pattern.compile(
       "(?iu)\\b(?:attach|send|provide|submit|include|reply|return|deliver|need|needs|require|requires|"
           + "joindre|joignez|envoyer|envoyez|transmettre|fournir|schicken|senden|anhängen|beifügen|"
-          + "benötigen|brauchen|übermitteln|ekleyin|ekler misiniz|ekleyebilir misiniz)\\b|请|請|需要");
+          + "benötigen|brauchen|übermitteln|ekleyin|ekler misiniz|ekleyebilir misiniz|envi\\p{L}*|mand\\p{L}*"
+          + "|invi\\p{L}*|stuur|sturen|wyślij|prześlij|przesłać|gönder\\p{L}*)\\b|请|請|需要|보내|送って|お送り|送付|添付");
+  // "as a PDF", "in PDF", "als PDF", "en PDF", "em PDF", "w formacie PDF", "PDF olarak", "PDF로", "PDFで".
   private static final Pattern REQUESTED_FORMAT = Pattern.compile(
-      "(?iu)\\b(?:as (?:a |an )?|in (?:a |an )?|format|only|als|im|en|au)\\h+"
+      "(?iu)\\b(?:as|in|format|only|als|im|en|au|em|w|in formato|w formacie|como)(?:\\h+(?:a|an|un|une|een))?\\h+"
           + "(?:\\.?)(?:pdf|docx|word|xlsx|xls|excel|spreadsheet|csv|txt|plain text|png|jpe?g)\\b"
+          + "|\\b(?:pdf|docx|word|xlsx|xls|excel|csv|png|jpe?g)\\h*(?:olarak|로|で|形式)"
           + "|(?:pdf|docx|word|xlsx|xls|excel|spreadsheet|csv|txt|plain text|png|jpe?g)[ -]+(?:file|format|offer|quote|quotation|datei|angebot)"
           + "|(?:pdf|docx|word|xlsx|xls|excel|csv|txt|png|jpe?g)\\h*(?:格式|文件|附件)|(?:格式|附件)\\h*(?:为|為)?\\h*(?:pdf|docx|word|xlsx|xls|excel|csv|txt|png|jpe?g)");
   private static final Pattern INBOUND_REQUEST = Pattern.compile(
       "(?iu)\\b(?:rfq|quotation request|quote request|our request|find attached|please find|"
           + "we (?:have )?attached|vous trouverez|anbei)\\b|随附|隨附");
-  private static final Pattern EXPLICIT_XLSX = Pattern.compile("(?iu)\\bxlsx\\b");
+  // A sentence that only names formats and asks for them: "PDF and Excel please."
+  private static final String FORMAT_NAME = "(?:pdf|docx|word|xlsx|xls|excel|csv|png|jpe?g)";
+  private static final Pattern FORMATS_PLEASE = Pattern.compile(
+      "(?iu)\\h*(?:(?:as|in)\\h+(?:an?\\h+)?)?" + FORMAT_NAME + "(?:\\h*(?:,|and|&|und|et|y|e|or|oder|ou|o|en)\\h*"
+          + FORMAT_NAME + ")*(?:\\h+(?:files?|format|attachments?))?\\h*,?\\h*(?:please|pls|bitte|svp|s['’]il vous"
+          + " plaît|por favor|per favore|graag|proszę|lütfen)[.!]?\\h*");
+  private static final Pattern EXPLICIT_XLSX =Pattern.compile("(?iu)\\bxlsx\\b");
   private static final Pattern PLAIN_EMAIL = Pattern.compile(
       "(?iu)\\b(?:in (?:the )?(?:email|mail) body|no attachments?|without attachments?|sans pièce jointe)\\b"
           + "|keine anhänge|无需附件|無需附件");
@@ -93,6 +104,11 @@ final class QuoteAttachments {
     var result = EnumSet.noneOf(Format.class);
     String text = subject + "\n" + MailParser.authoredText(body);
     for (var clause : text.split("\\R+|(?<=[.!?。！？])(?:\\h+|(?=\\p{IsHan}))")) {
+      if (FORMATS_PLEASE.matcher(clause).matches()) {
+        for (var format : Format.values())
+          if (format.mention.matcher(clause).find()) result.add(format);
+        continue;
+      }
       if (!OFFER.matcher(clause).find() || PLAIN_EMAIL.matcher(clause).find()) continue;
       boolean formatRequirement = REQUESTED_FORMAT.matcher(clause).find();
       if (!OUTPUT_REQUEST.matcher(clause).find() && !formatRequirement) continue;
