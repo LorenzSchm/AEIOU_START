@@ -28,8 +28,11 @@ class RfqGateway {
       dimensions and piece counts. Use 0.45359237 kg per pound and 0.028316846592 cubic metres per
       cubic foot. Preserve exact totals and do not round conversions. Leave uncertain facts null.
       For pickup, report the two-digit German postcode zone and leave origin null if only a postcode
-      is given. A customer who explicitly delivers to the airport does not request pickup. Ignore
-      their signature address.
+      is given. Origin and destination are airport codes, never a postcode. A customer who explicitly
+      delivers to the airport does not request pickup. Ignore their signature address.
+      Set preference to "cheapest" or "fastest", inferred in any language and from implicit wording:
+      price deciding the choice means cheapest, speed or arrival as soon as possible means fastest.
+      Otherwise use null; a hard deadline alone is not a preference.
       For several lots on one air waybill, add up every lot: multiply per-piece ("each") gross weights
       and dimensions by that lot's piece count and add lot totals as given. Never use net weight.
       Set needs_review for non-RFQs, unclear alternatives, special handling or conflicting details.
@@ -185,6 +188,8 @@ class RfqGateway {
   private final ObjectMapper json;
   private final Clock clock;
   private final boolean standardExtraction;
+  // Set once the gateway refuses the enum and pattern constraints, so later parses skip the retry.
+  private volatile boolean constrainedSchemaRejected;
 
   RfqGateway(
       FiveU api,
@@ -540,18 +545,23 @@ class RfqGateway {
     return text.substring(0, Math.min(limit, text.length()));
   }
 
-  private static Map<String, Object> extractionSchema(boolean standard, boolean withReplyLanguage) {
-    var text = Map.of("type", List.of("string", "null"));
+  static Map<String, Object> extractionSchema(boolean standard, boolean withReplyLanguage, boolean constrained) {
+    Map<String, Object> text = Map.of("type", List.of("string", "null"));
     var number = Map.of("type", List.of("number", "null"));
     var flag = Map.of("type", "boolean");
+    // Strict structured outputs support enum and pattern on strings. A nullable enum must list null.
+    Map<String, Object> airport = constrained ? Map.of("type", List.of("string", "null"), "pattern", "^[A-Z]{3}$") : text;
+    Map<String, Object> zone = constrained ? Map.of("type", List.of("string", "null"), "pattern", "^[0-9]{2}$") : text;
+    Map<String, Object> preference = constrained
+        ? Map.of("type", List.of("string", "null"), "enum", Arrays.asList("cheapest", "fastest", null)) : text;
     Map<String, Object> fields = new LinkedHashMap<>();
-    fields.put("origin", text);
-    fields.put("destination", text);
+    fields.put("origin", airport);
+    fields.put("destination", airport);
     fields.put("weight_kg", number);
     fields.put("volume_cbm", number);
-    fields.put("preference", text);
+    fields.put("preference", preference);
     fields.put("pickup_required", flag);
-    fields.put("pickup_zone", text);
+    fields.put("pickup_zone", zone);
     fields.put("needs_review", flag);
     if (standard) {
       fields.put("ready_date", text);
@@ -818,10 +828,11 @@ class RfqGateway {
     boolean withLanguage = api.directLlm();
     String languageInstructions = withLanguage ? REPLY_LANGUAGE_PROMPT : "";
     try {
-      var result = standard
-          ? completeQuote(STANDARD_RFQ_PROMPT + languageInstructions, ledger.write(Map.of("customer_message", bounded(text),
-              "java_candidate", local.shipment())), extractionSchema(true, withLanguage), 320)
-          : completeQuote(PROMPT + languageInstructions, bounded(text), extractionSchema(false, withLanguage), 240);
+      String prompt = (standard ? STANDARD_RFQ_PROMPT : PROMPT) + languageInstructions;
+      String input = standard
+          ? ledger.write(Map.of("customer_message", bounded(text), "java_candidate", local.shipment()))
+          : bounded(text);
+      var result = extract(prompt, input, standard, withLanguage);
       var parsed = standard ? validateStandard(result, mail, local, truncated) : validate(result, mail, truncated);
       ledger
           .transactions()
@@ -959,6 +970,29 @@ class RfqGateway {
     return text.substring(0, Math.min(INPUT_CHARS, text.length()));
   }
 
+  /**
+   * Extracts with the enum and pattern constraints. Should the gateway refuse them (a client error other than auth or rate limit), fall
+   * back once to plain nullable strings and keep using those; validate() normalises either result.
+   */
+  private JsonNode extract(String prompt, String input, boolean standard, boolean withLanguage)
+      throws com.fasterxml.jackson.core.JsonProcessingException {
+    int tokens = standard ? 320 : 240;
+    if (constrainedSchemaRejected)
+      return completeQuote(prompt, input, extractionSchema(standard, withLanguage, false), tokens);
+    try {
+      return completeQuote(prompt, input, extractionSchema(standard, withLanguage, true), tokens);
+    } catch (HttpClientErrorException ex) {
+      int status = ex.getStatusCode().value();
+      // Authentication and rate limits are not about the schema; any other refusal (400, 422, ...)
+      // falls back to the plain schema so a live request never stalls on the constraints.
+      if (status == 401 || status == 403 || status == 429) throw ex;
+      log.warn("The gateway refused the constrained RFQ schema (HTTP {}); retrying with plain strings", status);
+      var result = completeQuote(prompt, input, extractionSchema(standard, withLanguage, false), tokens);
+      constrainedSchemaRejected = true;
+      return result;
+    }
+  }
+
   private JsonNode complete(String prompt, String input, Map<String, Object> schema, int tokens)
       throws com.fasterxml.jackson.core.JsonProcessingException {
     return complete(prompt, input, schema, tokens, api::parseRfq);
@@ -1084,7 +1118,8 @@ class RfqGateway {
     var known = local.shipment();
     boolean pickup = flag(response, "pickup_required");
     boolean review = flag(response, "needs_review");
-    String zone = text(response, "pickup_zone"), origin = text(response, "origin");
+    String zone = matching(text(response, "pickup_zone"), PICKUP_ZONE);
+    String origin = matching(text(response, "origin"), AIRPORT);
     if (known.origin() != null && known.pickupZone() == null && MailParser.selfDelivery(body)
         && !MailParser.requestsPickup(subject, body)) {
       pickup = false;
@@ -1110,13 +1145,9 @@ class RfqGateway {
         if (catalog.zones.containsKey(derived)) zone = derived;
       }
     }
-    String preference = text(response, "preference");
+    // A valid model preference wins; Java's word lists are only the offline fallback.
+    String preference = preference(text(response, "preference"));
     if (preference == null) preference = known.preference();
-    if (preference != null && known.preference() != null) {
-      String phrase = preference.strip().toLowerCase(Locale.ROOT);
-      if (phrase.startsWith(known.preference() + " ")
-          && source.toLowerCase(Locale.ROOT).contains(phrase)) preference = known.preference();
-    }
     // The model sometimes reports the pickup postcode (e.g. "81843") as the origin. With a known
     // pickup zone, anything that is not a departure airport becomes that zone's airport.
     if (zone != null && catalog.zones.containsKey(zone)
@@ -1124,7 +1155,7 @@ class RfqGateway {
       origin = catalog.zones.get(zone);
     // A null extraction means uncertain; keep an airport code Java found explicitly in the email.
     if (origin == null && !pickup && zone == null && known.pickupZone() == null) origin = known.origin();
-    String destination = text(response, "destination");
+    String destination = matching(text(response, "destination"), AIRPORT);
     if (destination == null) destination = known.destination();
     // Consolidated lot totals are computed deterministically in Java from the lot lines.
     boolean lotTotals = MailParser.consolidatedLots(body).isPresent()
@@ -1156,9 +1187,34 @@ class RfqGateway {
     return new MailParser.Parsed(s, issue);
   }
 
+  private static final Pattern AIRPORT = Pattern.compile("[A-Z]{3}");
+  private static final Pattern PICKUP_ZONE = Pattern.compile("[0-9]{2}");
+  private static final Pattern FASTEST_TEXT = Pattern.compile(
+      "\\b(?:fast(?:er|est)?|quick(?:er|est)?|express|speed|urgent|soonest|earliest|shortest)\\b");
+  private static final Pattern CHEAPEST_TEXT = Pattern.compile("\\b(?:cheap(?:er|est)?|lowest (?:price|cost|rate)"
+      + "|low[- ]cost|(?:most )?economical|economy|best price|budget)\\b");
+
+  /** A value the strict schema should have constrained, upper-cased, or null when it does not fit. */
+  private static String matching(String value, Pattern pattern) {
+    if (value == null) return null;
+    String normalised = value.strip().toUpperCase(Locale.ROOT);
+    return pattern.matcher(normalised).matches() ? normalised : null;
+  }
+
+  /** Maps a model's free-text preference ("fastest option", "lowest price") to cheapest or fastest. */
+  static String preference(String value) {
+    if (value == null) return null;
+    String phrase = value.strip().toLowerCase(Locale.ROOT);
+    if (phrase.equals("cheapest") || phrase.equals("fastest")) return phrase;
+    boolean fast = FASTEST_TEXT.matcher(phrase).find(), cheap = CHEAPEST_TEXT.matcher(phrase).find();
+    return fast == cheap ? null : fast ? "fastest" : "cheapest";
+  }
+
   private static BigDecimal preserveConvertedTotal(BigDecimal exact, BigDecimal extracted, boolean converted) {
+    // Models convert imperial units with float noise (342.99999983 kg, 1.541 cbm for live #53794).
     return converted && exact != null && extracted != null
-        && exact.setScale(2, java.math.RoundingMode.HALF_UP).compareTo(extracted) == 0 ? exact : extracted;
+        && exact.setScale(2, java.math.RoundingMode.HALF_UP)
+            .compareTo(extracted.setScale(2, java.math.RoundingMode.HALF_UP)) == 0 ? exact : extracted;
   }
 
   /**

@@ -4378,12 +4378,15 @@ class WaveWorkerTest {
     assertEquals("4.677", Shipment.displayCbm(new BigDecimal("4.6768")));
   }
 
-  @Test
-  void live53794QuotesTheCheapestBalancedRouteThatMeetsTheDeadlineWithoutAsking() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void live53794QuotesTheCheapestBalancedRouteThatMeetsTheDeadlineWithoutAsking(boolean standard) throws Exception {
     // Round 179: no preference question should be asked; Xenon 873.05 (arrival 2026-12-02) was too_low.
-    recordedExtraction("""
+    restart(false, standard);
+    recordedExtraction(standardResult("""
         {"origin":"51871","destination":"ORD","weight_kg":342.99999983,"volume_cbm":1.5409999999999997,\
-        "preference":null,"pickup_required":true,"pickup_zone":"51","needs_review":false,"reply_language":"en"}""");
+        "preference":null,"pickup_required":true,"pickup_zone":"51","needs_review":false,"reply_language":"en"}""",
+        standard, "\"2026-11-27\"", "\"2026-11-29\"", true));
     receive(7, "weidner-spielwaren@hackloop.mail", "Air freight quote to ORD", "Hi there,\n\nHope your week’s going well. Our buyer in Chicago, US is importing some furniture samples from us in Germany, and I’m arranging the flight for their import. Could you send me an all-in air freight quote in EUR, including a truck you arrange to collect the shipment from our site in 51871 (Bergisch Gladbach), Germany, and take it to the departure airport?\n\nThe 5 pieces will be ready for pickup on 2026-11-27, weigh 756.19 lb gross, and take up 54.39 cubic feet. They need to be at ORD by 2026-11-29 at the latest. As long as the shipment arrives by then, price is what will decide which option we book.\n\nCould you attach the offer as a PDF when you reply? Our purchasing department needs it for filing.\n\nThanks for looking into this!\n\nCheers,\nKlaus Weidner\nWeidner Spielwaren GmbH, Nuremberg", null);
     var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
     assertEquals("cheapest", shipment.preference());
@@ -4431,11 +4434,14 @@ class WaveWorkerTest {
     assertTrue(body.contains("2026-11-29"), body);
   }
 
-  @Test
-  void live54117UsesThePickupAirportWhenTheExtractionReportsThePostcodeAsOrigin() {
-    recordedExtraction("""
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void live54117UsesThePickupAirportWhenTheExtractionReportsThePostcodeAsOrigin(boolean standard) throws Exception {
+    restart(false, standard);
+    recordedExtraction(standardResult("""
         {"origin":"81843","destination":"SGN","weight_kg":1951,"volume_cbm":13.67,"preference":"fastest",\
-        "pickup_required":true,"pickup_zone":"81","needs_review":false,"reply_language":"tr"}""");
+        "pickup_required":true,"pickup_zone":"81","needs_review":false,"reply_language":"tr"}""",
+        standard, "\"2026-11-28\"", "null", false));
     receive(7, "lindqvist-medtech@hackloop.mail", "RE: FW: BRUSSELS AIRPORT - ASU / 225 CTN 390 KGS", "Merhaba,\n\nSGN (Ho Chi Minh City, VN) varışlı tekstil numuneleri için en hızlı seçeneği istiyoruz. Gönderi 7 parça, brüt 1951 kg ve 13.67 cbm.\n\nYük 2026-11-28 tarihinde 81843 (Munich South), Germany adresindeki tesisimizden alıma hazır. Havalimanına kamyon nakliyesini de siz organize edecek şekilde, tüm masraflar dahil EUR teklifinizi iletebilir misiniz?\n\nSara\nLindqvist Medtech\n\n\n-----Original Message-----\nSent: 2026-10-16\nSubject: BRUSSELS AIRPORT - ASU / 225 CTN 390 KGS\n\nDear team,\n\npls quote air freight ex BRUSSELS AIRPORT to ASU:\n225 CTN / 390 KGS / 15.8 CBM, automotive sensors\nFCA, cargo ready next week.\n\nThanks", null);
     worker.work();
 
@@ -4493,5 +4499,131 @@ class WaveWorkerTest {
     worker.work();
     assertNotEquals("review", ledger.mail(7).get("stage"),
         () -> ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=7", String.class));
+  }
+
+  /**
+   * A recorded live extraction, plus the date fields the standard schema requires. The live parses
+   * ran without them because Java's own parse was incomplete at the time.
+   */
+  private static String standardResult(String recorded, boolean standard, String ready, String arriveBy,
+      boolean deadline) {
+    return standard ? recorded.replaceFirst("}$", ",\"ready_date\":%s,\"arrive_by\":%s,\"arrival_deadline_requested\":%s}"
+        .formatted(ready, arriveBy, deadline)) : recorded;
+  }
+
+  private static final String LIVE_56174_SUBJECT = "FRA–TLV hava kargo teklifi";
+  private static final String LIVE_56174_BODY = "Merhaba,\n\nUmarım haftanız iyi geçiyordur. Frankfurt (FRA) çıkışlı, Tel Aviv, IL (TLV) varışlı bir gönderimiz için hava kargo teklifi rica ediyorum.\n\nSpor ekipmanları 2026-11-26 tarihinde hazır olacak. Gönderiyi Frankfurt (FRA) havalimanına biz teslim edeceğiz. Toplam 7 parça, brüt ağırlığı 324 kg ve hacmi 1.96 cbm.\n\nBu gönderi için en hızlı seçeneği istiyoruz. En erken hangi uçuşa yetişebileceğimizi ve TLV’ye tahmini varış zamanını paylaşabilir misiniz? Teklifinizi tüm masraflar dahil EUR olarak iletebilirseniz sevinirim.\n\nŞimdiden teşekkürler, iyi çalışmalar!\n\nThanks a lot and have a lovely day!\nPetra Hofmann\nExport Desk, Hofmann Textilwerk KG";
+  private static final String LIVE_56174_EXTRACTION = """
+      {"origin":"FRA","destination":"TLV","weight_kg":324,"volume_cbm":1.96,"preference":"fastest option",\
+      "pickup_required":false,"pickup_zone":null,"needs_review":false,"reply_language":"tr"}""";
+
+  @Test
+  void live56174FreeTextFastestFromTheGatewayIsNotSentToReview() throws Exception {
+    // Live #56174 went to review ("Confirm cheapest or fastest service.") because the model returned
+    // "fastest option" instead of the enum value.
+    restart(false, true);
+    recordedExtraction(standardResult(LIVE_56174_EXTRACTION, true, "\"2026-11-26\"", "null", false));
+    receive(7, "hofmann-textilwerk@hackloop.mail", LIVE_56174_SUBJECT, LIVE_56174_BODY, null);
+    worker.work();
+
+    assertEquals("collecting", ledger.mail(7).get("stage"), () -> String.valueOf(ledger.mail(7)));
+    assertTrue(ledger.jdbc().queryForList("SELECT reason FROM wave_case WHERE id=7", String.class).stream()
+        .allMatch(Objects::isNull));
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("fastest", s.preference());
+    assertEquals("FRA", s.origin());
+    assertEquals("TLV", s.destination());
+  }
+
+  @Test
+  void theGatewayPreferenceWinsWhenJavaFindsNone() throws Exception {
+    // The same request in wording Java's Turkish phrases miss: only the model knows it is fastest.
+    restart(false, true);
+    String body = LIVE_56174_BODY.replace("Bu gönderi için en hızlı seçeneği istiyoruz.",
+        "Gönderinin TLV’ye mümkün olan en kısa sürede ulaşması bizim için önemli.");
+    assertNull(MailParser.request(LIVE_56174_SUBJECT, body, false, catalog).shipment().preference());
+    recordedExtraction(LIVE_56174_EXTRACTION);
+    receive(7, "hofmann-textilwerk@hackloop.mail", LIVE_56174_SUBJECT, body, null);
+    worker.work();
+
+    assertEquals("collecting", ledger.mail(7).get("stage"), () -> String.valueOf(ledger.mail(7)));
+    assertEquals("fastest", ledger.read(ledger.mail(7).get("fields"), Shipment.class).preference());
+  }
+
+  @Test
+  void theExtractionRequestConstrainsPreferenceAirportsAndPickupZone() throws Exception {
+    restart(false, true);
+    var payloads = new ArrayList<JsonNode>();
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      var payload = mapper.valueToTree(call.getArgument(0, Map.class));
+      payloads.add(payload);
+      return gatewayResponse("quote_check".equals(payload.at("/response_format/json_schema/name").asText())
+          ? "{\"contradiction\":false}"
+          : standardResult(LIVE_56174_EXTRACTION, true, "\"2026-11-26\"", "null", false));
+    });
+    receive(7, "hofmann-textilwerk@hackloop.mail", LIVE_56174_SUBJECT, LIVE_56174_BODY, null);
+    worker.work();
+
+    var schema = payloads.getFirst().at("/response_format/json_schema");
+    assertEquals("standard_freight_rfq", schema.path("name").asText());
+    assertTrue(schema.path("strict").asBoolean());
+    var properties = schema.at("/schema/properties");
+    assertEquals(mapper.readTree("[\"cheapest\",\"fastest\",null]"), properties.at("/preference/enum"));
+    assertEquals(mapper.readTree("[\"string\",\"null\"]"), properties.at("/preference/type"));
+    assertEquals("^[A-Z]{3}$", properties.at("/origin/pattern").asText());
+    assertEquals("^[A-Z]{3}$", properties.at("/destination/pattern").asText());
+    assertEquals("^[0-9]{2}$", properties.at("/pickup_zone/pattern").asText());
+    assertEquals("collecting", ledger.mail(7).get("stage"));
+  }
+
+  @Test
+  void aRefusedConstrainedSchemaFallsBackToPlainStrings() throws Exception {
+    restart(false, true);
+    var schemas = new ArrayList<JsonNode>();
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      var schema = mapper.valueToTree(call.getArgument(0, Map.class)).at("/response_format/json_schema");
+      if ("quote_check".equals(schema.path("name").asText())) return gatewayResponse("{\"contradiction\":false}");
+      schemas.add(schema);
+      if (schema.at("/schema/properties/preference").has("enum"))
+        throw HttpClientErrorException.create(HttpStatus.BAD_REQUEST, "Bad schema", new HttpHeaders(), new byte[0], null);
+      return gatewayResponse(standardResult(LIVE_56174_EXTRACTION, true, "\"2026-11-26\"", "null", false));
+    });
+    receive(7, "hofmann-textilwerk@hackloop.mail", LIVE_56174_SUBJECT, LIVE_56174_BODY, null);
+    worker.work();
+
+    assertEquals(2, schemas.size());
+    assertFalse(schemas.getLast().at("/schema/properties/origin").has("pattern"));
+    assertEquals("collecting", ledger.mail(7).get("stage"), () -> String.valueOf(ledger.mail(7)));
+    assertEquals("fastest", ledger.read(ledger.mail(7).get("fields"), Shipment.class).preference());
+  }
+
+  @Test
+  void aConstrainedSchemaRefusedWith422AlsoFallsBack() throws Exception {
+    restart(false, true);
+    var schemas = new ArrayList<JsonNode>();
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      var schema = mapper.valueToTree(call.getArgument(0, Map.class)).at("/response_format/json_schema");
+      if ("quote_check".equals(schema.path("name").asText())) return gatewayResponse("{\"contradiction\":false}");
+      schemas.add(schema);
+      if (schema.at("/schema/properties/preference").has("enum"))
+        throw HttpClientErrorException.create(HttpStatus.UNPROCESSABLE_ENTITY, "Bad schema", new HttpHeaders(), new byte[0], null);
+      return gatewayResponse(standardResult(LIVE_56174_EXTRACTION, true, "\"2026-11-26\"", "null", false));
+    });
+    receive(7, "hofmann-textilwerk@hackloop.mail", LIVE_56174_SUBJECT, LIVE_56174_BODY, null);
+    worker.work();
+
+    assertEquals(2, schemas.size());
+    assertFalse(schemas.getLast().at("/schema/properties/origin").has("pattern"));
+    assertEquals("collecting", ledger.mail(7).get("stage"), () -> String.valueOf(ledger.mail(7)));
+    assertEquals("fastest", ledger.read(ledger.mail(7).get("fields"), Shipment.class).preference());
+  }
+
+  @ParameterizedTest
+  @CsvSource(nullValues = "NULL", value = {
+      "fastest,fastest", "Fastest option,fastest", "quickest,fastest", "express,fastest",
+      "cheapest option,cheapest", "lowest price,cheapest", "most economical,cheapest", "cheapest,cheapest",
+      "standard,NULL", "cheapest or fastest,NULL", "NULL,NULL"})
+  void freeTextPreferencesNormaliseToTheServiceEnum(String extracted, String expected) {
+    assertEquals(expected, RfqGateway.preference(extracted));
   }
 }
