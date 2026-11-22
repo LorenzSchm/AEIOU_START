@@ -2125,19 +2125,20 @@ class WaveWorkerTest {
     verify(upstream, times(1)).parseRfq(anyMap());
   }
 
+  // Brief: "Among carrier bids, the right one is the most balanced: price and speed weigh 50/50."
+  // Rows 1-2 are live rounds 80 (req 22569) and 71 (req 19873), rejected too_low with the 29 h truck.
   @ParameterizedTest
   @CsvSource({
-      "82.92, 29, 169.72, 8, true",
-      "143.22, 29, 273.09, 8, true",
-      "60.00, 20, 100.00, 8, true",
-      "60.01, 20, 100.00, 8, false",
-      "60.00, 19, 100.00, 8, false",
-      "60.00,   , 100.00, 8, false",
-      "60.00, 20, 100.00,  , false"
+      "82.92, 29, 169.72, 8, Domblick Kurierdienst",
+      "143.22, 29, 273.09, 8, Domblick Kurierdienst",
+      "60.00, 20, 100.00, 8, Domblick Kurierdienst",
+      "60.00, 12, 100.00, 8, Vogelsberg Haulage",
+      "60.00,   , 100.00, 8, Domblick Kurierdienst",
+      "60.00, 20, 100.00,  , Vogelsberg Haulage"
   })
-  void holdsOnlyUnusuallyCheapAndSlowPickupBids(String selectedEur, Integer selectedHours,
-      String alternativeEur, Integer alternativeHours, boolean hold) throws Exception {
-    restart(hold); // A flagged case goes to review even when counteroffers are enabled.
+  void quotesTheMostBalancedPickupBidWithoutOperatorReview(String vogelsbergEur, Integer vogelsbergHours,
+      String domblickEur, Integer domblickHours, String expected) throws Exception {
+    restart(false);
     receive(7, "buyer@hackloop.mail", "RFQ FRA to DEL",
         "Please quote the cheapest air freight from FRA to DEL for 356 kg and 1.58 cbm. "
             + "Pickup from postcode 36563.", null);
@@ -2145,38 +2146,23 @@ class WaveWorkerTest {
         BigDecimal.valueOf(356), "portal", "FRA-DEL", START.plusSeconds(900));
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(air), true));
     worker.work();
-    replyWithTruckBid(8, "vogelsberg-haulage@hackloop.mail", selectedEur, selectedHours);
-    replyWithTruckBid(9, "domblick-kurierdienst@hackloop.mail", alternativeEur, alternativeHours);
+    replyWithTruckBid(8, "vogelsberg-haulage@hackloop.mail", vogelsbergEur, vogelsbergHours);
+    replyWithTruckBid(9, "domblick-kurierdienst@hackloop.mail", domblickEur, domblickHours);
     replyWithTruckBid(10, "bodenseefracht@hackloop.mail", "400.00", null);
-    int invitations = outbound.size();
     clock.current = START.plusSeconds(76);
     worker.work();
 
     var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
-    assertEquals("Vogelsberg Haulage", draft.trucker());
-    assertEquals(new BigDecimal("815.24").add(new BigDecimal(selectedEur)), draft.offer().totalEur());
-    if (hold) {
-      assertNull(ledger.delivery("quote:7"));
-      assertEquals(invitations, outbound.size());
-      assertEquals("operator review", ledger.mail(7).get("stage"));
-      assertEquals(1, draft.notes().size());
-      var note = draft.notes().getFirst();
-      assertTrue(note.contains("Vogelsberg Haulage quoted EUR " + selectedEur));
-      assertTrue(note.contains("Domblick Kurierdienst at EUR " + alternativeEur));
-      assertEquals(note, ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=7", String.class));
-      restart();
-      worker.work();
-      assertNull(ledger.delivery("quote:7"));
-      worker.sendQuote(7, draft.revision());
-      assertFalse(outbound.getLast().get("body").toString().contains("Pickup bid needs review"));
-    } else {
-      assertTrue(draft.notes().isEmpty());
-    }
+    assertEquals(expected, draft.trucker());
+    var pickup = expected.startsWith("Vogelsberg") ? vogelsbergEur : domblickEur;
+    assertEquals(new BigDecimal("815.24").add(new BigDecimal(pickup)), draft.offer().totalEur());
+    assertTrue(draft.notes().isEmpty());
     assertEquals("sent", ledger.delivery("quote:7"));
+    assertFalse(outbound.getLast().get("body").toString().contains("Pickup bid needs review"));
   }
 
   @Test
-  void round140ChecksFasterPickupBidsBeyondTheSecondCheapest() {
+  void round140QuotesTheBalancedPickupInsteadOfTheCheapestSlowOne() {
     receive(7, "buyer@hackloop.mail", "Air freight quote to RUH", """
         Please quote the cheapest air freight to RUH with truck pickup from postcode 45806,
         ready on 2026-11-28. The shipment has a gross weight of 3344.42 lb and a volume of 295.24 cubic feet.
@@ -2197,11 +2183,37 @@ class WaveWorkerTest {
     clock.current = START.plusSeconds(76);
     worker.work();
 
-    assertEquals("operator review", ledger.mail(7).get("stage"));
-    assertNull(ledger.delivery("quote:7"));
+    // Live round 140 (req 41536) quoted Bodenseefracht 131.85 EUR / 31 h at 3029.32 and was too_low.
+    assertEquals("sent", ledger.delivery("quote:7"));
     var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
-    assertEquals(new BigDecimal("3029.32"), draft.offer().totalEur());
-    assertTrue(draft.notes().getFirst().contains("Grautal Trucking at EUR 386.89 and 7 hours"));
+    assertEquals("Grautal Trucking", draft.trucker());
+    assertEquals(new BigDecimal("3284.36"), draft.offer().totalEur());
+  }
+
+  // Live round 53 (req 14293): the 132.02 EUR bid without a transit time was quoted and too_low.
+  @Test
+  void round53BalancedPickupIgnoresTheCheapBidWithoutTransit() {
+    receive(7, "buyer@hackloop.mail", "Air freight quote to ORD", """
+        Please quote the cheapest air freight to ORD with truck pickup from postcode 93938.
+        The shipment has a gross weight of 1012 kg and a volume of 4.06 cbm.
+        """, null);
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer(
+        "Xenon Cargo Airlines", 3, new BigDecimal("2590.72"), shipment.chargeableKg(), "portal", "ORD-53",
+        START.plusSeconds(900))), true));
+    for (String carrier : List.of("elbkante-logistik", "isarwelle-spedition", "neckarstrom-kurier")) {
+      worker.invite(7, shipment, catalog.contact(carrier + "@hackloop.mail").orElseThrow());
+    }
+    replyWithTruckBid(8, "elbkante-logistik@hackloop.mail", "132.02", null);
+    replyWithTruckBid(9, "isarwelle-spedition@hackloop.mail", "178.94", 33);
+    replyWithTruckBid(10, "neckarstrom-kurier@hackloop.mail", "297.62", 5);
+    clock.current = START.plusSeconds(76);
+    worker.work();
+
+    assertEquals("sent", ledger.delivery("quote:7"));
+    var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("Neckarstrom Kurier", draft.trucker());
+    assertEquals(new BigDecimal("2888.34"), draft.offer().totalEur());
   }
 
   private void replyWithTruckBid(long id, String email, String euros, Integer hours) {
