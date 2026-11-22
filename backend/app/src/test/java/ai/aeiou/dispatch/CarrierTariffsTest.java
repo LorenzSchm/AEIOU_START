@@ -125,6 +125,65 @@ class CarrierTariffsTest {
         .filter(sheet -> sheet.id() == 2).findFirst().orElseThrow().state());
   }
 
+  @Test
+  void reviewersCanCorrectASheetBeforeApprovingItButNeverAfter() throws Exception {
+    var catalog = new DispatchApplication().catalog(null);
+    var ledger = new Ledger(directory.resolve("revise.sqlite3").toString(), new ObjectMapper());
+    var now = Instant.parse("2026-11-21T22:00:00Z");
+    var manager = new CarrierTariffs(ledger, catalog, mock(FiveU.class),
+        Clock.fixed(now, ZoneOffset.UTC), mock(WriterLease.class));
+    var carrier = "Yellowtail Air Freight";
+    var misread = new ai.aeiou.freight.Catalog.Tariff(carrier, "CGN", "SYD", 3, BigDecimal.ZERO,
+        BigDecimal.ZERO, BigDecimal.ZERO, new TreeMap<>(Map.of(0, BigDecimal.valueOf(30))));
+    ledger.jdbc().update("""
+        INSERT INTO tariff_sheet(id,message_id,attachment_id,carrier,filename,received,state,issue,valid_from,valid_to,rates)
+        VALUES(1,11,11,?,'misread.pdf','2026-11-20T09:00:00Z','blocked','The carrier''s validity period has expired.',
+          '2025-11-01','2025-11-30',?)
+        """, carrier, ledger.write(List.of(misread)));
+    var lane = new CarrierTariffs.Lane("cgn", "syd", 3, BigDecimal.ZERO, new BigDecimal("0.10"),
+        BigDecimal.ZERO, Map.of(0, new BigDecimal("3.00"), 100, new BigDecimal("2.50")));
+
+    // Invalid corrections are refused with a reason and change nothing.
+    for (var bad : List.of(
+        new CarrierTariffs.Revision("2026-11-30", "2026-11-01", List.of(lane)),
+        new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of()),
+        new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of(lane, lane)),
+        new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of(new CarrierTariffs.Lane(
+            "CGN", "XXX", 3, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, Map.of(0, BigDecimal.ONE)))),
+        new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of(new CarrierTariffs.Lane(
+            "CGN", "SYD", 3, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, Map.of(45, BigDecimal.ONE)))),
+        new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of(new CarrierTariffs.Lane(
+            "CGN", "SYD", 3, new BigDecimal("-1"), BigDecimal.ZERO, BigDecimal.ZERO, Map.of(0, BigDecimal.ONE))))))
+      assertThrows(IllegalArgumentException.class, () -> manager.revise(1, bad));
+    assertEquals("2025-11-30", manager.queue().sheets().getFirst().validTo());
+
+    // Fixing the dates and the misread price returns the sheet to review, keeping the carrier's values.
+    var revised = manager.revise(1, new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of(lane)));
+    assertEquals("pending", revised.state());
+    assertNull(revised.issue());
+    assertEquals(now.toString(), revised.editedAt());
+    assertEquals("2025-11-30", revised.original().validTo());
+    assertEquals(List.of(misread), revised.original().rates());
+    var stored = revised.rates().getFirst();
+    assertEquals(carrier, stored.airline());
+    assertEquals("CGN", stored.origin());
+    assertEquals(new BigDecimal("2.50"), stored.breaks().get(100));
+
+    // A second correction keeps the first original, and nothing prices quotes until it is approved.
+    manager.revise(1, new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of(lane)));
+    assertEquals("2025-11-30", manager.queue().sheets().getFirst().original().validTo());
+    var shipment = new Shipment("CGN", "SYD", BigDecimal.valueOf(100), BigDecimal.ZERO,
+        "cheapest", null, null, 0);
+    var today = LocalDate.of(2026, 11, 21);
+    assertTrue(ledger.approvedTariffs(shipment, today, today).isEmpty());
+    assertEquals("approved", manager.decide(1, "approve"));
+    assertEquals(List.of(stored), ledger.approvedTariffs(shipment, today, today));
+
+    // Once approved, prices are never edited in place.
+    assertThrows(WaveWorker.Conflict.class,
+        () -> manager.revise(1, new CarrierTariffs.Revision("2026-11-01", "2026-11-30", List.of(lane))));
+  }
+
   private static Map<String, Object> mail(long id, long attachmentId, Instant received) {
     return Map.of("id", id, "from", "yellowtail-air-freight@hackloop.mail",
         "subject", "Monthly rate update", "body", "Updated air export tariffs attached.",

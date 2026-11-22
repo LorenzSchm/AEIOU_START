@@ -76,6 +76,12 @@ class DispatchController {
     return Map.of("state", tariffs.decide(id, input.decision()));
   }
 
+  /** Corrects the validity and lane prices of a sheet under review; it then awaits approval again. */
+  @PostMapping(path = "/tariff-sheets/{id}/revision", consumes = MediaType.APPLICATION_JSON_VALUE)
+  CarrierTariffs.Sheet tariffRevision(@PathVariable long id, @RequestBody CarrierTariffs.Revision input) {
+    return tariffs.revise(id, input);
+  }
+
   @PostMapping("/messages/{id}/price")
   WaveWorker.Draft price(@PathVariable long id, @RequestBody Price input) {
     return wave.price(id, input.shipment(), input.carrierBid());

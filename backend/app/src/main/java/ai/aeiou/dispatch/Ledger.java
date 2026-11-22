@@ -83,6 +83,9 @@ class Ledger {
           rates TEXT, retry_at INTEGER NOT NULL DEFAULT 0, decided_at TEXT,
           UNIQUE(message_id, attachment_id))
         """);
+    // Operator corrections during review: the carrier's values as read, kept on the first edit.
+    ensureColumn("tariff_sheet", "original", "TEXT");
+    ensureColumn("tariff_sheet", "edited_at", "TEXT");
     db.execute(
         "CREATE TABLE IF NOT EXISTS deliveries(action TEXT PRIMARY KEY,state TEXT NOT NULL,response"
             + " TEXT)");
