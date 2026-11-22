@@ -3,6 +3,8 @@ package ai.aeiou.dispatch;
 import ai.aeiou.freight.MailParser;
 import ai.aeiou.freight.Shipment;
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -39,11 +41,11 @@ final class QuoteChecks {
           + "([^,;.!?\\r\\n]{2,100})");
   private static final Pattern QUOTE_OR_KNOWN_SERVICE = pattern(
       "^(?:(?:all[ -]in |total |final )?(?:price|cost|rate|quote|quotation)\\b|"
-          + "(?:arranging |arrangement of |organizing )?(?:the |a )?(?:truck(?:ing)?|pickup|collection|"
+          + "(?:arrange |arranging |arrangement of |organizing )?(?:the |a )?(?:truck(?:ing)?|pickup|collection|"
           + "air freight|(?:cargo |freight |transport )?insurance|policy fee)\\b|"
           + "(?:delivery|transport) to (?:the |our |your )?(?:departure )?airport\\b|"
-          + "(?:(?:estimated|planned|expected|earliest|next)(?: available)? |available )?"
-          + "(?:transit|arrival|departure|delivery)(?: (?:times?|dates?))?\\b|"
+          + "(?:cargo acceptance cut[ -]?off\\b|(?:(?:estimated|planned|expected|scheduled|earliest|next)(?: available)? |available )?"
+          + "(?:transit|arrival|departure|delivery)(?: (?:times?|dates?))?\\b)|"
           + "(?:pdf|xlsx|xls|excel|word|docx|csv|txt|attachment|offer|carrier name|routing|"
           + "weight|volume|dimensions|service details|confirmation|all (?:fees|charges|costs))\\b)");
   private static final Pattern SCHEDULE = pattern(
@@ -53,6 +55,46 @@ final class QuoteChecks {
           + "business days only|working days only|weekend (?:pickup|collection|delivery) only|"
           + "(?:pickup|collection|depart(?:ure)?|arriv(?:e|al))\\b[^.!?;\\r\\n]{0,40}\\b"
           + "(?:by|at|before|after)\\h+(?:\\d{1,2}:\\d{2}|\\d{1,2}\\h*(?:am|pm))\\b)");
+  private static final Pattern SCHEDULE_INFORMATION = pattern(
+      "(?:^|(?<=[.!?])\\h+|\\R)\\h*(?:please (?:include|provide|confirm|share)|"
+          + "could you (?:please )?(?:include|provide|confirm|share))\\h+"
+          + "(?:(?:the )?(?:all[ -]in |total )?(?:price|rate|quote)(?: in EUR)?[,]?\\h+(?:and\\h+)?)?"
+          + "(?:the )?cargo acceptance cut[ -]?off(?: at [A-Z]{3})?,?\\h+(?:and )?(?:the )?"
+          + "scheduled arrival(?: (?:time|date))?(?: at [A-Z]{3})?\\h*(?=[.!?]|\\R|$)");
+  private static final String OFFSET_TIME = "(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2})?(?:Z|[+-]\\d{2}:\\d{2}))";
+  private static final Pattern CARRIER_CUTOFF = pattern("(?m)^\\h*Cargo acceptance cutoff:\\h*" + OFFSET_TIME + "\\h*$");
+  private static final Pattern CARRIER_ARRIVAL = pattern("(?m)^\\h*Scheduled arrival:\\h*" + OFFSET_TIME + "\\h*$");
+  private static final Pattern SCHEDULE_REPLY = pattern("(?m)^\\h*(?:Cargo acceptance cut[ -]?off|Scheduled arrival):");
+
+  record FlightSchedule(OffsetDateTime cutoff, OffsetDateTime arrival) {}
+
+  static boolean mentionsFlightSchedule(String authoredReply) {
+    return SCHEDULE_REPLY.matcher(authoredReply).find();
+  }
+
+  static FlightSchedule flightSchedule(String carrierReply) {
+    String body = MailParser.authoredText(carrierReply);
+    var cutoff = CARRIER_CUTOFF.matcher(body).results().map(match -> match.group(1)).distinct().toList();
+    var arrival = CARRIER_ARRIVAL.matcher(body).results().map(match -> match.group(1)).distinct().toList();
+    if (cutoff.size() != 1 || arrival.size() != 1) return null;
+    String conditions = CARRIER_ARRIVAL.matcher(CARRIER_CUTOFF.matcher(body).replaceAll("")).replaceAll("");
+    if (conditionalCarrier(conditions)) return null;
+    try {
+      var from = OffsetDateTime.parse(cutoff.getFirst());
+      var to = OffsetDateTime.parse(arrival.getFirst());
+      return to.isAfter(from) ? new FlightSchedule(from, to) : null;
+    } catch (DateTimeParseException invalid) {
+      return null;
+    }
+  }
+
+  static boolean scheduleInformation(Map<String, Object> message) {
+    String raw = Ledger.str(message, "body");
+    String body = MailParser.authoredText(raw);
+    String subject = MailParser.currentSubject(Ledger.str(message, "subject"), raw);
+    return MailParser.selfDelivery(body) && !MailParser.requestsPickup(subject, body)
+        && SCHEDULE_INFORMATION.matcher(body).find();
+  }
   private static final Pattern CONDITIONAL_CARRIER = pattern(
       "\\b(?:business|working) days\\b|\\b(?:weekdays only|weekend service unavailable|"
           + "(?:subject to|depending on) (?:flight|capacity|availability|pickup|collection)|"
@@ -71,9 +113,12 @@ final class QuoteChecks {
           + "(?:waiting|detention) (?:is )?not included)\\b");
 
   static void preflight(Map<String, Object> message) {
-    String body = MailParser.authoredText(Ledger.str(message, "body"));
-    String text = Ledger.str(message, "subject") + "\n" + body;
-    if (SCHEDULE.matcher(text).find()) throw new WaveWorker.Conflict(SCHEDULE_REVIEW);
+    String raw = Ledger.str(message, "body");
+    String body = MailParser.authoredText(raw);
+    String subject = MailParser.currentSubject(Ledger.str(message, "subject"), raw);
+    String text = subject + "\n" + body;
+    String schedule = scheduleInformation(message) ? subject + "\n" + SCHEDULE_INFORMATION.matcher(body).replaceAll("") : text;
+    if (SCHEDULE.matcher(schedule).find()) throw new WaveWorker.Conflict(SCHEDULE_REVIEW);
     var chargeText = CUSTOMER_HANDLES_CUSTOMS.matcher(EXCLUDED.matcher(text).replaceAll("")).replaceAll("");
     if (FIXED_FEE.matcher(chargeText).find() && !CargoInsurance.mentioned(chargeText))
       throw new WaveWorker.Conflict(REVIEW + " Confirm what the fixed fee covers.");

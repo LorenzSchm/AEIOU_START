@@ -26,11 +26,21 @@ class PortalBookings {
               + " (?:offer|quote))[,.! ]+)*(?:(?:please )?(?:go ahead and |proceed to )?book"
               + " (?:it|this|this shipment|the shipment|this option|the quoted option)(?: now)?|please"
               + " proceed with (?:the |this )?booking|bitte (?:so |wie angeboten )?buchen"
-              + "|veuillez proc[ée]der [àa] la r[ée]servation)[.! ]*");
+              + "|veuillez proc[ée]der [àa] la r[ée]servation)"
+              + "(?: (?:as quoted|under (?:these|the quoted) (?:terms|conditions)))?[.! ]*");
+  private static final Pattern TURKISH_APPROVAL = Pattern.compile(
+      "(?iu)(?:merhaba[,.! ]+)?(?:(?:teklifiniz için teşekkür (?:ederiz|ediyorum|ediyoruz)|teklifiniz için teşekkürler|teşekkürler"
+          + "|evet|(?:bu teklif|bu seçenek|bu) bizim için uygun(?:dur)?|bizim için uygun(?:dur)?"
+          + "|teklifinizi kabul ediyoruz)[,.! ]+)*(?:lütfen )?"
+          + "(?:(?:bu (?:gönderi|seçenek|teklif) için )?rezervasyon(?:u)? (?:yapın(?:ız)?|yapabilirsiniz"
+          + "|yapmanızı rica ederiz|gerçekleştirin(?:iz)?|tamamlayın(?:ız)?)"
+          + "|rezervasyona devam edin(?:iz)?|bu (?:gönderiyi|seçeneği|teklifi) rezerve edin(?:iz)?)"
+          + "(?:[, ]+lütfen)?[.! ]*");
   private static final Pattern SIGNOFF =
       Pattern.compile(
-          "(?im)^\\s*(?:best (?:greetings|regards|wishes)|kind regards|regards|cheers|bestens|mit"
-              + " freundlichen gr(?:ü|ue|u)(?:ss|ß)en|viele gr(?:ü|ue|u)(?:ss|ß)e|(?:bien )?cordialement|--)(?:[,!"
+          "(?imu)^\\s*(?:best (?:greetings|regards|wishes)|kind regards|regards|cheers|bestens|mit"
+              + " freundlichen gr(?:ü|ue|u)(?:ss|ß)en|viele gr(?:ü|ue|u)(?:ss|ß)e|(?:bien )?cordialement"
+              + "|saygılar(?:ımızla|ımla)?|iyi çalışmalar|--)(?:[,!"
               + " .]|$).*|^\\h*thanks(?: a lot| again)? and have a (?:lovely|great|nice|good|wonderful)"
               + " (?:day|evening|weekend)[.!]*\\h*$");
   private static final Pattern NAME_SIGNATURE =
@@ -41,13 +51,20 @@ class PortalBookings {
   private final FiveU upstream;
   private final Clock clock;
   private final boolean automatic;
+  private final RfqGateway gateway;
 
-  PortalBookings(
-      Ledger ledger, FiveU upstream, Clock clock, @Value("#{${dispatch.auto} and !${dispatch.read-only}}") boolean automatic) {
+  PortalBookings(Ledger ledger, FiveU upstream, Clock clock, boolean automatic) {
+    this(ledger, upstream, clock, automatic, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  PortalBookings(Ledger ledger, FiveU upstream, Clock clock,
+      @Value("#{${dispatch.auto} and !${dispatch.read-only}}") boolean automatic, RfqGateway gateway) {
     this.ledger = ledger;
     this.upstream = upstream;
     this.clock = clock;
     this.automatic = automatic;
+    this.gateway = gateway;
   }
 
   static boolean accepted(String body) {
@@ -56,13 +73,14 @@ class PortalBookings {
         + "[。.!]?(?:\\s*(?:谢谢|謝謝)[。！!]?)?")) return true;
     if (Pattern.compile(
             "(?iu)\\b(?:if|unless|until|hold|wait|cancel|not|never|wenn|nicht|stornieren|"
-                + "si|sauf|attendre|annuler|pas)\\b")
+                + "si|sauf|attendre|annuler|pas|eğer|şartıyla|değil|iptal|bekleyin)\\b")
         .matcher(authored)
         .find()) return false;
     String text = SIGNOFF.split(authored, 2)[0].strip();
     String[] blocks = text.split("\\R\\h*\\R", 2);
     if (blocks.length > 1 && NAME_SIGNATURE.matcher(blocks[1].strip()).matches()) text = blocks[0];
-    return APPROVAL.matcher(text.replaceAll("\\s+", " ").strip()).matches();
+    String instruction = text.replaceAll("\\s+", " ").strip();
+    return APPROVAL.matcher(instruction).matches() || TURKISH_APPROVAL.matcher(instruction).matches();
   }
 
   @Scheduled(fixedDelay = 2500)
@@ -73,23 +91,28 @@ class PortalBookings {
             .jdbc()
             .queryForList(
                 """
-                SELECT r.id, f.body FROM mail r
+                SELECT r.id, f.id AS reply_id, f.body FROM mail r
                 JOIN deliveries d ON d.action='quote:'||r.id AND d.state='sent'
                 LEFT JOIN deliveries reminder ON reminder.action='reply:'||r.id AND reminder.state='sent'
                 LEFT JOIN deliveries revised ON revised.rowid=(SELECT u.rowid FROM deliveries u
                   WHERE u.action='requote:'||r.id OR u.action LIKE 'requote:'||r.id||':%'
                   ORDER BY u.rowid DESC LIMIT 1)
+                LEFT JOIN deliveries schedule ON schedule.action='schedule-update:'||r.id AND schedule.state='sent'
+                  AND json_extract(schedule.payload,'$.in_reply_to')=
+                    json_extract(CASE WHEN revised.action IS NULL THEN d.response ELSE revised.response END,'$.id')
                 JOIN mail f ON f.id=(SELECT max(x.id) FROM mail x WHERE x.kind='follow-up'
                   AND x.sender=r.sender AND (
                     (revised.action IS NULL AND x.root IN (
-                      r.id,json_extract(d.response,'$.id'),json_extract(reminder.response,'$.id'))
+                      r.id,json_extract(d.response,'$.id'),json_extract(reminder.response,'$.id'),
+                      json_extract(schedule.response,'$.id'))
                       AND x.id>json_extract(d.response,'$.id'))
                     OR (revised.state='sent' AND (x.reply_to=json_extract(revised.response,'$.id')
-                      OR x.root IN (r.id,json_extract(revised.response,'$.id')))
+                      OR x.root IN (r.id,json_extract(revised.response,'$.id'),json_extract(schedule.response,'$.id')))
                       AND x.id>json_extract(revised.response,'$.id'))))
                 LEFT JOIN booking_attempt a ON a.request_id=r.id
                 WHERE r.kind='request' AND r.booking IS NULL
-                  AND (revised.action IS NULL OR f.reply_to=json_extract(revised.response,'$.id'))
+                  AND (revised.action IS NULL OR f.reply_to IN (
+                    json_extract(revised.response,'$.id'),json_extract(schedule.response,'$.id')))
                   AND json_extract(r.proposal,'$.offer.source')='portal'
                   AND json_extract(r.proposal,'$.offer.rate_id') IS NOT NULL
                   AND json_extract(r.proposal,'$.insurance') IS NULL
@@ -98,10 +121,11 @@ class PortalBookings {
                 """,
                 clock.instant().getEpochSecond());
     for (var row : candidates) {
-      if (!accepted(Ledger.str(row, "body"))) continue;
+      long replyId = Ledger.id(row.get("reply_id"));
+      if (!approval(replyId, row)) continue;
       long id = Ledger.id(row.get("id"));
       try {
-        book(id);
+        book(id, replyId);
       } catch (RuntimeException e) {
         long retry = clock.instant().getEpochSecond() + 30;
         if ((e instanceof WaveWorker.Conflict && !(e instanceof WaveWorker.RetryLater))
@@ -125,7 +149,16 @@ class PortalBookings {
     }
   }
 
+  private boolean approval(long replyId, Map<String, Object> reply) {
+    String body = Ledger.str(reply, "body");
+    return accepted(body) || (gateway != null && gateway.bookingApproval(replyId, body));
+  }
+
   synchronized Object book(long id) {
+    return book(id, null);
+  }
+
+  private synchronized Object book(long id, Long approvalReply) {
     var m = ledger.mail(id);
     if (m.get("booking") != null) return ledger.read(m.get("booking"), Map.class);
     if (!"sent".equals(ledger.delivery("quote:" + id)))
@@ -142,9 +175,8 @@ class PortalBookings {
       revisedQuote = Ledger.id(revision.get("message_id"));
       approvedQuote = revisedQuote;
       var replies = ledger.quoteReplies(id, Ledger.str(m, "sender"), revisedQuote);
-      if (replies.isEmpty() || replies.getFirst().get("reply_to") == null
-          || revisedQuote != Ledger.id(replies.getFirst().get("reply_to"))
-          || !accepted(Ledger.str(replies.getFirst(), "body")))
+      if (replies.isEmpty() || !repliesToRevisedQuote(id, revisedQuote, replies.getFirst())
+          || !approval(Ledger.id(replies.getFirst().get("id")), replies.getFirst()))
         throw new WaveWorker.Conflict("Waiting for approval of the updated quote.");
       draft = ledger.read(revision.get("proposal"), WaveWorker.Draft.class);
       if (revision.get("shipment") != null) shipment = ledger.read(revision.get("shipment"), Shipment.class);
@@ -176,7 +208,7 @@ class PortalBookings {
       throw new WaveWorker.Conflict("An earlier booking attempt must be resolved first.");
     String rate = Ledger.str(attempt, "rate_id");
     if (Ledger.id(attempt.get("submitted")) == 0)
-      rate = verifiedBookingRate(id, shipment, draft, Ledger.str(m, "sender"), approvedQuote);
+      rate = verifiedBookingRate(id, shipment, draft, Ledger.str(m, "sender"), approvedQuote, approvalReply);
     Map<String, Object> receipt;
     try {
       receipt = reserve(id, rate);
@@ -184,7 +216,7 @@ class PortalBookings {
       // Only a definitive expired response permits switching to a new rate ID. Otherwise
       // replay the persisted ID and team reference, including after a lost acknowledgment.
       ledger.jdbc().update("UPDATE booking_attempt SET submitted=0 WHERE request_id=?", id);
-      rate = verifiedBookingRate(id, shipment, draft, Ledger.str(m, "sender"), approvedQuote);
+      rate = verifiedBookingRate(id, shipment, draft, Ledger.str(m, "sender"), approvedQuote, approvalReply);
       receipt = reserve(id, rate);
     }
     if (Ledger.str(receipt, "booking_reference").isBlank()
@@ -200,8 +232,17 @@ class PortalBookings {
         "/v1/portal/bookings", Map.of("rate_id", rate, "team_reference", "AEIOU-" + id));
   }
 
+  private boolean repliesToRevisedQuote(long request, long quote, Map<String, Object> reply) {
+    if (reply.get("reply_to") == null) return false;
+    long parent = Ledger.id(reply.get("reply_to"));
+    return parent == quote || !ledger.jdbc().queryForList("""
+        SELECT 1 FROM deliveries WHERE action=? AND state='sent'
+          AND json_extract(payload,'$.in_reply_to')=? AND json_extract(response,'$.id')=?
+        """, Integer.class, "schedule-update:" + request, quote, parent).isEmpty();
+  }
+
   private String verifiedBookingRate(long id, Shipment shipment, WaveWorker.Draft draft,
-      String sender, Long approvedQuote) {
+      String sender, Long approvedQuote, Long approvalReply) {
     Offer current;
     try {
       current = draft.allIn(shipment, upstream.currentRate(shipment, draft.offer(), clock.instant()));
@@ -211,6 +252,18 @@ class PortalBookings {
     if (!draft.matchesQuotedTerms(current) || current.validUntil() == null
         || !current.validUntil().isAfter(clock.instant().plusSeconds(4))) throw requestFreshQuote(id);
     ledger.transactions().executeWithoutResult(tx -> {
+      if (approvalReply != null && approvedQuote != null) {
+        Long latest = ledger.jdbc().queryForObject("""
+            SELECT max(f.id) FROM mail f WHERE f.kind='follow-up' AND f.sender=? AND f.id>?
+              AND (f.reply_to=? OR f.root IN (?, ?, (SELECT json_extract(response,'$.id')
+                FROM deliveries WHERE action=? AND state='sent')) OR EXISTS (
+                  SELECT 1 FROM deliveries s WHERE s.action=? AND s.state='sent'
+                    AND json_extract(s.payload,'$.in_reply_to')=?
+                    AND json_extract(s.response,'$.id') IN (f.root,f.reply_to)))
+            """, Long.class, sender, approvedQuote, approvedQuote, id, approvedQuote, "reply:" + id,
+            "schedule-update:" + id, approvedQuote);
+        if (!approvalReply.equals(latest)) throw new WaveWorker.RetryLater("The customer reply changed before booking.");
+      }
       if (approvedQuote != null && ledger.quoteReplies(id, sender, approvedQuote).stream()
           .anyMatch(reply -> QuoteChecks.changesQuote(Ledger.str(reply, "body"))))
         throw new WaveWorker.Conflict("Waiting for an updated quote after the shipment change.");

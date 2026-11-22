@@ -174,6 +174,16 @@ public final class Catalog {
 
   public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes,
       java.util.function.Predicate<Carrier> eligible) {
+    return invitations(s, airlineRoutes, Map.of(), eligible);
+  }
+
+  public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes,
+      Map<String, Double> truckTransit, java.util.function.Predicate<Carrier> eligible) {
+    return invitations(s, airlineRoutes, truckTransit, Set.of(), eligible);
+  }
+
+  public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes,
+      Map<String, Double> truckTransit, Set<String> portalAirlines, java.util.function.Predicate<Carrier> eligible) {
     String route = s.origin() + "-" + s.destination();
     var airlines = carriers.stream()
         .filter(c -> !c.truck())
@@ -192,6 +202,11 @@ public final class Catalog {
       trucks = trucks.stream()
           .sorted(Comparator.comparingInt(c -> priority.getOrDefault(c.email(), 3)))
           .toList();
+    } else if ("fastest".equals(s.preference()) && !truckTransit.isEmpty()) {
+      // Observed transit orders invitations. Only fresh bids can supply the quote terms.
+      trucks = trucks.stream()
+          .sorted(Comparator.comparingDouble(c -> truckTransit.getOrDefault(c.email(), Double.POSITIVE_INFINITY)))
+          .toList();
     }
     int airlineLimit = s.pickupZone() == null ? MAX_INVITATIONS : 3;
     if (cheapestPickup) {
@@ -201,6 +216,12 @@ public final class Catalog {
       airlineLimit = Math.min(airlineLimit, Math.max(minimumAirlines, MAX_INVITATIONS - trucks.size()));
     }
     var selected = new ArrayList<>(airlines.stream().limit(airlineLimit).toList());
+    int extraTrucks = trucks.size() - (MAX_INVITATIONS - selected.size());
+    if (extraTrucks > 0 && !portalAirlines.isEmpty()) {
+      var covered = selected.stream().filter(c -> portalAirlines.contains(c.name().toLowerCase(Locale.ROOT)))
+          .limit(extraTrucks).toList();
+      selected.removeAll(covered);
+    }
     selected.addAll(trucks.stream().limit(MAX_INVITATIONS - selected.size()).toList());
     return selected;
   }

@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class Ledger implements AutoCloseable {
   static final long COUNTER_WAIT_SECONDS = 20;
   private static final Pattern CASE_REFERENCE = Pattern.compile("(?i)\\bAEIOU-(\\d{1,18})\\b");
+  private static final Pattern MAILBOX_SEPARATORS = Pattern.compile("[._-]");
   private static final long SHIPMENT_SCOPE_SIZE = 10;
   private static final Pattern COUNTER_REFERENCE =
       Pattern.compile("(?i)\\bAEIOU-(\\d{1,18})\\s*\\|\\s*counteroffer\\b");
@@ -142,6 +143,10 @@ class Ledger implements AutoCloseable {
     db.execute(
         "CREATE TABLE IF NOT EXISTS booking_attempt(request_id INTEGER PRIMARY KEY,rate_id TEXT NOT"
             + " NULL,retry_at INTEGER DEFAULT 0,issue TEXT)");
+    // Portal rates an operator looked up on the hosted page while the rate API was down.
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS operator_portal_rate(request_id INTEGER NOT NULL,rate_id TEXT NOT NULL,"
+            + "offer TEXT NOT NULL,entered_at TEXT NOT NULL,PRIMARY KEY(request_id,rate_id))");
     ensureColumn("booking_attempt", "submitted", "INTEGER NOT NULL DEFAULT 1");
     ensureColumn("booking_attempt", "quote_id", "INTEGER");
     // Existing operator drafts are preserved across the Python-to-Java handoff.
@@ -254,6 +259,20 @@ class Ledger implements AutoCloseable {
     return routes;
   }
 
+  Map<String, Double> truckTransitBefore(long request, Shipment shipment) {
+    var transit = new HashMap<String, Double>();
+    db.query("""
+        SELECT t.email,t.days FROM tender t JOIN mail m ON m.id=t.reply_id AND m.sender=t.email
+        WHERE m.id<? AND m.kind='carrier' AND t.leg='trucker' AND t.euros IS NOT NULL
+          AND t.days>0 AND t.issue IS NULL
+          AND json_extract(t.terms,'$.origin')=? AND json_extract(t.terms,'$.pickup_zone')=?
+        ORDER BY m.id DESC
+        """, (org.springframework.jdbc.core.RowCallbackHandler) row ->
+            transit.putIfAbsent(row.getString("email"), row.getDouble("days")),
+        request, shipment.origin(), shipment.pickupZone());
+    return transit;
+  }
+
   static long shipmentQuoteLeg(long request, int number) {
     if (request <= 0 || number <= 0 || number >= SHIPMENT_SCOPE_SIZE)
       throw new IllegalArgumentException("Invalid shipment scope.");
@@ -288,9 +307,12 @@ class Ledger implements AutoCloseable {
   List<Map<String, Object>> quoteReplies(long request, String sender, long quote) {
     return db.queryForList("""
         SELECT * FROM mail WHERE sender=? AND kind='follow-up' AND id>?
-          AND (reply_to=? OR root IN (?,?))
+          AND (reply_to=? OR root IN (?,?) OR EXISTS (
+            SELECT 1 FROM deliveries s WHERE s.action=? AND s.state='sent'
+              AND json_extract(s.payload,'$.in_reply_to')=?
+              AND json_extract(s.response,'$.id') IN (mail.root,mail.reply_to)))
         ORDER BY id DESC
-        """, sender, quote, quote, request, quote);
+        """, sender, quote, quote, request, quote, "schedule-update:" + request, quote);
   }
 
   boolean counterAnswered(long request) {
@@ -368,6 +390,10 @@ class Ledger implements AutoCloseable {
                                         subject, body, !attachments.isEmpty(), parsed.shipment())
                                     ? "spam"
                                     : "request";
+            if ((kind.equals("request") || kind.equals("follow-up")) && looksLikeCustomerSender(sender, mid)) {
+              kind = "spam";
+              root = mid;
+            }
             var received =
                 instant(
                     str(
@@ -409,6 +435,25 @@ class Ledger implements AutoCloseable {
           if (page.containsKey("next_since_id"))
             db.update("UPDATE cursor SET value=max(value,?) WHERE id=1", page.get("next_since_id"));
         });
+  }
+
+  private boolean looksLikeCustomerSender(String sender, long messageId) {
+    String key = mailboxKey(sender);
+    if (key == null) return false;
+    var customers = db.queryForList("""
+        SELECT DISTINCT sender FROM mail
+        WHERE kind='request' AND sender IS NOT NULL AND id<?
+        """, String.class, messageId);
+    return !customers.contains(sender)
+        && customers.stream().map(Ledger::mailboxKey).anyMatch(key::equals);
+  }
+
+  private static String mailboxKey(String address) {
+    int at = address.indexOf('@');
+    if (at <= 0 || at == address.length() - 1) return null;
+    String local = address.substring(0, at);
+    if (local.endsWith(".mail")) local = local.substring(0, local.length() - ".mail".length());
+    return MAILBOX_SEPARATORS.matcher(local).replaceAll("") + address.substring(at);
   }
 
   private void recordBid(

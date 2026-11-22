@@ -194,6 +194,11 @@ class DispatchController {
     return wave.sendQuote(id, input.revision());
   }
 
+  @PostMapping("/messages/{id}/portal-rate")
+  Offer portalRate(@PathVariable long id, @RequestBody WaveWorker.PortalRateEntry input) {
+    return wave.enterPortalRate(id, input);
+  }
+
   @PostMapping("/messages/{id}/bids")
   Object bid(@PathVariable long id, @RequestBody Invite input) {
     return wave.invite(

@@ -74,16 +74,16 @@ class QuoteFollowUps {
           "请问您需要我们为从 %s 到 %s 的这票货物安排订舱吗？如需订舱，请回复“请安排订舱”。"
               + "我们会核实承运商的当前报价，如有变动会先请您确认。")
           .formatted(fields.origin(), fields.destination());
-      var mail = Map.<String, Object>of(
-          "to", request.get("sender"),
-          "in_reply_to", Ledger.id(request.get("quote_id")),
-          "subject", "Re: " + request.get("subject"),
-          "body", worker.followUpBody(action, request, language, question, null));
       try {
+        var mail = Map.<String, Object>of(
+            "to", request.get("sender"),
+            "in_reply_to", Ledger.id(request.get("quote_id")),
+            "subject", "Re: " + request.get("subject"),
+            "body", worker.followUpBody(action, request, language, question, null));
         worker.send(action, mail, () -> claim(id, action, mail));
         log.info("RFQ {}: sent booking follow-up", id);
       } catch (WaveWorker.RetryLater ex) {
-        return;
+        continue;
       } catch (WaveWorker.Conflict ex) {
         log.info("RFQ {} booking follow-up: {}", id, ex.getMessage());
       }

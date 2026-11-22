@@ -20,10 +20,16 @@ class FiveU {
   private final RestClient client;
   private final RestClient gateway;
   private final MarketMemory marketMemory;
-  private final RestClient transcription;
+  private final RestClient openai;
   private final PortalPage page;
   @Value("${dispatch.transcription-key-file:backend/state/openai.key}")
   private String transcriptionKeyFile;
+  @Value("${dispatch.openai-key:}")
+  private String openaiKey;
+  @Value("${dispatch.llm-direct:false}")
+  private boolean directLlm;
+  @Value("${dispatch.llm-quote-gateway:false}")
+  private boolean quoteGateway;
   private Instant retryAt = Instant.EPOCH;
   private List<?> lanes = List.of();
   private Instant lanesExpire = Instant.EPOCH;
@@ -34,16 +40,17 @@ class FiveU {
   }
 
   FiveU(String base, String key, MarketMemory marketMemory, boolean readOnly) {
-    this(base, key, marketMemory, readOnly, null);
+    this(base, key, marketMemory, readOnly, null, "https://api.openai.com");
   }
 
   @org.springframework.beans.factory.annotation.Autowired
   FiveU(@Value("${dispatch.base-url}") String base, @Value("${dispatch.key}") String key,
-      MarketMemory marketMemory, @Value("${dispatch.read-only}") boolean readOnly, PortalPage page) {
+      MarketMemory marketMemory, @Value("${dispatch.read-only}") boolean readOnly, PortalPage page,
+      @Value("${dispatch.openai-base-url:https://api.openai.com}") String openaiBase) {
     this.page = page;
     client = client(base, key, 4, readOnly);
     gateway = client(base, key, 15, readOnly);
-    transcription = client("https://api.openai.com", "", 18, readOnly);
+    openai = client(openaiBase, null, 18, readOnly);
     this.marketMemory = marketMemory;
   }
 
@@ -51,26 +58,59 @@ class FiveU {
     var factory = new SimpleClientHttpRequestFactory();
     factory.setConnectTimeout(Duration.ofSeconds(3));
     factory.setReadTimeout(Duration.ofSeconds(seconds));
-    return RestClient.builder()
+    var builder = RestClient.builder()
         .baseUrl(base)
         .requestFactory(factory)
-        .defaultHeader("X-API-Key", key)
         // A read-only desk only displays the database and never reaches the live 5U API.
         .requestInterceptor((request, body, execution) -> {
           if (readOnly)
             throw new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.FORBIDDEN, "This desk is read-only.");
           return execution.execute(request, body);
-        })
-        .build();
+        });
+    if (key != null) builder.defaultHeader("X-API-Key", key);
+    return builder.build();
+  }
+
+  boolean directLlm() {
+    return directLlm;
+  }
+
+  boolean quoteGateway() {
+    return quoteGateway;
   }
 
   com.fasterxml.jackson.databind.JsonNode parseRfq(Map<String, Object> payload) {
+    return directLlm ? openaiCompletion(payload) : completion(gateway, payload);
+  }
+
+  com.fasterxml.jackson.databind.JsonNode parseQuoteThroughGateway(Map<String, Object> payload) {
     return completion(gateway, payload);
   }
 
   com.fasterxml.jackson.databind.JsonNode draftFollowUp(Map<String, Object> payload) {
-    return completion(client, payload);
+    return directLlm ? openaiCompletion(payload) : completion(client, payload);
+  }
+
+  private com.fasterxml.jackson.databind.JsonNode openaiCompletion(Map<String, Object> payload) {
+    String token;
+    try {
+      token = openaiToken();
+    } catch (IOException ex) {
+      throw new RestClientException("OpenAI key unavailable. Set OPENAI_API_KEY or configure the key file.");
+    }
+    return openai.post().uri("/v1/chat/completions")
+        .headers(headers -> headers.setBearerAuth(token))
+        .body(payload).retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
+  }
+
+  private String openaiToken() throws IOException {
+    if (openaiKey != null && !openaiKey.isBlank()) return openaiKey.strip();
+    if (transcriptionKeyFile == null || transcriptionKeyFile.isBlank())
+      throw new IOException("OpenAI key unavailable");
+    String token = Files.readString(Path.of(transcriptionKeyFile)).strip();
+    if (token.isEmpty()) throw new IOException("OpenAI key unavailable");
+    return token;
   }
 
   private static com.fasterxml.jackson.databind.JsonNode completion(
@@ -84,17 +124,16 @@ class FiveU {
   }
 
   String transcribe(byte[] audio) throws IOException {
-    if (transcriptionKeyFile == null || audio == null || audio.length == 0 || audio.length > 2_000_000)
+    if (audio == null || audio.length == 0 || audio.length > 2_000_000)
       throw new IOException("Voice transcription unavailable");
-    String token = Files.readString(Path.of(transcriptionKeyFile)).strip();
-    if (token.isEmpty()) throw new IOException("Voice transcription key unavailable");
+    String token = openaiToken();
     var audioHeaders = new HttpHeaders();
     audioHeaders.setContentType(org.springframework.http.MediaType.parseMediaType("audio/mpeg"));
     audioHeaders.setContentDispositionFormData("file", "voice-message.mp3");
     var form = new org.springframework.util.LinkedMultiValueMap<String, Object>();
     form.add("file", new org.springframework.http.HttpEntity<>(audio, audioHeaders));
     form.add("model", "gpt-4o-mini-transcribe");
-    var result = transcription.post().uri("/v1/audio/transcriptions")
+    var result = openai.post().uri("/v1/audio/transcriptions")
         .headers(headers -> headers.setBearerAuth(token))
         .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA)
         .body(form).retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
@@ -288,6 +327,22 @@ class FiveU {
           String name = Ledger.str(carrier, "name");
           if (!name.isBlank()) return name;
         }
+      }
+    }
+    return null;
+  }
+
+  /** The published name of an airline on the shipment's lane, matched by name or code; null if absent. */
+  synchronized String laneAirline(Shipment shipment, String airline, Instant now) {
+    for (Object raw : portalLanes(now)) {
+      if (!(raw instanceof Map<?, ?> lane) || !shipment.origin().equals(lane.get("origin"))
+          || !shipment.destination().equals(lane.get("destination"))
+          || !(lane.get("airlines") instanceof List<?> airlines)) continue;
+      for (Object entry : airlines) {
+        if (!(entry instanceof Map<?, ?> carrier)) continue;
+        String name = Ledger.str(carrier, "name");
+        if (airline.equalsIgnoreCase(name) || airline.equalsIgnoreCase(Ledger.str(carrier, "code")))
+          return name;
       }
     }
     return null;

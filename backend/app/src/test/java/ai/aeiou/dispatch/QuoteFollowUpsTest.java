@@ -20,6 +20,8 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 
 class QuoteFollowUpsTest {
@@ -34,16 +36,29 @@ class QuoteFollowUpsTest {
   @TempDir Path temp;
   private Ledger ledger;
   private QuoteFollowUps followUps;
+  private RfqGateway gateway;
+  private ObjectMapper mapper;
 
   @BeforeEach
   void setup() throws Exception {
-    var mapper = new ObjectMapper().findAndRegisterModules()
+    mapper = new ObjectMapper().findAndRegisterModules()
         .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     ledger = new Ledger(temp.resolve("dispatch.sqlite3").toString(), mapper);
-    var worker = new WaveWorker(ledger, catalog, upstream, clock, mock(RfqGateway.class),
+    gateway = new RfqGateway(upstream, ledger, catalog, mapper, clock, "gpt-4o-mini", true);
+    var worker = new WaveWorker(ledger, catalog, upstream, clock, gateway,
         mock(MailboxWebhook.class), true, START, 40, false);
     followUps = new QuoteFollowUps(ledger, worker, clock, true, START);
+  }
+
+  @Test
+  void skipsModelAndBookingForTheExplicitRound140Decline() {
+    quote(1, 120, NOW.plusSeconds(60), "accepted");
+    reply(1, "Thank you for your offer. That seems too low to be right, so we will not go ahead with it.", 101);
+    when(upstream.directLlm()).thenReturn(true);
+    new PortalBookings(ledger, upstream, clock, true, gateway).bookAccepted();
+    verify(upstream, never()).parseRfq(anyMap());
+    verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
   }
 
   @Test
@@ -78,6 +93,74 @@ class QuoteFollowUpsTest {
     assertFalse(PortalBookings.accepted("Thank you for your offer. We would like to proceed."));
     assertFalse(PortalBookings.accepted(
         "We would like to proceed. Please go ahead and book the shipment now if the rate drops."));
+  }
+
+  @Test
+  void booksOnceWhenTheCustomerApprovesTheQuoteInTurkish() {
+    var quoted = quote(1, 120, NOW.plusSeconds(60), "accepted");
+    reply(1, "Merhaba,\n\nTeklifiniz için teşekkür ederiz. Bizim için uygundur, lütfen rezervasyonu yapın."
+        + "\n\nSaygılarımla,\nSara\nLindqvist Medtech", 101);
+    var live = new Offer(quoted.airline(), quoted.days(), quoted.totalEur(), quoted.billedKg(), "portal",
+        "R-TURKISH", NOW.plusSeconds(120));
+    var payload = Map.<String, Object>of("rate_id", "R-TURKISH", "team_reference", "AEIOU-1");
+    when(upstream.currentRate(shipment, quoted, NOW)).thenReturn(live);
+    when(upstream.post("/v1/portal/bookings", payload)).thenReturn(Map.of(
+        "rate_id", "R-TURKISH", "team_reference", "AEIOU-1", "booking_reference", "BK-TURKISH"));
+    var bookings = new PortalBookings(ledger, upstream, clock, true);
+
+    bookings.bookAccepted();
+    bookings.bookAccepted();
+
+    assertEquals("BK-TURKISH", ledger.read(ledger.mail(1).get("booking"), Map.class).get("booking_reference"));
+    verify(upstream).currentRate(shipment, quoted, NOW);
+    verify(upstream).post("/v1/portal/bookings", payload);
+  }
+
+  @Test
+  void ignoresConditionalAndQuotedTurkishBookingInstructions() {
+    assertTrue(PortalBookings.accepted("Lütfen bu gönderi için rezervasyon yapınız.\n\nSara\nLindqvist Medtech"));
+    assertTrue(PortalBookings.accepted("Teklifiniz için teşekkür ediyorum. Rezervasyonu yapmanızı rica ederiz."));
+    assertFalse(PortalBookings.accepted("Teklifiniz için teşekkür ederiz. Bizim için uygundur."));
+    assertFalse(PortalBookings.accepted("Fiyat düşerse lütfen rezervasyonu yapın."));
+    assertFalse(PortalBookings.accepted("Lütfen rezervasyonu yapın.\n\nSaygılarımla,\nSara\nPS: Lütfen bekleyin."));
+    assertFalse(PortalBookings.accepted("Rezervasyon yapabilir misiniz?"));
+    assertFalse(PortalBookings.accepted("Lütfen rezervasyonu yapmayın."));
+    assertFalse(PortalBookings.accepted("Teşekkürler.\n\n> Lütfen rezervasyonu yapın."));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void booksAnExplicitModelInterpretedReplyAndRejectsAConditionalOne(boolean approved) {
+    var quoted = quote(1, 120, NOW.plusSeconds(60), "accepted");
+    String instruction = "이 조건으로 예약을 진행해 주세요.";
+    reply(1, approved ? instruction : "가격이 내려가면 예약을 진행해 주세요.", 101);
+    when(upstream.directLlm()).thenReturn(true);
+    String english = "Please proceed with the booking under these conditions.";
+    String content = approved
+        ? ledger.write(Map.of("english", english, "approval_excerpt", instruction))
+        : ledger.write(Map.of("english", "Please book it if the price goes down.",
+            "approval_excerpt", "가격이 내려가면 예약을 진행해 주세요."));
+    when(upstream.parseRfq(anyMap())).thenReturn(mapper.valueToTree(Map.of("choices", List.of(
+        Map.of("finish_reason", "stop", "message", Map.of("content", content))))));
+    var live = new Offer(quoted.airline(), quoted.days(), quoted.totalEur(), quoted.billedKg(), "portal",
+        "R-CURRENT", NOW.plusSeconds(120));
+    when(upstream.currentRate(shipment, quoted, NOW)).thenReturn(live);
+    var payload = Map.<String, Object>of("rate_id", "R-CURRENT", "team_reference", "AEIOU-1");
+    when(upstream.post("/v1/portal/bookings", payload)).thenReturn(Map.of(
+        "rate_id", "R-CURRENT", "team_reference", "AEIOU-1", "booking_reference", "BK-LOCALIZED"));
+
+    var bookings = new PortalBookings(ledger, upstream, clock, true, gateway);
+    bookings.bookAccepted();
+    bookings.bookAccepted();
+
+    verify(upstream).parseRfq(anyMap());
+    if (approved) {
+      assertEquals("BK-LOCALIZED", ledger.read(ledger.mail(1).get("booking"), Map.class).get("booking_reference"));
+      verify(upstream).post("/v1/portal/bookings", payload);
+    } else {
+      assertNull(ledger.mail(1).get("booking"));
+      verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
+    }
   }
 
   @Test

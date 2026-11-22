@@ -34,11 +34,11 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 
 final class QuoteAttachments {
   private static final Pattern OFFER = Pattern.compile(
-      "(?iu)\\b(?:quote|quotation|offer|bid|devis|offre|cotation|angebot|offerte)\\b|报价|報價");
+      "(?iu)\\b(?:quote|quotation|offer|bid|devis|offre|cotation|angebot|offerte|teklif\\p{L}*)\\b|报价|報價");
   private static final Pattern OUTPUT_REQUEST = Pattern.compile(
       "(?iu)\\b(?:attach|send|provide|submit|include|reply|return|deliver|need|needs|require|requires|"
           + "joindre|joignez|envoyer|envoyez|transmettre|fournir|schicken|senden|anhängen|beifügen|"
-          + "benötigen|brauchen|übermitteln)\\b|请|請|需要");
+          + "benötigen|brauchen|übermitteln|ekleyin|ekler misiniz|ekleyebilir misiniz)\\b|请|請|需要");
   private static final Pattern REQUESTED_FORMAT = Pattern.compile(
       "(?iu)\\b(?:as (?:a |an )?|in (?:a |an )?|format|only|als|im|en|au)\\h+"
           + "(?:\\.?)(?:pdf|docx|word|xlsx|xls|excel|spreadsheet|csv|txt|plain text|png|jpe?g)\\b"

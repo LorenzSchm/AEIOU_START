@@ -8,7 +8,8 @@ import java.util.regex.*;
 
 public final class MailParser {
   private static final String NUM = "(?<![\\w.,-])(\\d+(?:[.,]\\d+)*)(?![.,]\\d)";
-  private static final String UNIT_END = "(?![\\p{L}\\p{N}_])";
+  // Korean particles attach directly to Latin units, as in “cubic feet입니다”.
+  private static final String UNIT_END = "(?![\\p{L}\\p{N}_&&[^\\p{IsHangul}]])";
   private static final String METRIC_WEIGHT = "kgs?|kilograms?";
   private static final String IMPERIAL_WEIGHT = "lbs?\\.?|pounds?";
   private static final String METRIC_VOLUME = "cbm|m³|m3|cubic met(?:er|re)s?";
@@ -24,6 +25,14 @@ public final class MailParser {
           + ISO_DATE + ")");
   private static final Pattern READY_AT_LOCATION_DATE = pattern(
       "\\bready for (?:pickup|collection) at\\h+[^.!?;\\r\\n]{1,120}?\\bon\\h+(" + ISO_DATE + ")");
+  private static final Pattern GERMAN_READY_DATE = pattern(
+      "\\b(?:steht|stehen|ist|sind)\\h+(?:am|ab)\\h+(" + ISO_DATE + ")\\h+(?:zur Abholung\\h+)?(?:abhol)?bereit\\b");
+  private static final Pattern TURKISH_READY_DATE = pattern(
+      "\\b(" + ISO_DATE + ")\\h+tarihinde\\h+(?:teslime\\h+)?haz[ıi]r\\b");
+  private static final Pattern KOREAN_PICKUP_READY_DATE = pattern(
+      "픽업(?:은|이)?\\h+(\\d{4}-\\d{2}-\\d{2})(?:부터|에)\\h*가능");
+  private static final Pattern KOREAN_READY_AT_LOCATION_DATE = pattern(
+      "(\\d{4}-\\d{2}-\\d{2})(?:부터|에)\\h+[^.!?;\\r\\n]{0,120}?픽업(?:은|이)?\\h*가능");
   private static final Pattern REQUOTE_REQUEST = pattern(
       "\\b(?:update|revise|reprice) (?:your |the |our |this )?(?:offer|quote)\\b"
           + "|\\b(?:send|provide|issue) (?:us |me )?(?:an? )?(?:updated|revised|new) (?:offer|quote)\\b");
@@ -37,21 +46,28 @@ public final class MailParser {
           + "(?:no later than|on or before|by(?=\\h+(?:\\d|today\\b|tomorrow\\b|next\\b|"
           + "(?:mon|tue|wed|thu|fri|sat|sun|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\p{L}*\\b)))"
           + "\\h+(" + ISO_DATE + ")?");
+  private static final Pattern GERMAN_ARRIVAL_DEADLINE = pattern(
+      "\\b(?:muss|müssen|soll|sollen|Ankunft|Zustellung)\\b[^.!?;\\r\\n]{0,60}?\\bsp[aä]testens\\h+"
+          + "(?:(?:am|bis)\\h+)?(" + ISO_DATE + ")?"
+          + "(?=[^.!?;\\r\\n]{0,95}\\b(?:ankommen|eintreffen|erreichen|angeliefert|zugestellt)\\b)");
   private static final Pattern DEADLINE_TIME =
-      pattern("^\\h+(?:at\\h+)?\\d{1,2}(?::\\d{2}|\\h*(?:am|pm)\\b)");
+      pattern("^\\h+(?:(?:at|um)\\h+)?\\d{1,2}(?::\\d{2}|\\h*(?:am|pm|Uhr)\\b)");
 
   private static final Pattern STREET_POSTCODE =
       Pattern.compile(
           "(?iu:(?:\\b(?:PLZ|post\\s*code|postal code|zip(?: code)?)|邮编|郵編|郵遞區號)\\s*"
               + "(?:is\\s+|ist\\s+|[:：#-]\\s*)?)([0-9]{5})(?![0-9])"
-              + "|(?<![\\p{L}\\d.,])(?:D-)?([0-9]{5})\\h+\\(?(?=\\p{Lu}\\p{Ll})");
+              + "|(?<![\\p{L}\\d.,])(?:D-)?([0-9]{5})\\h+\\(?(?=\\p{Lu}\\p{Ll})"
+              + "|(?:픽업(?:지)?(?:의)?\\h*(?:주소\\h*)?(?:(?:5|다섯)\\h*자리\\h*)?우편번호(?:는|가)?\\h*[:：]?\\h*"
+              + "|(?iu:Germany|Deutschland|독일)\\h+(?:[\\p{L}.-]+\\h+){0,3}(?=[0-9]{5}(?:\\h+소재|에\\h+있는)))"
+              + "([0-9]{5})(?![0-9])");
 
   public static Optional<String> pickupPostcode(String text, String zone) {
     var candidates =
         STREET_POSTCODE
             .matcher(text)
             .results()
-            .map(m -> m.group(1) != null ? m.group(1) : m.group(2))
+            .map(m -> m.group(1) != null ? m.group(1) : m.group(2) != null ? m.group(2) : m.group(3))
             .filter(code -> code.startsWith(zone))
             .distinct()
             .toList();
@@ -75,7 +91,8 @@ public final class MailParser {
   public static boolean selfDelivery(String body) {
     return has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b|"
         + "\\bnous (?:la |le |les )?(?:d[ée]poserons|livrerons|apporterons)[^.!?\\n]{0,100}\\bnous-mêmes\\b|"
-        + "\\bwir (?:liefern|bringen)[^.!?\\n]{0,100}\\bselbst\\b");
+        + "\\bwir (?:liefern|bringen)[^.!?\\n]{0,100}\\bselbst\\b|"
+        + "\\b(?:biz|kendimiz)\\h+teslim\\h+edece[ğg]iz\\b");
   }
 
   public static boolean requestsPickup(String subject, String body) {
@@ -85,7 +102,7 @@ public final class MailParser {
     if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "");
     return has(text, "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from|arrange (?:the |a )?truck|door["
         + " -]to|abhol|vorlauf|enl[èe]vement|collecte|上门提货|上門提貨|安排提货|安排提貨|"
-        + "ex[ -]?works|\\bEXW\\b");
+        + "픽업|ex[ -]?works|\\bEXW\\b");
   }
 
   private static Pattern pattern(String s) {
@@ -131,10 +148,18 @@ public final class MailParser {
     return values.stream().allMatch(value -> value != null && first.compareTo(value) == 0) ? first : null;
   }
 
+  public static boolean hasImperialWeight(String body) {
+    return WEIGHT_QUANTITY.matcher(authoredText(body)).results().anyMatch(match -> match.group(2) != null);
+  }
+
+  public static boolean hasImperialVolume(String body) {
+    return VOLUME_QUANTITY.matcher(authoredText(body)).results().anyMatch(match -> match.group(2) != null);
+  }
+
   private static boolean perPieceQuantity(String text, String units) {
     String unit = "(?:" + units + ")" + UNIT_END;
     return has(text, "\\b\\d+\\s*[x×]\\s*" + NUM + "\\s*" + unit
-        + "|" + NUM + "\\s*" + unit + "\\s*(?:each|per (?:piece|pallet|crate))\\b"
+        + "|" + NUM + "\\s*" + unit + "\\s*(?:(?:each|per (?:piece|pallet|crate))\\b|씩|당)"
         + "|\\b(?:each|per piece)\\s*[:=]?\\s*" + NUM + "\\s*" + unit);
   }
 
@@ -263,7 +288,8 @@ public final class MailParser {
 
   public static ArrivalWindow arrivalWindow(String body) {
     String text = authoredText(body);
-    var deadlines = ARRIVAL_DEADLINE.matcher(text).results().toList();
+    var deadlines = java.util.stream.Stream.concat(ARRIVAL_DEADLINE.matcher(text).results(),
+        GERMAN_ARRIVAL_DEADLINE.matcher(text).results()).toList();
     if (deadlines.isEmpty()) return null;
     // Published transit is in days. Time-of-day deadlines require a confirmed schedule.
     var latest = deadlines.stream().map(match ->
@@ -273,8 +299,9 @@ public final class MailParser {
 
   public static LocalDate cargoReadyDate(String body) {
     String text = authoredText(body);
-    return onlyDate(java.util.stream.Stream.concat(READY_DATE.matcher(text).results(),
-        READY_AT_LOCATION_DATE.matcher(text).results()).map(match -> match.group(1)).toList());
+    return onlyDate(java.util.stream.Stream.of(READY_DATE, READY_AT_LOCATION_DATE, GERMAN_READY_DATE,
+        TURKISH_READY_DATE, KOREAN_PICKUP_READY_DATE, KOREAN_READY_AT_LOCATION_DATE)
+        .flatMap(pattern -> pattern.matcher(text).results()).map(match -> match.group(1)).toList());
   }
 
   public static boolean requestsRequote(String body) {
@@ -313,14 +340,17 @@ public final class MailParser {
       "\\b(?:both|two|three|multiple|several|separate|each of (?:these|the)) (?:\\w+ )?shipments\\b"
           + "|\\bboth quotes\\b[^.!?\\n]{0,110}\\b(?:same|one|single) (?:email|reply|message)\\b"
           + "|\\bseparate (?:all[ -]in )?(?:prices?|quotes?)\\b[^.!?\\n]{0,90}\\b(?:each shipment|both shipments)\\b");
-  private static final Pattern SHIPMENT_COUNT = pattern("\\b(both|two|three) (?:\\w+ )?shipments\\b");
+  private static final Pattern SHIPMENT_COUNT = pattern("\\b(both|two|three|four|five|six|seven|eight|[2-8])"
+      + " (?:\\w+ )?shipments\\b");
   private static final Pattern SHIPMENT_ROW =
       Pattern.compile("(?m)^\\h*(\\d{1,2})[.)]\\h+([^\\r\\n]+)");
   private static final Pattern ROUTE_AT_START = Pattern.compile(
-      "^(?:(?i:to)\\h+|(?i:destination(?:\\h+airport)?)\\h*[:–—-]?\\h*)?([A-Z]{3})\\b");
+      "^(?:(?i:(?:shipment\\h+)?to)\\h+|(?i:destination(?:\\h+airport)?)\\h*[:–—-]?\\h*)?([A-Z]{3})\\b");
   private static final Pattern PIECES = pattern("\\b(\\d{1,7})\\h+(?:pieces?|pcs)\\b");
 
   public record QuoteShipment(Shipment shipment, String text, Integer pieces) {}
+  public record ShipmentEvidence(String source, String destination, BigDecimal weightKg,
+      BigDecimal volumeCbm, Integer pieces, boolean pickupRequired) {}
   public record SeparateShipments(List<QuoteShipment> shipments, String issue, String sharedText) {
     SeparateShipments(List<QuoteShipment> shipments, String issue) {
       this(shipments, issue, "");
@@ -340,8 +370,7 @@ public final class MailParser {
     }).count() < 2) return null;
     if (attachments)
       return new SeparateShipments(List.of(), "Review the packing documents for each shipment.");
-    if (rows.size() < 2 || rows.size() > 8 || SHIPMENT_COUNT.matcher(request).results().anyMatch(
-        count -> rows.size() != ("three".equalsIgnoreCase(count.group(1)) ? 3 : 2)))
+    if (!matchesShipmentCount(request, rows.size()))
       return new SeparateShipments(List.of(), "Confirm every separately priced shipment and its cargo details.");
 
     String shared = body.substring(0, rows.getFirst().start()) + "\n" + body.substring(rows.getLast().end());
@@ -363,6 +392,74 @@ public final class MailParser {
       shipments.add(new QuoteShipment(parsed.shipment(), text, pieces.find() ? Integer.valueOf(pieces.group(1)) : null));
     }
     return new SeparateShipments(List.copyOf(shipments), null, shared);
+  }
+
+  public static SeparateShipments verifySeparateShipments(String body, List<ShipmentEvidence> evidence,
+      Catalog catalog) {
+    body = authoredText(body);
+    if (!matchesShipmentCount(body, evidence.size())) return null;
+
+    int previousEnd = 0;
+    var shared = new StringBuilder();
+    for (var entry : evidence) {
+      String source = entry.source();
+      if (source == null || source.isBlank()) return null;
+      int start = body.indexOf(source, previousEnd);
+      if (start < 0 || body.indexOf(source) != start || body.indexOf(source, start + 1) >= 0) return null;
+      int end = start + source.length();
+      int lineStart = body.lastIndexOf('\n', start - 1) + 1;
+      int lineEnd = body.indexOf('\n', end);
+      if (lineEnd < 0) lineEnd = body.length();
+      if (!body.substring(lineStart, start).isBlank() || !body.substring(end, lineEnd).isBlank()) return null;
+      shared.append(body, previousEnd, start).append('\n');
+      previousEnd = end;
+    }
+    shared.append(body.substring(previousEnd));
+    String sharedText = shared.toString();
+    if (WEIGHT_QUANTITY.matcher(sharedText).find() || VOLUME_QUANTITY.matcher(sharedText).find()
+        || PIECES.matcher(sharedText).find() || dimensions(sharedText) != null) return null;
+
+    boolean pickupRequested = requestsPickup("", body);
+    var ready = cargoReadyDate(body);
+    var arrival = arrivalWindow(body);
+    var shipments = new ArrayList<QuoteShipment>();
+    for (var entry : evidence) {
+      var row = request("Air freight quote", entry.source(), false, catalog).shipment();
+      String text = sharedText + "\n" + entry.source();
+      var parsed = request("Air freight quote", text, false, catalog);
+      var shipment = parsed.shipment();
+      var pieces = PIECES.matcher(entry.source()).results()
+          .map(match -> Integer.valueOf(match.group(1))).distinct().toList();
+      if (parsed.issue() != null || !Objects.equals(row.destination(), entry.destination())
+          || !Objects.equals(shipment.destination(), entry.destination())
+          || entry.weightKg() == null || row.weightKg() == null || row.weightKg().compareTo(entry.weightKg()) != 0
+          || entry.volumeCbm() == null || row.volumeCbm() == null || row.volumeCbm().compareTo(entry.volumeCbm()) != 0
+          || shipment.weightKg().compareTo(entry.weightKg()) != 0 || shipment.volumeCbm().compareTo(entry.volumeCbm()) != 0
+          || pieces.size() > 1 || !Objects.equals(pieces.isEmpty() ? null : pieces.getFirst(), entry.pieces())
+          || entry.pickupRequired() != (shipment.pickupZone() != null)
+          || (pickupRequested && !entry.pickupRequired())
+          || (entry.pickupRequired() && pickupPostcode(text, shipment.pickupZone()).isEmpty())
+          || (ready != null && !ready.equals(cargoReadyDate(text)))
+          || (arrival != null && !arrival.equals(arrivalWindow(text)))) return null;
+      shipments.add(new QuoteShipment(shipment, text, entry.pieces()));
+    }
+    return new SeparateShipments(List.copyOf(shipments), null, sharedText);
+  }
+
+  private static boolean matchesShipmentCount(String text, int count) {
+    return count >= 2 && count <= 8 && SHIPMENT_COUNT.matcher(text).results().allMatch(match -> {
+      int stated = switch (match.group(1).toLowerCase(Locale.ROOT)) {
+        case "both", "two" -> 2;
+        case "three" -> 3;
+        case "four" -> 4;
+        case "five" -> 5;
+        case "six" -> 6;
+        case "seven" -> 7;
+        case "eight" -> 8;
+        default -> Integer.parseInt(match.group(1));
+      };
+      return count == stated;
+    });
   }
 
   public static Parsed request(String subject, String body, boolean attachments, Catalog catalog) {
@@ -405,15 +502,16 @@ public final class MailParser {
     }
     String priority = text.replaceAll(
         "(?iu)(?:\\b(?:rather than|instead of|au lieu de|plut[oô]t que|statt|anstelle)\\h+[^.!?\\r\\n]+"
-            + "|而不是[^。！？\\r\\n]+)", "");
+            + "|而不是[^。！？\\r\\n]+|가장\\h*(?:빠른|저렴한)\\h+(?:옵션|서비스)보다(?:는)?)", "");
     boolean fast = has(priority, "fastest|quickest|shortest|schnellst|prioriti[sz]e speed|"
-        + "\\b(?:le|la|les) plus rapides?\\b|最快|时效最短|時效最短");
+        + "\\b(?:le|la|les) plus rapides?\\b|\\ben h[ıi]zl[ıi]\\b|最快|时效最短|時效最短|가장\\h*빠른");
     boolean cheap =
         has(
             priority,
             "cheapest|lowest|economical|günstig|preiswert|best price|most economical|prioriti[sz]e"
                 + " (?:price|cost)|\\b(?:le|la|les) moins ch[èe]r(?:e|s|es)?\\b|"
-                + "\\b(?:le|la|les) plus [ée]conomiques?\\b|最便宜|最低价|最低價|最经济|最經濟");
+                + "\\b(?:le|la|les) plus [ée]conomiques?\\b|\\ben (?:ucuz|ekonomik)\\b|最便宜|最低价|最低價|最经济|最經濟"
+                + "|가장\\h*저렴한|최저가");
     var arrival = arrivalWindow(body);
     if (arrival != null && has(priority,
         "\\b(?:(?:price|cost) (?:will determine (?:our|the) choice|(?:is|will be) (?:the )?"
@@ -484,7 +582,7 @@ public final class MailParser {
 
   private static final String FREIGHT_TERMS =
       "\\b(?:rfq|quot(?:e|ation)|rat(?:e|es)|pric(?:e|ing)|angebot|anfrage|luftfracht(?:anfrage)?|"
-          + "freight|airfreight|versand|devis|fret a[ée]rien)\\b|空运|空運";
+          + "freight|airfreight|versand|devis|fret a[ée]rien|hava navlun|hava kargo)\\b|空运|空運|항공\\h*(?:운송|화물)|견적";
   private static final String CARGO_TERMS =
       "\\b(?:kgs?|kilograms?|cbm|m3|m³|pallets?|paletten|pieces|pcs|crates?|kisten|cartons?|colli|awb"
           + "|air ?waybill|consignment|shipment|sendung|cargo)\\b";
@@ -644,6 +742,10 @@ public final class MailParser {
   private static final Pattern COLLECTION_WAIT_CONTEXT = pattern(
       "\\b(?:wait(?:ing)?|(?:until|before|time to|drive to) (?:actual )?(?:pick[ -]?up|collection)"
           + "|from (?:cargo |shipment )?readiness|(?:pick[ -]?up|collection) (?:in|within))\\b");
+  private static final Pattern AMBIGUOUS_PICKUP_TIMING = pattern(
+      "\\b(?:(?:pick[ -]?up|collection) (?:lead )?time|time to (?:pick[ -]?up|collection)|"
+          + "lead time before (?:pick[ -]?up|collection)|collect(?:ion)? (?:in|within))"
+          + "\\b[^.!?;\\r\\n]{0,32}?" + DURATION);
   private static final String TRUCK_TIMING_DESCRIPTION =
       "(?:(?:road |airport |truck(?:ing)? )?transit(?: time)?(?: " + FROM_PICKUP_TO_DELIVERY + ")?"
           + "|(?:the )?(?:total )?time to delivery(?: at [A-Z]{3} airport)?"
@@ -674,6 +776,10 @@ public final class MailParser {
     if (unit.startsWith("h")) return duration / 24;
     if (unit.startsWith("min")) return duration / (24 * 60);
     return duration;
+  }
+
+  public static boolean quotesAmbiguousPickupTiming(String body) {
+    return AMBIGUOUS_PICKUP_TIMING.matcher(authoredText(body)).find();
   }
 
   /** Candidate clauses for resolving unusual road timing in an otherwise usable truck bid. */

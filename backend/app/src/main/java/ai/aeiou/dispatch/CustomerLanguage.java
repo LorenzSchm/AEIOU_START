@@ -11,7 +11,8 @@ enum CustomerLanguage {
       + "pouvez-vous|marchandise|d[ée]lai de transit|tarif tout compris|merci d['’]avance)\\b"),
   GERMAN("de", "\\b(?:luftfracht(?:anfrage)?|frachtanfrage|guten (?:tag|morgen|abend)|"
       + "könnten sie|bitte senden|wir benötigen|wir möchten|abholung|mit freundlichen grüßen)\\b"),
-  CHINESE("zh", "空运|詢價|询价|全包价|全包價|提货|提貨|您好|谢谢|謝謝");
+  CHINESE("zh", "空运|詢價|询价|全包价|全包價|提货|提貨|您好|谢谢|謝謝"),
+  TURKISH("tr", "\\b(?:merhaba|hava navlun|havalimanı|teslim edeceğiz|teklifinizi|en ucuz|en ekonomik)\\b");
 
   private static final Pattern REPLY_IN = Pattern.compile(
       "(?iu)\\b(?:reply|respond|quote|antworten sie|r[ée]pondez)(?: please)? "
@@ -63,7 +64,7 @@ enum CustomerLanguage {
 
   String text(String english, String french, String german) {
     return switch (this) {
-      case ENGLISH, CHINESE -> english;
+      case ENGLISH, CHINESE, TURKISH -> english;
       case FRENCH -> french;
       case GERMAN -> german;
     };
@@ -73,9 +74,13 @@ enum CustomerLanguage {
     return this == CHINESE ? chinese : text(english, french, german);
   }
 
+  String text(String english, String french, String german, String chinese, String turkish) {
+    return this == TURKISH ? turkish : text(english, french, german, chinese);
+  }
+
   String signoff() {
     return text("Best regards,\nTeam AEIOU", "Cordialement,\nL’équipe AEIOU",
-        "Mit freundlichen Grüßen\nTeam AEIOU", "谢谢！\nAEIOU 团队");
+        "Mit freundlichen Grüßen\nTeam AEIOU", "谢谢！\nAEIOU 团队", "Saygılarımızla,\nAEIOU Ekibi");
   }
 
   String followUpQuestion(String template, String details) {
@@ -92,6 +97,7 @@ enum CustomerLanguage {
           + "(?:bestätigen|mitteilen|angeben|nennen|zusenden)[?.]";
       case CHINESE -> "(?:为了(?:给您|为您)报价[，,])?(?:能否|可否|请您|请|烦请|麻烦您)"
           + "(?:确认|提供|告知|告诉我们) ?\\{details\\}[？?。.]";
+      case TURKISH -> "(?!)";
     };
     return Pattern.compile(grammar, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
         .matcher(template).matches() ? template.replace("{details}", details) : null;
@@ -115,6 +121,10 @@ enum CustomerLanguage {
     if (this == CHINESE) {
       if (remainder == 0) return wholeDays + " 天";
       return wholeDays == 0 ? remainder + " 小时" : wholeDays + " 天 " + remainder + " 小时";
+    }
+    if (this == TURKISH) {
+      if (remainder == 0) return wholeDays + " gün";
+      return wholeDays == 0 ? remainder + " saat" : wholeDays + " gün " + remainder + " saat";
     }
     String dayText = wholeDays + text(wholeDays == 1 ? " day" : " days",
         wholeDays == 1 ? " jour" : " jours", wholeDays == 1 ? " Tag" : " Tage");

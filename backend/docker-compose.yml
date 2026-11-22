@@ -1,0 +1,40 @@
+# Run the dispatch worker and desk together.
+#   docker compose --env-file .env -f backend/docker-compose.yml up --build -d
+#
+# Build context is the repo root (..) so the image can read start-kit/ too.
+services:
+  worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: aeiou-dispatch
+    init: true
+    ports:
+      - "127.0.0.1:${DISPATCH_HOST_PORT:-8000}:8000"
+    env_file:
+      - ../.env              # TEAM_API_KEY, DISPATCH_WEBHOOK_SECRET, DATABASE_URL, ...
+    environment:
+      # The worker acts on the live 5U mailbox. Keep this false unless this
+      # container is meant to be the one sending quotes (see the note in the README).
+      AUTO_SEND: "${AUTO_SEND:-false}"
+      DISPATCH_START_AT: "${DISPATCH_START_AT:-2026-11-21T15:00:00Z}"
+    volumes:
+      - dispatch-state:/app/state   # dispatch.sqlite3 persists across restarts
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        DISPATCH_API_URL: http://worker:8000
+    image: aeiou-dispatch-frontend
+    init: true
+    ports:
+      - "127.0.0.1:${DISPATCH_FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      worker:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  dispatch-state:

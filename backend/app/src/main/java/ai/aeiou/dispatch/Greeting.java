@@ -36,6 +36,7 @@ final class Greeting {
 
   static String at(Map<?, ?> mail, Instant now, CustomerLanguage language) {
     if (language == CustomerLanguage.CHINESE) return "您好，";
+    if (language == CustomerLanguage.TURKISH) return "Merhaba,";
     int hour = now.atZone(BERLIN).getHour();
     String opening = language.text(
         hour < 5 ? "Hello" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening",

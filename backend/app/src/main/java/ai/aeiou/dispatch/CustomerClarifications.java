@@ -3,16 +3,36 @@ package ai.aeiou.dispatch;
 import ai.aeiou.freight.Catalog;
 import ai.aeiou.freight.MailParser;
 import ai.aeiou.freight.Shipment;
+import java.math.BigDecimal;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 final class CustomerClarifications {
   static final String WAITING = "waiting for customer";
   static final String PICKUP_ISSUE = "Pickup requested. Confirm the pickup postcode or zone.";
+  private static final Pattern SHIPMENT_REFERENCE = Pattern.compile(
+      "(?iu)\\b(?:could you (?:please )?|please )quote (?:for )?the same shipment as in my (?:earlier )?request,?\\s+"
+          + "[\"“]([^\"”\\r\\n]+)[\"”],\\s+sent on (\\d{4}-\\d{2}-\\d{2}) at (\\d{2}:\\d{2}) UTC"
+          + " for (?:destination )?([a-z]{3})[.?]\\s+The cargo and pickup details are unchanged"
+          + "(?:,? and you (?:already )?have them from (?:that|my previous|my earlier) request)?\\.");
+  private static final Pattern REPEATED_SHIPMENT_REFERENCE = Pattern.compile(
+      "(?iu)\\b(?:could you (?:please )?|please )quote the same shipment again[.?]\\s+My earlier request,?\\s+"
+          + "[\"“]([^\"”\\r\\n]+)[\"”],\\s+was sent on (\\d{4}-\\d{2}-\\d{2}) at (\\d{2}:\\d{2}) UTC"
+          + " and was for ([a-z]{3})[.?]\\s+The cargo and pickup details are unchanged"
+          + "(?:,? and you (?:already )?have them from that request)?\\.");
+  private static final Pattern UNCHANGED_CARGO_PICKUP = Pattern.compile(
+      "(?iu)\\b(?:(?:cargo|shipment)\\s+and\\s+(?:the\\s+)?(?:pickup|collection)(?:\\s+details)?"
+          + "\\s+(?:are|remain|stay)\\s+(?:unchanged|the same)"
+          + "|(?:the same|unchanged)\\s+(?:cargo|shipment)\\s+and\\s+(?:the\\s+)?(?:pickup|collection)(?:\\s+details)?)\\b");
+  private static final Pattern PRIOR_REQUEST = Pattern.compile("(?iu)\\b(?:earlier|prior|previous)\\s+(?:request|email|rfq)\\b");
+  private static final Pattern UTC_MINUTE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}");
   private static final Pattern DELIVERY_APPROVAL = Pattern.compile(
       "(?iu)(?:yes[,!]\\h*)?we(?: will|['’]ll) deliver(?: the (?:freight|shipment|cargo))? to "
           + "([a-z]{3}) ourselves(?:,\\h*so\\h+(?:there(?:['’]s| is)\\h+)?no\\h+"
@@ -55,12 +75,24 @@ final class CustomerClarifications {
     }
   }
 
+  private record ReferencedShipment(String body, Shipment shipment) {
+    String normalizeConfirmedWeight(String reply) {
+      var weight = shipment.weightKg().stripTrailingZeros();
+      if (weight.scale() > 0 || weight.compareTo(BigDecimal.valueOf(1000)) < 0) return reply;
+      String grouped = NumberFormat.getIntegerInstance(Locale.US).format(weight);
+      return reply.replaceAll("(?iu)(?<![\\d.,])" + Pattern.quote(grouped) + "(?=\\h+(?:kg|kgs|kilograms?)\\b)",
+          weight.toPlainString());
+    }
+  }
+
   private final Ledger ledger;
   private final Catalog catalog;
+  private final RfqGateway gateway;
 
-  CustomerClarifications(Ledger ledger, Catalog catalog) {
+  CustomerClarifications(Ledger ledger, Catalog catalog, RfqGateway gateway) {
     this.ledger = ledger;
     this.catalog = catalog;
+    this.gateway = gateway;
   }
 
   Details details(long id, Map<String, Object> original,
@@ -68,6 +100,8 @@ final class CustomerClarifications {
     String raw = Ledger.str(original, "body");
     String subject = MailParser.currentSubject(Ledger.str(original, "subject"), raw);
     String body = MailParser.authoredText(raw);
+    var referenced = referencedShipment(original, body);
+    if (referenced != null) body = referenced.body();
     String postcode = MailParser.pickupPostcode(subject + "\n" + body, "").orElse(null);
     Long pickupReply = null, latest = null;
     String deliveryAirport = null;
@@ -89,6 +123,7 @@ final class CustomerClarifications {
     for (var reply : replies) {
       latest = Ledger.id(reply.get("id"));
       String answer = MailParser.authoredText(Ledger.str(readAttachment.apply(reply), "body"));
+      if (referenced != null) answer = referenced.normalizeConfirmedWeight(answer);
       String approvedAirport = deliveryApproval(answer);
       if (approvedAirport != null) {
         deliveryAirport = approvedAirport;
@@ -123,6 +158,85 @@ final class CustomerClarifications {
     message.put("body", merged.toString());
     return new Details(message, postcode, area == null ? null : area.getValue(), zone, pickupReply,
         latest, deliveryAirport, CustomerLanguage.of(original));
+  }
+
+  private ReferencedShipment referencedShipment(Map<String, Object> current, String body) {
+    var references = Stream.concat(SHIPMENT_REFERENCE.matcher(body).results(),
+        REPEATED_SHIPMENT_REFERENCE.matcher(body).results()).limit(2).toList();
+    if (references.size() > 1 || !ledger.read(current.get("attachments"), List.class).isEmpty()) return null;
+    Reference reference;
+    if (references.isEmpty()) {
+      reference = gatewayReference(current, body);
+      if (reference == null) return null;
+    } else {
+      var exact = references.getFirst();
+      reference = new Reference(exact.group(1), exact.group(2) + "T" + exact.group(3), exact.group(4),
+          exact.start(), exact.end(), "");
+    }
+    var matches = ledger.jdbc().queryForList("""
+        SELECT * FROM mail WHERE kind='request' AND root=id AND sender=? AND subject=?
+          AND substr(received,1,16)=? AND received<?
+        """, current.get("sender"), reference.subject(), reference.sentMinute(),
+        current.get("received"));
+    if (matches.size() != 1) return null;
+    var previous = matches.getFirst();
+    if (!ledger.read(previous.get("attachments"), List.class).isEmpty()) return null;
+    String priorBody = MailParser.authoredText(Ledger.str(previous, "body"));
+    var parsed = MailParser.request(Ledger.str(previous, "subject"), priorBody, false, catalog);
+    var shipment = parsed.shipment();
+    if (parsed.issue() != null || !reference.destination().equalsIgnoreCase(shipment.destination())) return null;
+    try {
+      QuoteChecks.preflight(previous);
+      if (CargoInsurance.from(previous) != null) return null;
+    } catch (WaveWorker.Conflict ex) {
+      return null;
+    }
+    String pickup;
+    if (shipment.pickupZone() != null) {
+      var postcode = MailParser.pickupPostcode(priorBody, shipment.pickupZone());
+      if (postcode.isEmpty()) return null;
+      pickup = "Please arrange pickup from postcode " + postcode.get() + " to " + shipment.origin() + ".";
+    } else {
+      if (!MailParser.selfDelivery(priorBody)) return null;
+      pickup = "We will deliver the cargo to " + shipment.origin() + " ourselves.";
+    }
+    return new ReferencedShipment(body.substring(0, reference.start()) + reference.remainingText()
+        + "\nThe shipment has a total gross weight of "
+        + shipment.weightKg().toPlainString() + " kg and a total volume of "
+        + shipment.volumeCbm().toPlainString() + " cbm. " + pickup + body.substring(reference.end()), shipment);
+  }
+
+  private record Reference(String subject, String sentMinute, String destination, int start, int end,
+      String remainingText) {}
+
+  private Reference gatewayReference(Map<String, Object> current, String body) {
+    if (!PRIOR_REQUEST.matcher(body).find() || !UNCHANGED_CARGO_PICKUP.matcher(body).find()) return null;
+    var proposed = gateway.earlierShipmentReference(current, body);
+    if (proposed == null || proposed.subject() == null || proposed.subject().isBlank() || proposed.sentMinute() == null
+        || !UTC_MINUTE.matcher(proposed.sentMinute()).matches() || proposed.destination() == null
+        || !catalog.destinations.contains(proposed.destination())) return null;
+    String title = proposed.subject();
+    var titlePattern = Pattern.compile("[\"“‘']" + Pattern.quote(title) + "[\"”’']");
+    var titles = titlePattern.matcher(body).results().limit(2).toList();
+    if (titles.size() != 1) return null;
+    var match = titles.getFirst();
+    int paragraph = body.lastIndexOf("\n\n", match.start());
+    int start = paragraph < 0 ? 0 : paragraph + 2;
+    int after = body.indexOf("\n\n", match.end());
+    int end = after < 0 ? body.length() : after;
+    String source = body.substring(start, end);
+    String withoutTitle = titlePattern.matcher(source).replaceAll("earlier request");
+    var unchanged = UNCHANGED_CARGO_PICKUP.matcher(withoutTitle);
+    if (!unchanged.find()) return null;
+    String date = proposed.sentMinute().substring(0, 10), minute = proposed.sentMinute().substring(11);
+    var timestamp = Pattern.compile("(?i)" + Pattern.quote(date) + "[T\\s,]+(?:at\\s+)?"
+        + Pattern.quote(minute) + "(?::[0-5]\\d)?\\s*(?:UTC|Z)\\b").matcher(withoutTitle);
+    var destination = Pattern.compile("\\b" + Pattern.quote(proposed.destination()) + "\\b");
+    if (!timestamp.find() || !destination.matcher(source).find()) return null;
+    // Remove only the verified old title, timestamp, airport and unchanged-details phrase.
+    String remaining = destination.matcher(timestamp.replaceAll("earlier that day")).replaceAll("");
+    remaining = UNCHANGED_CARGO_PICKUP.matcher(remaining).replaceFirst("");
+    return new Reference(title, proposed.sentMinute(), proposed.destination(), start, end, remaining);
   }
 
   private String deliveryApproval(String answer) {

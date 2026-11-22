@@ -51,15 +51,19 @@ class MailboxIntegrationTest {
             if (ex.getRequestURI().getPath().equals("/v1/gateway/chat/completions")) {
               var request = json.readTree(ex.getRequestBody());
               assertEquals("fixture", ex.getRequestHeaders().getFirst("X-API-Key"));
+              assertNull(ex.getRequestHeaders().getFirst("Authorization"));
               assertEquals("gpt-4o-mini", request.path("model").asText());
               assertEquals("json_schema", request.path("response_format").path("type").asText());
-              assertTrue(
-                  request
-                      .path("messages")
-                      .get(1)
-                      .path("content")
-                      .asText()
-                      .contains("one hundred kilograms"));
+              var input = request.path("messages").get(1).path("content").asText();
+              assertTrue(input.contains("one hundred kilograms"));
+              String name = request.path("response_format").path("json_schema").path("name").asText();
+              String result = switch (name) {
+                case "freight_rfq" -> """
+                    {"origin":null,"destination":"LAX","weight_kg":100,"volume_cbm":0.2,"preference":"cheapest all-in freight option",
+                     "pickup_required":true,"pickup_zone":"11","needs_review":false,"reply_language":"en"}
+                    """;
+                default -> throw new AssertionError(name);
+              };
               gatewayCalls++;
               response =
                   Map.of(
@@ -70,12 +74,11 @@ class MailboxIntegrationTest {
                               "stop",
                               "message",
                               Map.of(
-                                  "content",
-                                  """
-                                  {"origin":null,"destination":"LAX","weight_kg":100,"volume_cbm":0.2,"preference":"cheapest all-in freight option",
-                                   "pickup_required":true,"pickup_zone":"11","needs_review":false}
-                                  """))));
+                                  "content", result))));
             } else if (ex.getRequestMethod().equals("POST")) {
+              assertEquals("/v1/mailbox/messages", ex.getRequestURI().getPath());
+              assertEquals("fixture", ex.getRequestHeaders().getFirst("X-API-Key"));
+              assertNull(ex.getRequestHeaders().getFirst("Authorization"));
               @SuppressWarnings("unchecked")
               var msg = (Map<String, Object>) json.readValue(ex.getRequestBody(), Map.class);
               out.add(msg);
@@ -129,6 +132,10 @@ class MailboxIntegrationTest {
     props.add("dispatch.db", () -> temp.resolve("dispatch.sqlite3").toString());
     props.add("dispatch.base-url", () -> "http://127.0.0.1:" + fixture.getAddress().getPort());
     props.add("dispatch.key", () -> "fixture");
+    props.add("dispatch.openai-base-url", () -> "http://127.0.0.1:" + fixture.getAddress().getPort());
+    props.add("dispatch.openai-key", () -> "openai-fixture");
+    props.add("dispatch.llm-direct", () -> "true");
+    props.add("dispatch.llm-quote-gateway", () -> "true");
     props.add("dispatch.start-at", () -> "2000-01-01T00:00:00Z");
     props.add("dispatch.poll-ms", () -> "200");
     props.add("dispatch.auto", () -> "true");

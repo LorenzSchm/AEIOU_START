@@ -18,6 +18,23 @@ import { clock, eur, kindLabel, needsAttention, secondsLeft, statusOf, transitLa
 import { spring } from "../../lib/motion";
 
 const RATE_PORTAL = "https://start-hack.5u.ai/portal/ui";
+const EMPTY_PORTAL_RATE = { airline: "", rate_id: "", air_total_eur: "", transit_days: "", valid_until: "" };
+
+/** "€2,315.00", "2.315,00" or "2315" → "2315.00": the last separator followed by 1–2 digits is the decimal point. */
+function eurAmount(text) {
+  const raw = text.replace(/[^0-9.,]/g, "");
+  const m = raw.match(/^(.*?)[.,](\d{1,2})$/);
+  return m ? m[1].replace(/[.,]/g, "") + "." + m[2] : raw.replace(/[.,]/g, "");
+}
+
+/** "HH:MM" on the operator's clock → ISO instant today; blank lets the backend apply its default. */
+function validUntilIso(time) {
+  if (!time) return null;
+  const [h, min] = time.split(":").map(Number);
+  const at = new Date();
+  at.setHours(h, min, 0, 0);
+  return at.toISOString();
+}
 
 /** Stable sheet frame: slides in once; switching cases only crossfades the content. */
 export default function CaseSheet(props) {
@@ -66,6 +83,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
   const [portalDialog, setPortalDialog] = useState(false);
+  const [portalRate, setPortalRate] = useState(EMPTY_PORTAL_RATE);
   const portalPrompted = useRef(false);
   const closeRef = useRef(null);
 
@@ -337,6 +355,35 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
                   <button className="btn" onClick={() => setPortalDialog(true)}>Look up a portal rate</button>
                 </div>
               )}
+              {canOpenPortal && (
+                <>
+                  <div className="grid">
+                    {[["airline", "Portal rate · airline"], ["rate_id", "Rate ID · R-…"], ["air_total_eur", "Air total · EUR"],
+                      ["transit_days", "Transit · days"], ["valid_until", "Valid until", "time"]].map(([k, label, type]) => (
+                      <label className="field" key={k}>
+                        <span>{label}</span>
+                        <input type={type || "text"} value={portalRate[k]}
+                          onChange={(e) => { setDirty(true); setPortalRate({ ...portalRate, [k]: e.target.value }); }} />
+                      </label>
+                    ))}
+                  </div>
+                  <div className="actions">
+                    <button
+                      className="btn"
+                      disabled={!portalRate.airline.trim() || !portalRate.rate_id.trim() || !portalRate.air_total_eur || !portalRate.transit_days}
+                      onClick={() => act("portal-rate", {
+                        airline: portalRate.airline.trim(),
+                        rate_id: portalRate.rate_id.trim(),
+                        air_total_eur: eurAmount(portalRate.air_total_eur),
+                        transit_days: parseFloat(portalRate.transit_days.replace(",", ".")) || null,
+                        valid_until: validUntilIso(portalRate.valid_until),
+                      }, () => setPortalRate(EMPTY_PORTAL_RATE), "Portal rate added. The worker will compare and quote it.")}
+                    >
+                      Add portal rate
+                    </button>
+                  </div>
+                </>
+              )}
               <div className="grid">
                 {[["airline", "Manual bid · airline"], ["air_total_eur", "Air total · EUR"], ["transit_days", "Transit · days"]].map(([k, label]) => (
                   <label className="field" key={k}>
@@ -412,7 +459,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
         message={<>
           {fields.origin} → {fields.destination} · {fields.weight_kg} kg · {fields.volume_cbm} m³
           <br />
-          Solve the sum on 5U’s page, then enter the carrier, EUR air total, and transit under Carrier bids.
+          Look up the rate on 5U’s page, then enter the airline, rate ID, EUR air total, transit and validity under Carrier bids. The worker quotes it like an API rate.
         </>}
         confirmLabel="Open 5U portal" confirmStyle="primary" onConfirm={openPortal} onCancel={dismissPortal} />
     </>

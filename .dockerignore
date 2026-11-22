@@ -1,0 +1,28 @@
+# Build context is the repo root; keep it small. The Docker build needs only
+# backend/ sources + backend/data + backend/cloudline + start-kit.
+
+.git
+**/.DS_Store
+
+# Frontend is not part of the backend image.
+frontend
+
+# Gradle/Java build output and the heavy runtime state dir (jars + sqlite snapshots).
+backend/build
+backend/*/build
+backend/.gradle
+backend/state
+backend/__pycache__
+**/*.class
+
+# Secrets never belong in an image layer; pass them at run time instead.
+.env
+**/.env
+**/.env.*
+**/*.key
+
+# Bulky docs/data at the repo root that the build never reads.
+*.pdf
+*.zip
+*.pptx
+*.docx
