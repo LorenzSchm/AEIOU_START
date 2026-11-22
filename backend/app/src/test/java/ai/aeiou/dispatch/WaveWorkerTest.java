@@ -4483,6 +4483,10 @@ class WaveWorkerTest {
 
         Kind regards
         Anna Sonnberg""";
+    recordedExtraction("""
+        {"origin":"STR","destination":"BOM","weight_kg":110,"volume_cbm":0.39,"preference":"cheapest",
+         "pickup_required":true,"pickup_zone":"72","needs_review":false}
+        """);
     receive(7, "anna@hackloop.mail", "RE: FW: BRUSSELS AIRPORT - MEX / 112 PCS 414 KGS", body, null);
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 3,
         new BigDecimal("900.00"), new BigDecimal("110"), "portal", "R-test000000000002", START.plusSeconds(900))), true));
