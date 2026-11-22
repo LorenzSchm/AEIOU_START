@@ -5,7 +5,7 @@ import Icon from "../ui/Icon";
 import { Chip, CountdownRing, RouteBadge, Segmented } from "../ui/primitives";
 import ProcessStrip from "../case/ProcessStrip";
 import { deriveProcess } from "../../lib/process";
-import { clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
+import { answered, clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
 import { inWindow, useNow } from "../../lib/clock";
 import { useQueuePage } from "../../lib/pages";
 import { isVoiceMessage } from "../../lib/voice";
@@ -114,7 +114,7 @@ const Row = memo(function Row({ m, thread, active, onSelect }) {
     <button className={"row" + (active ? " active" : "")} data-id={m.id} aria-current={active || undefined} onClick={() => onSelect(m.id)}>
       <span className="row-lead">
         {request && m.received ? (
-          <CountdownRing received={m.received} size={30} done={Boolean(m.delivery)} />
+          <CountdownRing received={m.received} size={30} done={Boolean(m.delivery) || answered(m)} />
         ) : (
           <span className={"row-icon" + (voice ? " row-icon-voice" : "")}>
             <Icon name={voice ? "mic" : m.kind === "tracking" ? "pin" : "mail"} size={15} title={voice ? "Voice message" : undefined} />
