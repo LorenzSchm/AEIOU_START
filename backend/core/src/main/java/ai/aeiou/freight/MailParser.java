@@ -50,6 +50,49 @@ public final class MailParser {
       "\\b(?:muss|müssen|soll|sollen|Ankunft|Zustellung)\\b[^.!?;\\r\\n]{0,60}?\\bsp[aä]testens\\h+"
           + "(?:(?:am|bis)\\h+)?(" + ISO_DATE + ")?"
           + "(?=[^.!?;\\r\\n]{0,95}\\b(?:ankommen|eintreffen|erreichen|angeliefert|zugestellt)\\b)");
+  // Further hard arrival deadlines, e.g. "They need to be at ORD by 2026-11-29 at the latest" (live
+  // #53794). A match only counts when its sentence is not about the ready date or the collection.
+  private static final List<Pattern> OTHER_ARRIVAL_DEADLINES = List.of(
+      pattern("\\b(?:needs?|has|have|must|should)\\h+(?:to\\h+)?(?:be|get|arrive|land|reach)\\b"
+          + "[^.!?;\\r\\n]{0,60}?\\b(?:no later than|on or before|by)\\h+(" + ISO_DATE + ")"),
+      pattern("\\b(?:at the latest(?:\\h+(?:by|on))?|latest arrival(?:\\h+(?:by|on|date))?:?)\\h+("
+          + ISO_DATE + ")"),
+      pattern("(" + ISO_DATE + ")\\h+at the latest\\b"),
+      pattern("\\bno later than\\h+(?:the\\h+)?(" + ISO_DATE + ")"),
+      pattern("\\b(?:arrival\\h+|delivery\\h+)?deadline\\b(?:\\h*(?:is|of|:)\\h*)?[^.!?;\\r\\n\\d]{0,25}?("
+          + ISO_DATE + ")"),
+      pattern("\\b(?:doi(?:t|vent)|devr(?:a|ont|ait|aient)|arriv\\p{L}*|livr\\p{L}*)\\b[^.!?;\\r\\n]{0,60}?"
+          + "\\b(?:au plus tard|avant)\\h+(?:le\\h+)?(" + ISO_DATE + ")"),
+      pattern("\\b(?:debe|deben|deber[áa]n?|lleg\\p{L}*|entreg\\p{L}*)\\b[^.!?;\\r\\n]{0,60}?"
+          + "(?:a m[áa]s tardar|antes del?|como m[áa]ximo)\\h+(?:el\\h+)?(" + ISO_DATE + ")"),
+      pattern("\\b(?:deve|devono|arriv\\p{L}*|consegn\\p{L}*)\\b[^.!?;\\r\\n]{0,60}?"
+          + "\\b(?:entro|al pi[uù] tardi)\\h+(?:il\\h+)?(" + ISO_DATE + ")"),
+      pattern("\\b(?:muss|müssen|soll|sollen|Ankunft|Zustellung|Liefertermin)\\b[^.!?;\\r\\n]{0,60}?"
+          + "\\b(?:bis\\h+(?:spätestens\\h+)?|spätestens\\h+(?:am\\h+|bis\\h+(?:zum\\h+)?)?)(" + ISO_DATE + ")"));
+  private static final Pattern NOT_AN_ARRIVAL = pattern(
+      "\\b(?:ready|available|pick(?:ed)?[ -]?up|collect\\p{L}*|abhol\\p{L}*|bereit|abholbereit|"
+          + "enl[èe]vement|ramass\\p{L}*|pr[êe]te?s?|recog\\p{L}*|listo|ritiro|pronto|"
+          + "quot\\p{L}*|offer|reply|respon\\p{L}*|angebot\\p{L}*|devis|oferta|offerta)\\b");
+  private static final Pattern IMPLICIT_CHEAPEST = pattern(
+      "\\b(?:the\\h+)?(?:lowest\\h+|best\\h+|all[ -]in\\h+|total\\h+)?(?:price|cost|rate)s?\\h+(?:"
+          + "(?:is|are)\\h+what\\h+(?:will\\h+|would\\h+)?(?:decides?|determines?|matters?|counts?)"
+          + "|(?:is|are|will\\h+be)\\h+(?:the\\h+|our\\h+)?(?:deciding|determining|decisive|key|main|"
+          + "most\\h+important)\\h+(?:factor|criterion|point)"
+          + "|(?:will\\h+)?(?:decides?|determines?)\\b(?!\\h+(?:later|whether|if))"
+          + "|(?:matters?|counts?)\\h+(?:the\\h+)?most"
+          + "|(?:is|are)\\h+(?:our|the)\\h+(?:main\\h+|top\\h+|first\\h+|only\\h+)?priority)"
+          + "|\\b(?:decide|decision|choose|choice)\\h+(?:will\\h+be\\h+)?based\\h+(?:solely\\h+|only\\h+|purely\\h+)?"
+          + "on\\h+(?:the\\h+)?(?:(?:all[ -]in|total|lowest)\\h+)?(?:price|cost)\\b");
+  private static final Pattern IMPLICIT_FASTEST = pattern(
+      "\\b(?:speed|time|transit\\h+time|timing)\\h+(?:"
+          + "(?:is|are)\\h+what\\h+(?:will\\h+|would\\h+)?(?:decides?|determines?|matters?|counts?)"
+          + "|(?:is|will\\h+be)\\h+(?:the\\h+|our\\h+)?(?:deciding|determining|decisive|key|main|"
+          + "most\\h+important)\\h+(?:factor|criterion|point)"
+          + "|(?:matters?|counts?)\\h+(?:the\\h+)?most"
+          + "|is\\h+(?:our|the)\\h+(?:main\\h+|top\\h+|first\\h+)?priority)"
+          + "|\\bas\\h+fast\\h+as\\h+possible\\b"
+          + "|\\b(?:arrive|deliver(?:ed)?|get\\h+there|be\\h+there|fly|flown|ship(?:ped)?|move[sd]?|transport(?:ed)?)"
+          + "\\h+[^.!?\\r\\n]{0,30}?as\\h+(?:quickly|soon)\\h+as\\h+possible\\b");
   private static final Pattern DEADLINE_TIME =
       pattern("^\\h+(?:(?:at|um)\\h+)?\\d{1,2}(?::\\d{2}|\\h*(?:am|pm|Uhr)\\b)");
 
@@ -448,8 +491,13 @@ public final class MailParser {
       return readyOn != null && arriveBy != null && !arriveBy.isBefore(readyOn);
     }
 
+    /**
+     * The calendar day the cargo arrives when it leaves at the start of its ready day. Live rounds
+     * 85 (#23999) and 179 (#53794) show that the board counts fractional transit this way: a 2 day
+     * flight plus an 11 hour truck from 2026-11-27 arrives on 2026-11-29.
+     */
     public LocalDate estimatedArrival(LocalDate today, double transitDays) {
-      return (readyOn.isBefore(today) ? today : readyOn).plusDays((long) Math.ceil(transitDays));
+      return (readyOn.isBefore(today) ? today : readyOn).plusDays((long) Math.floor(transitDays + 1e-9));
     }
 
     public boolean allows(LocalDate today, double transitDays) {
@@ -459,13 +507,23 @@ public final class MailParser {
 
   public static ArrivalWindow arrivalWindow(String body) {
     String text = authoredText(body);
-    var deadlines = java.util.stream.Stream.concat(ARRIVAL_DEADLINE.matcher(text).results(),
-        GERMAN_ARRIVAL_DEADLINE.matcher(text).results()).toList();
+    var others = OTHER_ARRIVAL_DEADLINES.stream().flatMap(p -> p.matcher(text).results())
+        .filter(match -> !NOT_AN_ARRIVAL.matcher(sentence(text, match)).find());
+    var deadlines = java.util.stream.Stream.of(ARRIVAL_DEADLINE.matcher(text).results(),
+        GERMAN_ARRIVAL_DEADLINE.matcher(text).results(), others).flatMap(s -> s).toList();
     if (deadlines.isEmpty()) return null;
     // Published transit is in days. Time-of-day deadlines require a confirmed schedule.
     var latest = deadlines.stream().map(match ->
         DEADLINE_TIME.matcher(text.substring(match.end())).find() ? null : match.group(1)).toList();
     return new ArrivalWindow(cargoReadyDate(text), onlyDate(latest));
+  }
+
+  private static String sentence(String text, java.util.regex.MatchResult match) {
+    int start = match.start();
+    while (start > 0 && ".!?;\r\n".indexOf(text.charAt(start - 1)) < 0) start--;
+    int end = match.end();
+    while (end < text.length() && ".!?;\r\n".indexOf(text.charAt(end)) < 0) end++;
+    return text.substring(start, end);
   }
 
   public static LocalDate cargoReadyDate(String body) {
@@ -689,6 +747,11 @@ public final class MailParser {
             + "(?:deciding|determining) factor)|(?:decide|decision|choice) based on "
             + "(?:the )?(?:(?:all[ -]in|total) )?(?:price|cost))\\b"))
       cheap = true;
+    if (!fast && !cheap) {
+      // No explicit preference: "price is what will decide" (live #53794) means cheapest.
+      cheap = IMPLICIT_CHEAPEST.matcher(priority).find();
+      fast = IMPLICIT_FASTEST.matcher(priority).find();
+    }
     var volume = quantity(body, VOLUME_QUANTITY, CBM_PER_CUBIC_FOOT);
     if (volume == null && !VOLUME_QUANTITY.matcher(body).find() && !has(body, "\\b(?:cbm|m³|m3)\\b"))
       volume = dimensions(body);

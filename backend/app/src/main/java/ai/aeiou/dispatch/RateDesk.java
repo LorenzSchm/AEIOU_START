@@ -28,7 +28,7 @@ final class RateDesk {
             Thanks,
             Team AEIOU
             """.formatted(shipment.preference(), shipment.origin(), shipment.destination(),
-                shipment.weightKg().toPlainString(), shipment.volumeCbm().toPlainString()));
+                Shipment.displayKg(shipment.weightKg()), Shipment.displayCbm(shipment.volumeCbm())));
   }
 
   static Optional<Offer> offer(String body, Shipment shipment, Catalog catalog, Instant now) {

@@ -136,6 +136,16 @@ class WaveWorkerTest {
         Map.of("finish_reason", "stop", "message", Map.of("content", content)))));
   }
 
+  /** Answers RFQ extraction with a recorded live result; quote checks find no contradiction. */
+  private void recordedExtraction(String fields) {
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      Map<String, Object> payload = call.getArgument(0);
+      var schema = mapper.valueToTree(payload.get("response_format")).path("json_schema");
+      return gatewayResponse("quote_check".equals(schema.path("name").asText())
+          ? "{\"contradiction\":false,\"reply_language\":\"en\"}" : fields);
+    });
+  }
+
   private HttpClientErrorException rateLimited(String retryAfter) {
     var headers = new HttpHeaders();
     headers.set(HttpHeaders.RETRY_AFTER, retryAfter);
@@ -781,7 +791,7 @@ class WaveWorkerTest {
     String quote = outbound.getLast().get("body").toString();
     assertTrue(quote.contains("EUR 4427.30 all in."));
     assertTrue(quote.contains("collection from postcode 22911"));
-    assertTrue(quote.contains("estimated arrival is 2026-12-01"));
+    assertTrue(quote.contains("estimated arrival is 2026-11-30"));
     assertTrue(quote.contains("cargo insurance premium of EUR 267.30"));
   }
 
@@ -868,8 +878,8 @@ class WaveWorkerTest {
     assertTrue(quote.contains("2. FRA to TLV — EUR " + (insured ? "3288.00" : "3200.00")
         + " all-in\n1812 kg · 5.75 m³ · Test Israel Air"));
     assertTrue(quote.contains("collection from postcode 65996"));
+    assertTrue(quote.contains("estimated arrival is 2026-11-24"));
     assertTrue(quote.contains("estimated arrival is 2026-11-25"));
-    assertTrue(quote.contains("estimated arrival is 2026-11-26"));
     assertFalse(quote.contains("7300"));
     assertEquals("sent", ledger.delivery("quote:7"));
   }
@@ -1035,7 +1045,7 @@ class WaveWorkerTest {
     assertEquals(6, outbound.size());
     assertEquals(5001L, outbound.getLast().get("in_reply_to"));
     assertTrue(outbound.getLast().get("body").toString().contains("EUR 4511.03"));
-    assertTrue(outbound.getLast().get("body").toString().contains("estimated arrival is 2026-11-27"));
+    assertTrue(outbound.getLast().get("body").toString().contains("estimated arrival is 2026-11-26"));
     var state = ledger.latestRequote(7);
     assertEquals(new BigDecimal("1317"), ledger.read(state.get("shipment"), Shipment.class).weightKg());
     assertThrows(WaveWorker.Conflict.class, () -> new PortalBookings(ledger, upstream, clock, true).book(7));
@@ -1101,10 +1111,14 @@ class WaveWorkerTest {
 
     assertEquals("sent", ledger.delivery("quote:7"));
     var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
-    assertEquals("Sternmeile Logistik", draft.trucker());
+    // Live round 85 (#23999) quoted the 2-day air rate and was too_high: with fractional transit the cheaper
+    // 3-day flight plus the balanced 31 h truck still arrives on 2026-12-01.
+    assertEquals("231.40", ledger.jdbc().queryForObject(
+        "SELECT euros FROM tender WHERE email='sternmeile-logistik@hackloop.mail'", String.class));
+    assertEquals("Neckarstrom Kurier", draft.trucker());
     assertEquals("Lumen Air Cargo", draft.offer().airline());
-    assertEquals(new BigDecimal("2711.40"), draft.offer().totalEur());
-    assertEquals(3 + 23 / 24.0, draft.offer().days());
+    assertEquals(new BigDecimal("2588.00"), draft.offer().totalEur());
+    assertEquals(3 + 31 / 24.0, draft.offer().days());
     assertTrue(draft.body().contains("Planned arrival is 2026-12-01"));
   }
 
@@ -1128,7 +1142,7 @@ class WaveWorkerTest {
     var expiry = START.plusSeconds(900);
     var weight = new BigDecimal("836.67");
     var solace = new Offer("Solace Air Cargo", 3, new BigDecimal("2334.30"), weight, "portal", "SOLACE", expiry);
-    var late = new Offer("Cheaper Air Cargo", 4, new BigDecimal("1900"), weight, "portal", "LATE", expiry);
+    var late = new Offer("Cheaper Air Cargo", 5, new BigDecimal("1900"), weight, "portal", "LATE", expiry);
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(solace, late), true));
     worker.work();
     replyWithTruckBid(8, "rheinufer-spedition@hackloop.mail", "119.57", 28);
@@ -1152,7 +1166,7 @@ class WaveWorkerTest {
     assertEquals("Solace Air Cargo", draft.offer().airline());
     assertEquals(3.875, draft.offer().days());
     assertEquals(new BigDecimal("2478.23"), draft.offer().totalEur());
-    assertTrue(outbound.getLast().get("body").toString().contains("Planned arrival is 2026-11-27"));
+    assertTrue(outbound.getLast().get("body").toString().contains("Planned arrival is 2026-11-26"));
   }
 
   @ParameterizedTest
@@ -1203,7 +1217,7 @@ class WaveWorkerTest {
     assertEquals(pickup ? "Fast Test Cargo" : "Cheap Test Cargo", draft.offer().airline());
     assertEquals(new BigDecimal(pickup ? "1950.00" : "1300.00"), draft.offer().totalEur());
     assertEquals(8L, outbound.getLast().get("in_reply_to"));
-    assertTrue(draft.body().contains(pickup ? "2026-11-28" : "2026-11-30"));
+    assertTrue(draft.body().contains(pickup ? "2026-11-27" : "2026-11-30"));
     assertFalse(draft.body().contains("ATL"));
   }
 
@@ -1339,7 +1353,7 @@ class WaveWorkerTest {
   void standardRfqsUseOneGatewayExtractionBeforeInvitingCarriers(String variant) throws Exception {
     restart(false, true);
     request("unverified_deadline".equals(variant)
-        ? "The cargo will be ready on 2026-11-26. La marchandise doit arriver à destination au plus tard le 2026-12-01."
+        ? "The cargo will be ready on 2026-11-26. De lading moet uiterlijk op 2026-12-01 op de bestemming aankomen."
         : "The cargo will be ready on 2026-11-26 and must arrive at LAX by 2026-12-01.");
     when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
       var payload = mapper.valueToTree(call.getArgument(0, Map.class));
@@ -2125,19 +2139,20 @@ class WaveWorkerTest {
     verify(upstream, times(1)).parseRfq(anyMap());
   }
 
+  // Brief: "Among carrier bids, the right one is the most balanced: price and speed weigh 50/50."
+  // Rows 1-2 are live rounds 80 (req 22569) and 71 (req 19873), rejected too_low with the 29 h truck.
   @ParameterizedTest
   @CsvSource({
-      "82.92, 29, 169.72, 8, true",
-      "143.22, 29, 273.09, 8, true",
-      "60.00, 20, 100.00, 8, true",
-      "60.01, 20, 100.00, 8, false",
-      "60.00, 19, 100.00, 8, false",
-      "60.00,   , 100.00, 8, false",
-      "60.00, 20, 100.00,  , false"
+      "82.92, 29, 169.72, 8, Domblick Kurierdienst",
+      "143.22, 29, 273.09, 8, Domblick Kurierdienst",
+      "60.00, 20, 100.00, 8, Domblick Kurierdienst",
+      "60.00, 12, 100.00, 8, Vogelsberg Haulage",
+      "60.00,   , 100.00, 8, Domblick Kurierdienst",
+      "60.00, 20, 100.00,  , Vogelsberg Haulage"
   })
-  void holdsOnlyUnusuallyCheapAndSlowPickupBids(String selectedEur, Integer selectedHours,
-      String alternativeEur, Integer alternativeHours, boolean hold) throws Exception {
-    restart(hold); // A flagged case goes to review even when counteroffers are enabled.
+  void quotesTheMostBalancedPickupBidWithoutOperatorReview(String vogelsbergEur, Integer vogelsbergHours,
+      String domblickEur, Integer domblickHours, String expected) throws Exception {
+    restart(false);
     receive(7, "buyer@hackloop.mail", "RFQ FRA to DEL",
         "Please quote the cheapest air freight from FRA to DEL for 356 kg and 1.58 cbm. "
             + "Pickup from postcode 36563.", null);
@@ -2145,38 +2160,23 @@ class WaveWorkerTest {
         BigDecimal.valueOf(356), "portal", "FRA-DEL", START.plusSeconds(900));
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(air), true));
     worker.work();
-    replyWithTruckBid(8, "vogelsberg-haulage@hackloop.mail", selectedEur, selectedHours);
-    replyWithTruckBid(9, "domblick-kurierdienst@hackloop.mail", alternativeEur, alternativeHours);
+    replyWithTruckBid(8, "vogelsberg-haulage@hackloop.mail", vogelsbergEur, vogelsbergHours);
+    replyWithTruckBid(9, "domblick-kurierdienst@hackloop.mail", domblickEur, domblickHours);
     replyWithTruckBid(10, "bodenseefracht@hackloop.mail", "400.00", null);
-    int invitations = outbound.size();
     clock.current = START.plusSeconds(76);
     worker.work();
 
     var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
-    assertEquals("Vogelsberg Haulage", draft.trucker());
-    assertEquals(new BigDecimal("815.24").add(new BigDecimal(selectedEur)), draft.offer().totalEur());
-    if (hold) {
-      assertNull(ledger.delivery("quote:7"));
-      assertEquals(invitations, outbound.size());
-      assertEquals("operator review", ledger.mail(7).get("stage"));
-      assertEquals(1, draft.notes().size());
-      var note = draft.notes().getFirst();
-      assertTrue(note.contains("Vogelsberg Haulage quoted EUR " + selectedEur));
-      assertTrue(note.contains("Domblick Kurierdienst at EUR " + alternativeEur));
-      assertEquals(note, ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=7", String.class));
-      restart();
-      worker.work();
-      assertNull(ledger.delivery("quote:7"));
-      worker.sendQuote(7, draft.revision());
-      assertFalse(outbound.getLast().get("body").toString().contains("Pickup bid needs review"));
-    } else {
-      assertTrue(draft.notes().isEmpty());
-    }
+    assertEquals(expected, draft.trucker());
+    var pickup = expected.startsWith("Vogelsberg") ? vogelsbergEur : domblickEur;
+    assertEquals(new BigDecimal("815.24").add(new BigDecimal(pickup)), draft.offer().totalEur());
+    assertTrue(draft.notes().isEmpty());
     assertEquals("sent", ledger.delivery("quote:7"));
+    assertFalse(outbound.getLast().get("body").toString().contains("Pickup bid needs review"));
   }
 
   @Test
-  void round140ChecksFasterPickupBidsBeyondTheSecondCheapest() {
+  void round140QuotesTheBalancedPickupInsteadOfTheCheapestSlowOne() {
     receive(7, "buyer@hackloop.mail", "Air freight quote to RUH", """
         Please quote the cheapest air freight to RUH with truck pickup from postcode 45806,
         ready on 2026-11-28. The shipment has a gross weight of 3344.42 lb and a volume of 295.24 cubic feet.
@@ -2197,11 +2197,37 @@ class WaveWorkerTest {
     clock.current = START.plusSeconds(76);
     worker.work();
 
-    assertEquals("operator review", ledger.mail(7).get("stage"));
-    assertNull(ledger.delivery("quote:7"));
+    // Live round 140 (req 41536) quoted Bodenseefracht 131.85 EUR / 31 h at 3029.32 and was too_low.
+    assertEquals("sent", ledger.delivery("quote:7"));
     var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
-    assertEquals(new BigDecimal("3029.32"), draft.offer().totalEur());
-    assertTrue(draft.notes().getFirst().contains("Grautal Trucking at EUR 386.89 and 7 hours"));
+    assertEquals("Grautal Trucking", draft.trucker());
+    assertEquals(new BigDecimal("3284.36"), draft.offer().totalEur());
+  }
+
+  // Live round 53 (req 14293): the 132.02 EUR bid without a transit time was quoted and too_low.
+  @Test
+  void round53BalancedPickupIgnoresTheCheapBidWithoutTransit() {
+    receive(7, "buyer@hackloop.mail", "Air freight quote to ORD", """
+        Please quote the cheapest air freight to ORD with truck pickup from postcode 93938.
+        The shipment has a gross weight of 1012 kg and a volume of 4.06 cbm.
+        """, null);
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer(
+        "Xenon Cargo Airlines", 3, new BigDecimal("2590.72"), shipment.chargeableKg(), "portal", "ORD-53",
+        START.plusSeconds(900))), true));
+    for (String carrier : List.of("elbkante-logistik", "isarwelle-spedition", "neckarstrom-kurier")) {
+      worker.invite(7, shipment, catalog.contact(carrier + "@hackloop.mail").orElseThrow());
+    }
+    replyWithTruckBid(8, "elbkante-logistik@hackloop.mail", "132.02", null);
+    replyWithTruckBid(9, "isarwelle-spedition@hackloop.mail", "178.94", 33);
+    replyWithTruckBid(10, "neckarstrom-kurier@hackloop.mail", "297.62", 5);
+    clock.current = START.plusSeconds(76);
+    worker.work();
+
+    assertEquals("sent", ledger.delivery("quote:7"));
+    var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("Neckarstrom Kurier", draft.trucker());
+    assertEquals(new BigDecimal("2888.34"), draft.offer().totalEur());
   }
 
   private void replyWithTruckBid(long id, String email, String euros, Integer hours) {
@@ -4296,5 +4322,127 @@ class WaveWorkerTest {
     worker.work();
     assertNotEquals("review", ledger.mail(7).get("stage"),
         () -> ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=7", String.class));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "They need to be at ORD by 2026-11-29 at the latest.",
+      "The cargo must arrive by 2026-11-29.",
+      "It has to reach ORD by 2026-11-29.",
+      "Delivery in Chicago no later than 2026-11-29, please.",
+      "We need it in Chicago at the latest by 2026-11-29.",
+      "Arrival deadline: 2026-11-29.",
+      "Die Sendung muss bis spätestens 2026-11-29 in ORD sein.",
+      "La marchandise doit arriver à ORD au plus tard le 2026-11-29.",
+      "La carga debe llegar a ORD a más tardar el 2026-11-29.",
+      "La merce deve arrivare a ORD entro il 2026-11-29."})
+  void readsHardArrivalDeadlines(String deadline) {
+    var arrival = MailParser.arrivalWindow("The goods will be ready for pickup on 2026-11-27. " + deadline);
+    assertNotNull(arrival, deadline);
+    assertEquals(LocalDate.parse("2026-11-27"), arrival.readyOn());
+    assertEquals(LocalDate.parse("2026-11-29"), arrival.arriveBy(), deadline);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "The cargo must be ready for collection by 2026-11-29.",
+      "Please send your quote no later than 2026-11-29.",
+      "Our reply deadline is 2026-11-29.",
+      "We can hand it over at the latest by 2026-11-29 for pickup."})
+  void ignoresDatesThatAreNotArrivalDeadlines(String text) {
+    assertNull(MailParser.arrivalWindow(text), text);
+  }
+
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', value = {
+      "As long as the shipment arrives by then, price is what will decide which option we book.|cheapest",
+      "Price is the deciding factor for us.|cheapest",
+      "In the end the price decides.|cheapest",
+      "Lowest cost matters most.|cheapest",
+      "Speed is what matters here.|fastest",
+      "We need it there as fast as possible.|fastest",
+      "Please reply as soon as possible.|",
+      "Price is the deciding factor, but please quote the fastest option.|fastest"})
+  void readsAnImplicitServicePreference(String sentence, String preference) {
+    var parsed = MailParser.request("Air freight quote to ORD",
+        "Please quote air freight from CGN to ORD for 343 kg and 1.54 cbm. " + sentence, false, catalog);
+    assertEquals(preference, parsed.shipment().preference(), sentence);
+  }
+
+  @Test
+  void displaysWeightsAndVolumesWithoutConversionNoise() {
+    assertEquals("343", Shipment.displayKg(new BigDecimal("343.0020142703")));
+    assertEquals("12.35", Shipment.displayKg(new BigDecimal("12.345")));
+    assertEquals("1951", Shipment.displayKg(new BigDecimal("1951")));
+    assertEquals("1.54", Shipment.displayCbm(new BigDecimal("1.54015328613888")));
+    assertEquals("4.677", Shipment.displayCbm(new BigDecimal("4.6768")));
+  }
+
+  @Test
+  void live53794QuotesTheCheapestBalancedRouteThatMeetsTheDeadlineWithoutAsking() {
+    // Round 179: no preference question should be asked; Xenon 873.05 (arrival 2026-12-02) was too_low.
+    recordedExtraction("""
+        {"origin":"51871","destination":"ORD","weight_kg":342.99999983,"volume_cbm":1.5409999999999997,\
+        "preference":null,"pickup_required":true,"pickup_zone":"51","needs_review":false,"reply_language":"en"}""");
+    receive(7, "weidner-spielwaren@hackloop.mail", "Air freight quote to ORD", "Hi there,\n\nHope your week’s going well. Our buyer in Chicago, US is importing some furniture samples from us in Germany, and I’m arranging the flight for their import. Could you send me an all-in air freight quote in EUR, including a truck you arrange to collect the shipment from our site in 51871 (Bergisch Gladbach), Germany, and take it to the departure airport?\n\nThe 5 pieces will be ready for pickup on 2026-11-27, weigh 756.19 lb gross, and take up 54.39 cubic feet. They need to be at ORD by 2026-11-29 at the latest. As long as the shipment arrives by then, price is what will decide which option we book.\n\nCould you attach the offer as a PDF when you reply? Our purchasing department needs it for filing.\n\nThanks for looking into this!\n\nCheers,\nKlaus Weidner\nWeidner Spielwaren GmbH, Nuremberg", null);
+    var shipment = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("cheapest", shipment.preference());
+    assertEquals("CGN", shipment.origin());
+    var arrival = MailParser.arrivalWindow(ledger.mail(7).get("body").toString());
+    assertEquals(LocalDate.parse("2026-11-27"), arrival.readyOn());
+    assertEquals(LocalDate.parse("2026-11-29"), arrival.arriveBy());
+    var kg = shipment.weightKg();
+    var expiry = Instant.parse("2026-11-22T09:18:00Z");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(
+        new Offer("Xenon Cargo Airlines", 3, new BigDecimal("782.04"), kg, "portal", "R-GUR8yk--KBUriLuZ", expiry),
+        new Offer("Aurelia Air Cargo", 2, new BigDecimal("929.53"), kg, "portal", "R-Dkc2dyD8HGLptVR1", expiry)),
+        true));
+    var bids = new LinkedHashMap<String, String>();
+    bids.put("elbkante-logistik", "Hello,\n\nOur all-in rate for collection and delivery to CGN is 91.01 EUR, valid until 22 Nov 2026 09:18 UTC.\n\nThe estimated transit time from actual pickup to airport delivery is 29 hours, excluding any wait before collection.\n\nOffer reference: TRK-17244. No booking is required for collection.\n\nKind regards,\nElbkante Logistik");
+    bids.put("westfalenroute", "Dear Team AEIOU,\n\nOur all-in rate for collection and delivery to CGN is 145.16 EUR.\n\nEstimated transit time from actual pickup to airport delivery, excluding any wait before collection: 11 hours.\n\nRate valid until: 22 Nov 2026 09:18 UTC.\nOffer reference: TRK-17246. No booking is required for pickup.\n\nKind regards,\nWestfalenroute");
+    bids.put("bodenseefracht", "All-in rate: 169.88 EUR\nEstimated transit from actual pickup to airport delivery at CGN, excluding any wait before collection: 12 hours\nRate valid until: 22 Nov 2026 09:18 UTC\nOffer reference: TRK-17248. No booking is required for pickup.\n\nBodenseefracht");
+    bids.put("maintal-transport-logistik", "Hi Team AEIOU,\n\nThe estimated road transit from actual pickup to delivery at CGN airport is 13 hours, excluding any wait before collection.\n\nThe all-in rate is 153.73 EUR, valid until 22 Nov 2026 09:18 UTC. Our offer reference is TRK-17259. No booking is needed for pickup.\n\nBest regards,\nMaintal Transport Logistik");
+    bids.put("aurelia-air-cargo", "Dear Team AEIOU,\n\nThank you for your inquiry. Our all-in air freight rate from CGN to ORD is 929.53 EUR, valid until 22 Nov 2026 09:18 UTC.\n\nThe estimated transit time is 2 days. Please quote R-Nes5vD4FCIKgk4xx when booking.\n\nKind regards,\nAurelia Air Cargo");
+    for (String carrier : bids.keySet())
+      worker.invite(7, shipment, catalog.contact(carrier + "@hackloop.mail").orElseThrow());
+    long replyId = 8;
+    for (var bid : bids.entrySet()) {
+      String email = bid.getKey() + "@hackloop.mail";
+      var invitation = outbound.stream().filter(m -> email.equals(m.get("to"))).findFirst().orElseThrow();
+      assertFalse(invitation.get("body").toString().contains("343.0020142703"));
+      receive(replyId++, email, "Re: " + invitation.get("subject"), bid.getValue(), Ledger.id(invitation.get("id")));
+    }
+    clock.current = START.plusSeconds(76);
+    worker.work();
+
+    assertNull(ledger.delivery("rfq-info:7"), () -> String.valueOf(outbound));
+    assertEquals("sent", ledger.delivery("quote:7"), () -> ledger.jdbc().queryForList("SELECT reason FROM wave_case")
+        + " " + ledger.jdbc().queryForList("SELECT * FROM rfq_parse"));
+    var draft = ledger.read(ledger.mail(7).get("proposal"), WaveWorker.Draft.class);
+    // Xenon + any truck arrives 2026-11-30 or later; Aurelia + Elbkante (29 h) too. Westfalenroute is
+    // both the cheapest on-time truck and the most balanced one: 929.53 + 145.16.
+    assertEquals("Aurelia Air Cargo", draft.offer().airline());
+    assertEquals("Westfalenroute", draft.trucker());
+    assertEquals(new BigDecimal("1074.69"), draft.offer().totalEur());
+    assertFalse(arrival.estimatedArrival(LocalDate.parse("2026-11-21"), draft.offer().days())
+        .isAfter(LocalDate.parse("2026-11-29")));
+    String body = outbound.getLast().get("body").toString();
+    assertTrue(body.contains("343 kg"), body);
+    assertTrue(body.contains("2026-11-29"), body);
+  }
+
+  @Test
+  void live54117UsesThePickupAirportWhenTheExtractionReportsThePostcodeAsOrigin() {
+    recordedExtraction("""
+        {"origin":"81843","destination":"SGN","weight_kg":1951,"volume_cbm":13.67,"preference":"fastest",\
+        "pickup_required":true,"pickup_zone":"81","needs_review":false,"reply_language":"tr"}""");
+    receive(7, "lindqvist-medtech@hackloop.mail", "RE: FW: BRUSSELS AIRPORT - ASU / 225 CTN 390 KGS", "Merhaba,\n\nSGN (Ho Chi Minh City, VN) varışlı tekstil numuneleri için en hızlı seçeneği istiyoruz. Gönderi 7 parça, brüt 1951 kg ve 13.67 cbm.\n\nYük 2026-11-28 tarihinde 81843 (Munich South), Germany adresindeki tesisimizden alıma hazır. Havalimanına kamyon nakliyesini de siz organize edecek şekilde, tüm masraflar dahil EUR teklifinizi iletebilir misiniz?\n\nSara\nLindqvist Medtech\n\n\n-----Original Message-----\nSent: 2026-10-16\nSubject: BRUSSELS AIRPORT - ASU / 225 CTN 390 KGS\n\nDear team,\n\npls quote air freight ex BRUSSELS AIRPORT to ASU:\n225 CTN / 390 KGS / 15.8 CBM, automotive sensors\nFCA, cargo ready next week.\n\nThanks", null);
+    worker.work();
+
+    assertEquals("collecting", ledger.mail(7).get("stage"), () -> String.valueOf(ledger.mail(7)));
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("MUC", s.origin());
+    assertEquals("81", s.pickupZone());
+    assertEquals("fastest", s.preference());
   }
 }

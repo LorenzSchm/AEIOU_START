@@ -159,7 +159,7 @@ class TrackingReplies {
               + ".";
     if (Pattern.compile("(?i)\\b(?:weight|kg|gewicht)\\b").matcher(question).find())
       detail +=
-          " The gross weight is " + s.weightKg().stripTrailingZeros().toPlainString() + " kg.";
+          " The gross weight is " + Shipment.displayKg(s.weightKg()) + " kg.";
     // Written in English, then rendered and verified in the language of the question.
     String approved = Greeting.at(q, clock.instant())
         + "\n\nThe shipment from "

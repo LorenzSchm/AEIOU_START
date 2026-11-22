@@ -149,7 +149,7 @@ final class QuoteAttachments {
     var fields = new ArrayList<>(List.of(new Field(label.get(1), reference),
         new Field(label.get(2), label.get(3).formatted(shipment.origin(), shipment.destination())),
         new Field(label.get(4), offer.airline()),
-        new Field(label.get(5), shipment.weightKg().stripTrailingZeros().toPlainString()),
+        new Field(label.get(5), Shipment.displayKg(shipment.weightKg())),
         new Field(label.get(6), offer.totalEur().toPlainString())));
     if (offer.validUntil() != null) fields.add(new Field(label.get(7), UTC.format(offer.validUntil())));
     fields.add(new Field(label.get(8), draft.body(), true));

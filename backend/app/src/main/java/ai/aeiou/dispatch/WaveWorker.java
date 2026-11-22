@@ -24,8 +24,6 @@ class WaveWorker {
       "(?<![A-Za-z0-9_-])BK-[A-Za-z0-9_-]+(?![A-Za-z0-9_-])");
   private static final int MAILBOX_PAGE_SIZE = 200;
   private static final long MAILBOX_POLL_SECONDS = 6;
-  private static final BigDecimal PICKUP_REVIEW_PRICE_RATIO = new BigDecimal("0.60");
-  private static final double PICKUP_REVIEW_TRANSIT_RATIO = 2.5;
   private final Ledger ledger;
   private final Catalog catalog;
   private final FiveU upstream;
@@ -650,7 +648,7 @@ class WaveWorker {
           : "Portal rates unavailable. Waiting for a comparable Rate Desk quote.");
       return;
     }
-    if (counteroffers && !calculation.pickupReview()) {
+    if (counteroffers) {
       if (awaitCounteroffer(id, deadline, waitUntil, draft, tenders)) {
         ledger.stage(id, "collecting", null);
         return;
@@ -660,8 +658,8 @@ class WaveWorker {
         if (refreshed.draft().offer() != null) calculation = refreshed;
       }
     }
-    save(id, s, calculation.draft(), calculation.pickupReview());
-    if (!calculation.pickupReview()) sendQuote(id, calculation.draft().revision(), true);
+    save(id, s, calculation.draft(), false);
+    sendQuote(id, calculation.draft().revision(), true);
   }
 
   private void requestRateDesk(long id, Shipment shipment, Instant deadline) {
@@ -927,8 +925,6 @@ class WaveWorker {
           new PricingContext(mail, details, received, deadline, null, CargoInsurance.from(details.message())),
           leg.tenderId());
       var draft = calculation.draft();
-      if (calculation.pickupReview())
-        throw new Conflict(shipment.destination() + ". " + String.join(" ", draft.notes()));
       if (draft.offer() == null) {
         if (draft.notes().contains(QuoteChecks.PICKUP_REVIEW))
           throw new Conflict(shipment.destination() + ". " + QuoteChecks.PICKUP_REVIEW);
@@ -1156,7 +1152,7 @@ class WaveWorker {
     return awaitingVoice;
   }
 
-  private record Calculation(Draft draft, boolean pickupReview) {}
+  private record Calculation(Draft draft) {}
   private record PricingContext(Map<String, Object> mail, CustomerClarifications.Details details,
       Instant received, Instant deadline, Long revisionReply, CargoInsurance insurance) {}
 
@@ -1289,8 +1285,6 @@ class WaveWorker {
     var notes = new ArrayList<>(plan.notes());
     if (conditionalPickup && s.pickupZone() != null && plan.pickupEur() == null)
       notes.add(QuoteChecks.PICKUP_REVIEW);
-    String pickupReview = "cheapest".equals(s.preference()) ? pickupReviewReason(plan, trucks) : null;
-    if (pickupReview != null) notes.add(pickupReview);
     var draft = new Draft(
         UUID.randomUUID().toString(),
         best,
@@ -1304,7 +1298,7 @@ class WaveWorker {
         null,
         insurance,
         airEur);
-    return new Calculation(draft, pickupReview != null);
+    return new Calculation(draft);
   }
 
   private MailParser.ArrivalWindow arrivalWindow(CustomerClarifications.Details details) {
@@ -1318,38 +1312,39 @@ class WaveWorker {
   private QuotePlanner.Plan planWithinArrival(Shipment shipment, List<Offer> offers, List<Offer> airBids,
       List<Offer> trucks, Set<String> unknownTransit, QuotePlanner.Plan original,
       MailParser.ArrivalWindow arrival) {
-    // A faster truck can make a cheaper air option feasible. Compare complete combinations.
+    // A faster truck can make a cheaper air option feasible. Compare complete combinations: the air
+    // leg the customer asked for first, then the most balanced truck that still arrives in time.
+    var timed = trucks.stream().filter(truck -> !unknownTransit.contains(truck.airline())).toList();
     var combinations = shipment.pickupZone() == null || shipment.pickupEur() != null
         ? java.util.stream.Stream.of(original)
-        : trucks.stream().filter(truck -> !unknownTransit.contains(truck.airline()))
+        : timed.stream()
             .map(truck -> QuotePlanner.plan(shipment, offers, airBids, List.of(truck), Set.of()));
     LocalDate today = quoteDay();
     var ranking = Offer.order(shipment.preference());
+    var balance = QuotePlanner.balance(timed);
+    Comparator<QuotePlanner.Plan> byAirLeg = Comparator.comparing(plan -> airLeg(plan), ranking);
+    Comparator<QuotePlanner.Plan> byTruck = Comparator.comparing(plan -> timed.stream()
+        .filter(truck -> truck.airline().equals(plan.trucker())).findFirst().orElse(null),
+        Comparator.nullsLast(balance));
     return combinations.map(plan -> {
       var eligible = plan.options().stream().filter(offer -> arrival.allows(today, offer.days())).toList();
       return new QuotePlanner.Plan(eligible.isEmpty() ? null : eligible.getFirst(), eligible, plan.notes(),
           plan.trucker(), plan.pickupEur(), plan.pickupDays(), plan.pickupValidUntil());
-    }).filter(plan -> plan.best() != null).min(Comparator.comparing(QuotePlanner.Plan::best, ranking))
+    }).filter(plan -> plan.best() != null).min(byAirLeg.thenComparing(byTruck))
         .orElseGet(() -> new QuotePlanner.Plan(null, List.of(),
             original.best() == null ? original.notes()
                 : List.of("No confirmed offer meets the requested arrival date of " + arrival.arriveBy() + "."),
             original.trucker(), original.pickupEur(), original.pickupDays(), original.pickupValidUntil()));
   }
 
-  private String pickupReviewReason(QuotePlanner.Plan plan, List<Offer> trucks) {
-    if (plan.best() == null || plan.trucker() == null || plan.pickupDays() == null
-        || plan.pickupDays() <= 0) return null;
-    var selected = trucks.stream().filter(t -> t.airline().equals(plan.trucker())).findFirst().orElseThrow();
-    var alternative = trucks.stream()
-        .filter(t -> !t.airline().equals(plan.trucker()) && t.days() > 0)
-        .filter(t -> selected.totalEur().compareTo(t.totalEur().multiply(PICKUP_REVIEW_PRICE_RATIO)) <= 0)
-        .filter(t -> selected.days() >= Math.nextDown(PICKUP_REVIEW_TRANSIT_RATIO * t.days()))
-        .min(Offer.order("cheapest")).orElse(null);
-    if (alternative == null) return null;
-    return ("Pickup bid needs review. %s quoted EUR %s and %s. "
-        + "The lowest-priced substantially faster bid is %s at EUR %s and %s.")
-        .formatted(selected.airline(), selected.totalEur().toPlainString(), selected.transitLabel(),
-            alternative.airline(), alternative.totalEur().toPlainString(), alternative.transitLabel());
+  /** The air part of a planned offer, so combinations compare by the customer's air preference. */
+  private static Offer airLeg(QuotePlanner.Plan plan) {
+    var best = plan.best();
+    if (plan.trucker() == null || plan.pickupEur() == null) return best;
+    double pickupDays = plan.pickupDays() == null ? 0 : plan.pickupDays();
+    return new Offer(best.airline(), Math.max(0, best.days() - pickupDays),
+        best.totalEur().subtract(plan.pickupEur()).max(BigDecimal.ZERO), best.billedKg(), best.source(),
+        best.rateId(), best.validUntil());
   }
 
   private List<Offer> tariffOffers(Shipment shipment, Instant received) {
@@ -1408,7 +1403,7 @@ class WaveWorker {
       String pickupWaitingDisclosure) {
     var language = details.language();
     var arrival = arrivalWindow(details);
-    String weight = s.weightKg().stripTrailingZeros().toPlainString();
+    String weight = Shipment.displayKg(s.weightKg());
     String priority = "fastest".equals(s.preference())
         ? language.text("quickest option", "solution la plus rapide", "schnellste Option", "最快方案", "en hızlı seçenek")
         : arrival == null
@@ -1437,8 +1432,8 @@ class WaveWorker {
         "%d. %s 至 %s — EUR %s 全包价")
         .formatted(number, s.origin(), s.destination(), offer.totalEur().toPlainString());
     return heading + "\n"
-        + "%s kg · %s m³ · %s".formatted(s.weightKg().stripTrailingZeros().toPlainString(),
-            s.volumeCbm().stripTrailingZeros().toPlainString(), offer.airline())
+        + "%s kg · %s m³ · %s".formatted(Shipment.displayKg(s.weightKg()),
+            Shipment.displayCbm(s.volumeCbm()), offer.airline())
         + "\n" + quoteService(details, s, offer, draft.pickupDays(), draft.pickupWaitingDisclosure())
         + (draft.insurance() == null ? "" : "\n" + draft.insurance().disclosure(language));
   }
@@ -2092,9 +2087,9 @@ class WaveWorker {
             "Hi,\n\nCould you quote "
                 + service
                 + " for a shipment weighing "
-                + s.weightKg().stripTrailingZeros().toPlainString()
+                + Shipment.displayKg(s.weightKg())
                 + " kg gross, with a total volume of "
-                + s.volumeCbm().stripTrailingZeros().toPlainString()
+                + Shipment.displayCbm(s.volumeCbm())
                 + " cbm" + (pieces == null ? "" : " across " + pieces + (pieces == 1 ? " piece" : " pieces")) + "?"
                 + (revisionReply == null ? dates : " These are the revised shipment details." + dates)
                 + (c.truck()
@@ -2226,7 +2221,7 @@ class WaveWorker {
     var calculation = calculate(id, shipment, null, false,
         new PricingContext(request, details, received, deadline, replyId, insurance));
     var draft = calculation.draft();
-    if (draft.offer() == null || calculation.pickupReview()) {
+    if (draft.offer() == null) {
       ledger.stage(id, "sent", String.join(" ", draft.notes()));
       return;
     }
@@ -2240,7 +2235,7 @@ class WaveWorker {
         "This updated offer uses your total volume of %s m³.",
         "Cette offre mise à jour tient compte de votre volume total de %s m³.",
         "Dieses aktualisierte Angebot berücksichtigt Ihr Gesamtvolumen von %s m³.",
-        "本次更新报价按您的总体积 %s 立方米计算。").formatted(shipment.volumeCbm().toPlainString());
+        "本次更新报价按您的总体积 %s 立方米计算。").formatted(Shipment.displayCbm(shipment.volumeCbm()));
     if (rateChanged || sameAirShipment(prior, shipment)) {
       confirmation = language.text(
           "This is an updated offer. Please confirm whether you accept the revised all-in price.",
