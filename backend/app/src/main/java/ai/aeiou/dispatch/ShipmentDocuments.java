@@ -322,7 +322,7 @@ final class ShipmentDocuments {
   }
 
   Decision inspect(Map<String, Object> original, List<Map<String, Object>> followUps,
-      String confirmedPickupZone, String customerDeliveryAirport) {
+      String confirmedPickupZone, String customerDeliveryAirport, CustomerLanguage language) {
     boolean voiceRequest = voiceAttachment(original) != null
         && !Ledger.str(original, "voice_transcript").isBlank();
     var latestPacking = read(original);
@@ -363,12 +363,15 @@ final class ShipmentDocuments {
       correction = correction.followedBy(
           MailParser.confirmedPackingCorrection(body.text()).orElse(emptyCorrection));
     }
-    if (dg) return dangerousGoods(dangerous, followUpDocuments, evidence);
+    if (dg) return dangerousGoods(dangerous, followUpDocuments, evidence, language);
     if (scanning) return new Decision(null, "Reading shipment attachments.", null, null);
     boolean requestOnly = !latestPacking.isEmpty() && latestPacking.stream().allMatch(this::isRequest);
     if (requestOnly && requestText(latestPacking) == null)
       return new Decision("packing-correction", "Waiting for one confirmed quotation request.",
-          "Could you confirm which of the attached quotation requests we should price?", null);
+          language.text("Could you confirm which of the attached quotation requests we should price?",
+              "Pouvez-vous confirmer pour laquelle des demandes jointes vous souhaitez un devis ?",
+              "Bitte bestätigen Sie, für welche der beigefügten Anfragen wir ein Angebot erstellen sollen.",
+              "请确认您希望我们为附件中的哪一份询价提供报价。"), null);
     if (requestOnly || (latestPacking.isEmpty() && voiceRequest)) {
       var parsed = MailParser.request(Ledger.str(original, "subject"), Ledger.str(original, "body"),
           false, catalog, confirmedPickupZone, customerDeliveryAirport);
@@ -381,8 +384,13 @@ final class ShipmentDocuments {
       return new Decision(
           "packing-copy",
           "Waiting for a readable packing specification and cargo classification.",
-          "Could you send a readable packing list with the total gross weight, total volume, and"
-              + " dangerous goods classification?",
+          language.text("Could you send a readable packing list with the total gross weight, total volume, and"
+                  + " dangerous goods classification?",
+              "Pouvez-vous envoyer une liste de colisage lisible indiquant le poids brut total, le volume total"
+                  + " et la classification des marchandises dangereuses ?",
+              "Bitte senden Sie eine lesbare Packliste mit Gesamtbruttogewicht, Gesamtvolumen"
+                  + " und Gefahrgutklassifizierung.",
+              "请发送一份清晰可读的装箱单，并注明总毛重、总体积及危险品分类。"),
           null);
     var subject = Ledger.str(original, "subject");
     var body =
@@ -426,9 +434,13 @@ final class ShipmentDocuments {
     return new Decision(
         "packing-correction",
         "Waiting for consistent shipment details.",
-        "Could you send a corrected packing list and confirm the destination, gross weight and"
-            + " total volume? I couldn’t reconcile the shipment details in the documents and"
-            + " email.",
+        language.text("Could you send a corrected packing list and confirm the destination, gross weight and"
+                + " total volume? I couldn’t reconcile the shipment details in the documents and email.",
+            "Pouvez-vous envoyer une liste de colisage corrigée et confirmer la destination, le poids brut et"
+                + " le volume total ? Les informations dans les documents et le courriel diffèrent.",
+            "Bitte senden Sie eine korrigierte Packliste und bestätigen Sie Ziel, Bruttogewicht und"
+                + " Gesamtvolumen. Die Angaben in den Unterlagen und der E-Mail weichen voneinander ab.",
+            "文件与邮件中的货物信息不一致。请发送更正后的装箱单，并确认目的地、总毛重和总体积。"),
         null);
   }
 
@@ -466,7 +478,8 @@ final class ShipmentDocuments {
   }
 
   private static Decision dangerousGoods(
-      Set<String> unNumbers, List<PackingSafety.Document> followUps, Set<String> evidence) {
+      Set<String> unNumbers, List<PackingSafety.Document> followUps, Set<String> evidence,
+      CustomerLanguage language) {
     boolean matchingSds =
         unNumbers.size() == 1
             && followUps.stream()
@@ -479,8 +492,13 @@ final class ShipmentDocuments {
       return new Decision(
           "dg-unavailable",
           "Dangerous goods documents received. No supported dangerous goods rate.",
-          "Thank you for sending the documents. We don’t have a confirmed dangerous goods service"
-              + " for this shipment, so we’re unable to offer a quote.",
+          language.text("Thank you for sending the documents. We don’t have a confirmed dangerous goods service"
+                  + " for this shipment, so we’re unable to offer a quote.",
+              "Merci pour les documents. Nous ne disposons pas d’un service confirmé pour ce transport"
+                  + " de marchandises dangereuses et ne pouvons donc pas vous proposer de devis.",
+              "Vielen Dank für die Unterlagen. Für diese Gefahrgutsendung haben wir keinen bestätigten"
+                  + " Service und können deshalb kein Angebot machen.",
+              "感谢您提供文件。我们暂时没有可承运这批危险品的确认服务，因此无法提供报价。"),
           null);
     var review = new DangerousGoodsCheck(evidence, followUps.stream()
         .map(doc -> new SubmittedDocument(doc.safetyDataSheet(), doc.declaration(), doc.unNumbers()))
@@ -489,16 +507,29 @@ final class ShipmentDocuments {
       return new Decision(
           "dg-incomplete",
           "Waiting for complete, matching dangerous goods documents.",
-          "Thank you for the documents. Could you send a safety data sheet with Section 14 and the"
-              + " shipper’s dangerous goods declaration, both showing the same UN classification?",
+          language.text("Thank you for the documents. Could you send a safety data sheet with Section 14 and the"
+                  + " shipper’s dangerous goods declaration, both showing the same UN classification?",
+              "Merci pour les documents. Pouvez-vous envoyer une fiche de données de sécurité avec la rubrique 14"
+                  + " et la déclaration de l’expéditeur, avec la même classification ONU dans les deux documents ?",
+              "Vielen Dank für die Unterlagen. Bitte senden Sie das Sicherheitsdatenblatt mit Abschnitt 14"
+                  + " und die Gefahrguterklärung des Absenders. Beide müssen dieselbe UN-Klassifizierung ausweisen.",
+              "感谢您提供文件。请发送包含第 14 节的安全数据表和托运人危险品申报单。两份文件须注明相同的联合国危险品分类。"),
           null, review);
     return new Decision(
         "dg-docs",
         "Dangerous goods indicated. Hold pending documents and carrier review.",
-        "The shipment details indicate dangerous goods. Could you send the current safety data"
-            + " sheet, including Section 14, and the dangerous goods declaration if applicable?"
-            + " Please also confirm the classification for air transport. We’ll review these before"
-            + " we quote.",
+        language.text("The shipment details indicate dangerous goods. Could you send the current safety data"
+                + " sheet, including Section 14, and the dangerous goods declaration if applicable?"
+                + " Please also confirm the classification for air transport. We’ll review these before we quote.",
+            "Les informations indiquent qu’il s’agit de marchandises dangereuses. Pouvez-vous transmettre"
+                + " la fiche de données de sécurité à jour, y compris la rubrique 14, et la déclaration de"
+                + " marchandises dangereuses le cas échéant ? Merci de confirmer la classification pour le"
+                + " transport aérien afin que nous puissions examiner le dossier avant d’établir un devis.",
+            "Die Angaben weisen auf Gefahrgut hin. Bitte senden Sie das aktuelle Sicherheitsdatenblatt"
+                + " mit Abschnitt 14 und, falls erforderlich, die Gefahrguterklärung. Bitte bestätigen Sie"
+                + " auch die Klassifizierung für den Lufttransport. Wir prüfen die Unterlagen vor dem Angebot.",
+            "货物信息显示这批货物可能属于危险品。请提供含第 14 节的最新安全数据表，以及适用的危险品申报单。"
+                + "请同时确认空运危险品分类，我们会在报价前审核文件。"),
         null, review);
   }
 }

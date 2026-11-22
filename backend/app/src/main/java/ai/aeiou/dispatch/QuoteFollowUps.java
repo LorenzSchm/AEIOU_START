@@ -60,15 +60,25 @@ class QuoteFollowUps {
       String action = "reply:" + id;
       var fields = ledger.read(request.get("fields"), Shipment.class);
       if (fields == null) continue;
+      var language = CustomerLanguage.of(request);
+      String question = language.text(
+          "Would you like us to book your %s to %s shipment?"
+              + " If so, please reply “Please go ahead and book it.” We’ll check the carrier’s"
+              + " current rate and ask you to approve any changes before we book.",
+          "Souhaitez-vous que nous réservions le transport de %s à %s ?"
+              + " Si oui, merci de répondre « Veuillez procéder à la réservation. »"
+              + " Nous vérifierons le tarif actuel et vous demanderons de valider tout changement.",
+          "Sollen wir den Transport von %s nach %s für Sie buchen?"
+              + " Antworten Sie bitte mit „Bitte so buchen.“"
+              + " Wir prüfen den aktuellen Tarif und bitten Sie bei Änderungen um Bestätigung.",
+          "请问您需要我们为从 %s 到 %s 的这票货物安排订舱吗？如需订舱，请回复“请安排订舱”。"
+              + "我们会核实承运商的当前报价，如有变动会先请您确认。")
+          .formatted(fields.origin(), fields.destination());
       var mail = Map.<String, Object>of(
           "to", request.get("sender"),
           "in_reply_to", Ledger.id(request.get("quote_id")),
           "subject", "Re: " + request.get("subject"),
-          "body", Greeting.at(request, clock.instant()) + "\n\nWould you like us to book your "
-              + fields.origin() + " to " + fields.destination() + " shipment?"
-              + " If so, please reply “Please go ahead and book it.” We’ll check the carrier’s"
-              + " current rate and ask you to approve any changes before we book."
-              + "\n\nBest regards,\nTeam AEIOU");
+          "body", worker.followUpBody(action, request, language, question, null));
       try {
         worker.send(action, mail, () -> claim(id, action, mail));
         log.info("RFQ {}: sent booking follow-up", id);

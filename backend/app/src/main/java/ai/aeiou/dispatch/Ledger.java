@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class Ledger {
   static final long COUNTER_WAIT_SECONDS = 20;
   private static final Pattern CASE_REFERENCE = Pattern.compile("(?i)\\bAEIOU-(\\d{1,18})\\b");
+  private static final long SHIPMENT_SCOPE_SIZE = 10;
   private static final Pattern COUNTER_REFERENCE =
       Pattern.compile("(?i)\\bAEIOU-(\\d{1,18})\\s*\\|\\s*counteroffer\\b");
   private static final Pattern AIRLINE_ROUTES = Pattern.compile(
@@ -74,6 +75,14 @@ class Ledger {
     ensureColumn("mail", "reply_to", "INTEGER");
     ensureColumn("mail", "carrier_offer_text", "TEXT");
     ensureColumn("mail", "voice_transcript", "TEXT");
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS tariff_sheet(
+          id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL, attachment_id INTEGER NOT NULL,
+          carrier TEXT NOT NULL, filename TEXT NOT NULL, received TEXT,
+          state TEXT NOT NULL DEFAULT 'queued', issue TEXT, valid_from TEXT, valid_to TEXT,
+          rates TEXT, retry_at INTEGER NOT NULL DEFAULT 0, decided_at TEXT,
+          UNIQUE(message_id, attachment_id))
+        """);
     db.execute(
         "CREATE TABLE IF NOT EXISTS deliveries(action TEXT PRIMARY KEY,state TEXT NOT NULL,response"
             + " TEXT)");
@@ -131,7 +140,24 @@ class Ledger {
             + " operator case' FROM mail WHERE kind='request'");
   }
 
-  private void ensureColumn(String table, String column, String type) {
+  List<Catalog.Tariff> approvedTariffs(Shipment shipment, LocalDate date, LocalDate today) {
+    return db.query("""
+        SELECT rate FROM (
+          SELECT lane.value AS rate, ROW_NUMBER() OVER (
+            PARTITION BY s.carrier ORDER BY (s.state='active') DESC,
+              julianday(s.received) DESC, s.message_id DESC, s.attachment_id DESC
+          ) AS rank
+          FROM tariff_sheet s, json_each(s.rates) lane
+          WHERE s.state IN ('approved','active') AND s.valid_from<=? AND s.valid_to>=?
+            AND s.valid_from<=? AND s.valid_to>=?
+            AND json_extract(lane.value,'$.origin')=? AND json_extract(lane.value,'$.destination')=?
+        ) WHERE rank=1
+        """, (row, index) -> read(row.getString("rate"), Catalog.Tariff.class),
+        date.toString(), date.toString(), today.toString(), today.toString(),
+        shipment.origin(), shipment.destination());
+  }
+
+  void ensureColumn(String table, String column, String type) {
     if (!db.queryForList("SELECT name FROM pragma_table_info(?)", String.class, table)
         .contains(column)) db.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
   }
@@ -218,6 +244,13 @@ class Ledger {
     return routes;
   }
 
+  static long shipmentQuoteLeg(long request, int number) {
+    if (request <= 0 || number <= 0 || number >= SHIPMENT_SCOPE_SIZE)
+      throw new IllegalArgumentException("Invalid shipment scope.");
+    // Mail IDs are positive. Negative tender keys reserve a separate slot for each shipment.
+    return -Math.addExact(Math.multiplyExact(request, SHIPMENT_SCOPE_SIZE), number);
+  }
+
   Instant firstInvitation(long request) {
     return db.queryForList("""
         SELECT d.attempted_at FROM tender t JOIN deliveries d
@@ -231,6 +264,23 @@ class Ledger {
     return tender.get("bid_action") == null
         ? "bid:" + tender.get("request_id") + ":" + tender.get("email")
         : str(tender, "bid_action");
+  }
+
+  Map<String, Object> latestRequote(long request) {
+    return db.queryForList("""
+        SELECT action,state, json_extract(response,'$.id') AS message_id,
+          json_extract(payload,'$.updated_quote') AS proposal,
+          json_extract(payload,'$.updated_shipment') AS shipment
+        FROM deliveries WHERE action=? OR action LIKE ? ORDER BY rowid DESC LIMIT 1
+        """, "requote:" + request, "requote:" + request + ":%").stream().findFirst().orElse(null);
+  }
+
+  List<Map<String, Object>> quoteReplies(long request, String sender, long quote) {
+    return db.queryForList("""
+        SELECT * FROM mail WHERE sender=? AND kind='follow-up' AND id>?
+          AND (reply_to=? OR root IN (?,?))
+        ORDER BY id DESC
+        """, sender, quote, quote, request, quote);
   }
 
   boolean counterAnswered(long request) {
@@ -380,9 +430,18 @@ class Ledger {
       var receipt = read(row.get("response"), Map.class);
       if (parents.contains(String.valueOf(receipt.get("id")))) linked.add(id(row.get("request_id")));
     }
-    matches.addAll(linked);
-    if (matches.size() != 1) return;
-    long request = matches.iterator().next();
+    long request, root;
+    if (linked.stream().anyMatch(id -> id < 0)) {
+      if (linked.size() != 1) return;
+      request = linked.iterator().next();
+      root = -(request / SHIPMENT_SCOPE_SIZE);
+      if (!matches.isEmpty() && !matches.equals(Set.of(root))) return;
+    } else {
+      matches.addAll(linked);
+      if (matches.size() != 1) return;
+      request = matches.iterator().next();
+      root = request;
+    }
     var parsed = parseCarrierBid(request, sender, body, truck, catalog);
     var bid = parsed.terms();
     var price = bid.map(b -> b.euros().toPlainString()).orElse(null);
@@ -406,7 +465,7 @@ class Ledger {
     if (updated > 0)
       db.update(
           "UPDATE mail SET root=?,stage=? WHERE id=?",
-          request,
+          root,
           bid.isPresent() ? "bid received" : "bid unreadable",
           mid);
   }
@@ -569,7 +628,8 @@ class Ledger {
     for (var row : db.queryForList("SELECT * FROM deliveries ORDER BY rowid")) {
       String action = str(row, "action");
       String[] parts = action.split(":", 3);
-      if (parts.length < 2 || !Set.of("quote", "requote", "bid", "counter", "reply", "airport-delivery").contains(parts[0]))
+      if (parts.length < 2 || !Set.of("quote", "requote", "bid", "counter", "reply", "airport-delivery", "rate-desk")
+          .contains(parts[0]))
         continue;
       long owner = Long.parseLong(parts[1]);
       Map<?, ?> receipt = read(row.get("response"), Map.class);
@@ -586,7 +646,7 @@ class Ledger {
       var item =
           new Outgoing(
               action,
-              "airport-delivery".equals(parts[0]) ? "reply" : parts[0],
+              Set.of("airport-delivery", "rate-desk").contains(parts[0]) ? "reply" : parts[0],
               str(row, "state"),
               messageId,
               recipient,

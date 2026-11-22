@@ -2,11 +2,17 @@ package ai.aeiou.freight;
 
 import java.io.*;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.*;
 
 public final class Catalog {
+  public static final int MAX_INVITATIONS = 5;
+  private static final YearMonth KIT_TARIFF_MONTH = YearMonth.of(2026, 11);
+
   public record Carrier(String name, String kind, String email, String serves) {
     public boolean serves(String location) {
       return location != null && Arrays.asList(serves.split(" ")).contains(location);
@@ -17,13 +23,14 @@ public final class Catalog {
     }
   }
 
-  record Tariff(
+  public record Tariff(
       String airline,
       String origin,
       String destination,
       int days,
       BigDecimal minimum,
-      BigDecimal surcharge,
+      BigDecimal fuel,
+      BigDecimal security,
       NavigableMap<Integer, BigDecimal> breaks) {
     Offer price(BigDecimal weight) {
       int bracket = breaks.floorKey(weight.intValue());
@@ -35,11 +42,19 @@ public final class Catalog {
       return best;
     }
 
+    /** A total that applies a higher break's rate to a weight below that break. */
+    boolean misappliedBreak(BigDecimal weight, BigDecimal total) {
+      int bracket = breaks.floorKey(weight.intValue());
+      if (total.compareTo(price(weight).totalEur()) >= 0) return false;
+      return breaks.tailMap(bracket, false).values().stream()
+          .anyMatch(rate -> at(weight, rate).totalEur().subtract(total).abs().compareTo(new BigDecimal("0.02")) <= 0);
+    }
+
     private Offer at(BigDecimal kg, BigDecimal rate) {
       return new Offer(
           airline,
           days,
-          kg.multiply(rate).max(minimum).add(kg.multiply(surcharge)),
+          kg.multiply(rate).max(minimum).add(kg.multiply(fuel.add(security))),
           kg,
           "sheet",
           null,
@@ -47,13 +62,19 @@ public final class Catalog {
     }
   }
 
-  private final List<Tariff> tariffs = new ArrayList<>();
+  private final List<Tariff> kitTariffs;
+  private final Path tariffDirectory;
   public final List<Carrier> carriers;
   public final Map<String, String> zones = new LinkedHashMap<>();
   public final Map<String, String> pickupAreas = new LinkedHashMap<>();
   public final Set<String> destinations = new HashSet<>();
 
   public Catalog(Reader tariffFile, Reader carrierFile, Reader zoneFile) {
+    this(tariffFile, carrierFile, zoneFile, null);
+  }
+
+  public Catalog(Reader tariffFile, Reader carrierFile, Reader zoneFile, Path tariffDirectory) {
+    this.tariffDirectory = tariffDirectory;
     carriers = rows(carrierFile).stream().map(r -> new Carrier(r[0], r[1], r[2], r[3])).toList();
     carriers.stream()
         .filter(c -> !c.truck())
@@ -62,6 +83,11 @@ public final class Catalog {
       zones.put(r[0], r[2]);
       pickupAreas.put(r[0], r[1]);
     }
+    kitTariffs = readTariffs(tariffFile);
+  }
+
+  private static List<Tariff> readTariffs(Reader tariffFile) {
+    var tariffs = new ArrayList<Tariff>();
     int[] breaks = {0, 45, 100, 250, 300, 500, 1000, 2000};
     for (var r : rows(tariffFile)) {
       var prices = new TreeMap<Integer, BigDecimal>();
@@ -74,9 +100,25 @@ public final class Catalog {
               r[2],
               Integer.parseInt(r[3]),
               new BigDecimal(r[4]),
-              new BigDecimal(r[5]).add(new BigDecimal(r[6])),
+              new BigDecimal(r[5]),
+              new BigDecimal(r[6]),
               prices));
     }
+    return List.copyOf(tariffs);
+  }
+
+  private List<Tariff> tariffsFor(YearMonth month) {
+    if (tariffDirectory != null) {
+      Path file = tariffDirectory.resolve("tariffs-" + month + ".csv");
+      try {
+        return readTariffs(Files.newBufferedReader(file));
+      } catch (NoSuchFileException ex) {
+        // The original kit tariff is available as a fallback for November 2026.
+      } catch (IOException ex) {
+        throw new UncheckedIOException("Could not open monthly tariffs " + file, ex);
+      }
+    }
+    return KIT_TARIFF_MONTH.equals(month) ? kitTariffs : List.of();
   }
 
   private static List<String[]> rows(Reader source) {
@@ -88,15 +130,34 @@ public final class Catalog {
   }
 
   public int size() {
-    return tariffs.size();
+    return kitTariffs.size();
   }
 
   public List<Offer> price(Shipment s, LocalDate date) {
-    if (!YearMonth.from(date).equals(YearMonth.of(2026, 11))) return List.of();
-    return tariffs.stream()
-        .filter(t -> t.origin.equals(s.origin()) && t.destination.equals(s.destination()))
+    return price(s, date, List.of());
+  }
+
+  public List<Offer> price(Shipment s, LocalDate date, List<Tariff> approved) {
+    return tariffs(s, date, approved).stream()
         .map(t -> t.price(s.chargeableKg()))
         .toList();
+  }
+
+  /** Whether an airline's total bills the chargeable weight at a break the shipment does not reach. */
+  public boolean misappliedBreak(Shipment s, LocalDate date, List<Tariff> approved, String airline, BigDecimal total) {
+    return tariffs(s, date, approved).stream()
+        .anyMatch(t -> t.airline.equals(airline) && t.misappliedBreak(s.chargeableKg(), total));
+  }
+
+  private Collection<Tariff> tariffs(Shipment s, LocalDate date, List<Tariff> approved) {
+    var byCarrier = new LinkedHashMap<String, Tariff>();
+    tariffsFor(YearMonth.from(date)).stream()
+        .filter(t -> t.origin.equals(s.origin()) && t.destination.equals(s.destination()))
+        .forEach(t -> byCarrier.put(t.airline, t));
+    approved.stream()
+        .filter(t -> t.origin.equals(s.origin()) && t.destination.equals(s.destination()))
+        .forEach(t -> byCarrier.put(t.airline, t));
+    return byCarrier.values();
   }
 
   public Optional<Carrier> contact(String address) {
@@ -123,17 +184,24 @@ public final class Catalog {
         .toList();
     var trucks = carriers.stream().filter(c -> c.truck() && c.serves(s.pickupZone()))
         .filter(eligible).toList();
-    // In zone 60 these truckers returned the lowest initial bids in the pre-wave comparison.
-    // This is an invitation preference only. Each shipment still needs a fresh confirmed rate.
-    if ("60".equals(s.pickupZone()) && "cheapest".equals(s.preference())) {
-      var priority = Map.of("bodenseefracht@hackloop.mail", 0, "westfalenroute@hackloop.mail", 1);
+    boolean cheapestPickup = s.pickupZone() != null && "cheapest".equals(s.preference());
+    if (cheapestPickup && "60".equals(s.pickupZone())) {
+      // Use the pre-wave comparison for invitation order. Every quote still needs a fresh bid.
+      var priority = Map.of("bodenseefracht@hackloop.mail", 0, "westfalenroute@hackloop.mail", 1,
+          "domblick-kurierdienst@hackloop.mail", 2);
       trucks = trucks.stream()
-          .sorted(Comparator.comparingInt(c -> priority.getOrDefault(c.email(), 2)))
+          .sorted(Comparator.comparingInt(c -> priority.getOrDefault(c.email(), 3)))
           .toList();
     }
-    var selected =
-        new ArrayList<>(airlines.stream().limit(s.pickupZone() == null ? 5 : 3).toList());
-    selected.addAll(trucks.stream().limit(5 - selected.size()).toList());
+    int airlineLimit = s.pickupZone() == null ? MAX_INVITATIONS : 3;
+    if (cheapestPickup) {
+      // Keep a second airline bid when the directory only confirms the destination.
+      boolean exactAirLane = airlines.stream().anyMatch(carrier -> airlineRoutes.containsKey(carrier.email()));
+      int minimumAirlines = exactAirLane ? 1 : 2;
+      airlineLimit = Math.min(airlineLimit, Math.max(minimumAirlines, MAX_INVITATIONS - trucks.size()));
+    }
+    var selected = new ArrayList<>(airlines.stream().limit(airlineLimit).toList());
+    selected.addAll(trucks.stream().limit(MAX_INVITATIONS - selected.size()).toList());
     return selected;
   }
 

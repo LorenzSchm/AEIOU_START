@@ -7,6 +7,7 @@ import Overview from "./components/overview/Overview";
 import Queue from "./components/queue/Queue";
 import CaseSheet from "./components/case/CaseSheet";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
+import RateSheets from "./components/rates/RateSheets";
 import { useDispatchData } from "./lib/api";
 import { clock, needsAttention } from "./lib/format";
 import { spring } from "./lib/motion";
@@ -14,13 +15,14 @@ import { spring } from "./lib/motion";
 const NAV = [
   { id: "overview", label: "Overview", icon: "overview" },
   { id: "queue", label: "Queue", icon: "queue" },
+  { id: "rates", label: "Rate sheets", icon: "euro" },
 ];
 
 function readUrl() {
   if (typeof window === "undefined") return { view: "overview", caseId: null, scope: "attention" };
   const p = new URLSearchParams(window.location.search);
   return {
-    view: p.get("view") === "queue" ? "queue" : "overview",
+    view: NAV.some(({ id }) => id === p.get("view")) ? p.get("view") : "overview",
     caseId: p.get("case") ? Number(p.get("case")) : null,
     scope: ["attention", "requests", "all"].includes(p.get("scope")) ? p.get("scope") : "attention",
   };
@@ -168,7 +170,9 @@ export default function Page() {
   // Stable callbacks so memoised views (Queue, Overview, rows) don't re-render on every parent render.
   const openCase = useCallback((id, opts) => guardedGo({ caseId: id }, opts), [guardedGo]);
   const setScope = useCallback((scope) => go({ scope }), [go]);
-  const setView = useCallback((view) => go({ view }), [go]);
+  const setView = useCallback((view) => (
+    view === "rates" ? guardedGo({ view, caseId: null }) : go({ view })
+  ), [go, guardedGo]);
 
   return (
     <div className="app">
@@ -197,7 +201,7 @@ export default function Page() {
         <header className="page-head">
           <div>
             <div className="eyebrow">Air export · Live wave</div>
-            <h1>{nav.view === "queue" ? "Queue" : "Overview"}</h1>
+            <h1>{NAV.find(({ id }) => id === nav.view).label}</h1>
           </div>
         </header>
 
@@ -210,7 +214,7 @@ export default function Page() {
           )}
         </AnimatePresence>
 
-        {!data ? (
+        {nav.view === "rates" ? <RateSheets /> : !data ? (
           <div className="skeleton-grid" aria-busy="true" aria-label="Loading">
             {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton glass" />)}
           </div>

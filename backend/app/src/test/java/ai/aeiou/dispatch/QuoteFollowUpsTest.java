@@ -27,7 +27,7 @@ class QuoteFollowUpsTest {
   private static final Instant START = NOW.minusSeconds(600);
   private static final long FOLLOW_UP_ID = 200;
   private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-  private final Catalog catalog = new DispatchApplication().catalog();
+  private final Catalog catalog = new DispatchApplication().catalog(null);
   private final FiveU upstream = mock(FiveU.class);
   private final Shipment shipment =
       new Shipment("FRA", "LAX", BigDecimal.valueOf(100), BigDecimal.ONE, "cheapest", null, null, 0);

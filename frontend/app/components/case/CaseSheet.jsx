@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import Conversation from "../../conversation";
 import EmailPreview from "../../email-preview";
@@ -9,12 +9,15 @@ import { Chip, CountdownRing, RouteBadge, Section } from "../ui/primitives";
 import OfferBars from "./OfferBars";
 import BoardScore from "./BoardScore";
 import Select from "../ui/Select";
+import ConfirmDialog from "../ui/ConfirmDialog";
 import { inWindow, useNow } from "../../lib/clock";
 import Timeline from "./Timeline";
 import { deriveProcess } from "../../lib/process";
 import { api } from "../../lib/api";
 import { clock, eur, kindLabel, needsAttention, secondsLeft, statusOf, transitLabel } from "../../lib/format";
 import { spring } from "../../lib/motion";
+
+const RATE_PORTAL = "https://start-hack.5u.ai/portal/ui";
 
 /** Stable sheet frame: slides in once; switching cases only crossfades the content. */
 export default function CaseSheet(props) {
@@ -62,6 +65,8 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [portalDialog, setPortalDialog] = useState(false);
+  const portalPrompted = useRef(false);
   const closeRef = useRef(null);
 
   useEffect(() => {
@@ -82,6 +87,20 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
   const remaining = secondsLeft(m, now);
   const closed = Boolean(m.delivery) || (remaining !== null && remaining <= 0);
   const request = m.kind === "request";
+  const portalUnavailable = m.review_reason?.startsWith("Portal rates unavailable.");
+  const canOpenPortal = request && !closed && fields.origin && fields.destination && fields.weight_kg
+    && fields.volume_cbm != null;
+  const dismissPortal = useCallback(() => setPortalDialog(false), []);
+  useEffect(() => {
+    if (canOpenPortal && portalUnavailable && !portalPrompted.current) {
+      portalPrompted.current = true;
+      setPortalDialog(true);
+    }
+  }, [canOpenPortal, portalUnavailable]);
+  function openPortal() {
+    window.open(RATE_PORTAL, "_blank", "popup,width=760,height=820,noopener,noreferrer");
+    setPortalDialog(false);
+  }
   const proposal = m.proposal;
   const status = statusOf(m, now);
   const process = useMemo(() => (request ? deriveProcess(m, messages, { now, directory }) : null), [m, messages, request, directory, now]);
@@ -168,6 +187,9 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
         <div className="banner banner-warn" role="status">
           <Icon name="alert" size={16} />
           <span>{m.review_reason}</span>
+          {canOpenPortal && portalUnavailable && (
+            <button className="btn" onClick={() => setPortalDialog(true)}>Open rate lookup</button>
+          )}
         </div>
       )}
 
@@ -309,6 +331,11 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
                   {m.bid_requests?.[recipient] || "Request bid"}
                 </button>
               </div>
+              {canOpenPortal && !portalUnavailable && (
+                <div className="actions">
+                  <button className="btn" onClick={() => setPortalDialog(true)}>Look up a portal rate</button>
+                </div>
+              )}
               <div className="grid">
                 {[["airline", "Manual bid · airline"], ["air_total_eur", "Air total · EUR"], ["transit_days", "Transit · days"]].map(([k, label]) => (
                   <label className="field" key={k}>
@@ -380,6 +407,13 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
       {notice && !(request && proposal?.offer) && (
         <p className={"foot-note tone-" + notice.tone} role="status">{notice.text}</p>
       )}
+      <ConfirmDialog open={portalDialog && !closed} title="Look up the 5U rate"
+        message={<>
+          {fields.origin} → {fields.destination} · {fields.weight_kg} kg · {fields.volume_cbm} m³
+          <br />
+          Solve the sum on 5U’s page, then enter the carrier, EUR air total, and transit under Carrier bids.
+        </>}
+        confirmLabel="Open 5U portal" confirmStyle="primary" onConfirm={openPortal} onCancel={dismissPortal} />
     </>
   );
 }

@@ -16,7 +16,8 @@ final class Greeting {
   private static final Pattern SIGNOFF = Pattern.compile(
       "(?iu)^(?:best(?: regards| wishes| greetings(?: from .+)?)?|kind regards|regards|sincerely"
           + "|cheers|thanks(?: a lot)?(?: and have a .+)?|thank you|many thanks"
-          + "|mit freundlichen gr(?:ü|ue|u)(?:ss|ß)en|viele gr(?:ü|ue|u)(?:ss|ß)e|bestens)"
+          + "|mit freundlichen gr(?:ü|ue|u)(?:ss|ß)en|viele gr(?:ü|ue|u)(?:ss|ß)e|bestens"
+          + "|cordialement|bien cordialement|merci|bien à vous)"
           + "(?:\\h*/\\h*kind regards)?[,.! ]*$");
   private static final Pattern PERSONAL_NAME = Pattern.compile(
       "^(?<first>[\\p{Lu}][\\p{L}’'-]+)(?: (?:[\\p{Lu}][\\p{L}’'-]+|"
@@ -30,9 +31,16 @@ final class Greeting {
   private Greeting() {}
 
   static String at(Map<?, ?> mail, Instant now) {
+    return at(mail, now, CustomerLanguage.ENGLISH);
+  }
+
+  static String at(Map<?, ?> mail, Instant now, CustomerLanguage language) {
+    if (language == CustomerLanguage.CHINESE) return "您好，";
     int hour = now.atZone(BERLIN).getHour();
-    String opening = hour < 5 ? "Hello" : hour < 12 ? "Good morning"
-        : hour < 18 ? "Good afternoon" : "Good evening";
+    String opening = language.text(
+        hour < 5 ? "Hello" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening",
+        hour < 18 ? "Bonjour" : "Bonsoir",
+        hour < 5 ? "Hallo" : hour < 12 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend");
     return opening + firstName(Ledger.str(mail, "sender"), Ledger.str(mail, "body"))
         .map(name -> " " + name).orElse("") + ",";
   }

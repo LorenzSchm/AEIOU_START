@@ -21,6 +21,7 @@ class FiveU {
   private final RestClient gateway;
   private final MarketMemory marketMemory;
   private final RestClient transcription;
+  private final PortalPage page;
   @Value("${dispatch.transcription-key-file:backend/state/openai.key}")
   private String transcriptionKeyFile;
   private Instant retryAt = Instant.EPOCH;
@@ -32,9 +33,14 @@ class FiveU {
     this(base, key, marketMemory, false);
   }
 
+  FiveU(String base, String key, MarketMemory marketMemory, boolean readOnly) {
+    this(base, key, marketMemory, readOnly, null);
+  }
+
   @org.springframework.beans.factory.annotation.Autowired
   FiveU(@Value("${dispatch.base-url}") String base, @Value("${dispatch.key}") String key,
-      MarketMemory marketMemory, @Value("${dispatch.read-only}") boolean readOnly) {
+      MarketMemory marketMemory, @Value("${dispatch.read-only}") boolean readOnly, PortalPage page) {
+    this.page = page;
     client = client(base, key, 4, readOnly);
     gateway = client(base, key, 15, readOnly);
     transcription = client("https://api.openai.com", "", 18, readOnly);
@@ -60,7 +66,16 @@ class FiveU {
   }
 
   com.fasterxml.jackson.databind.JsonNode parseRfq(Map<String, Object> payload) {
-    return gateway
+    return completion(gateway, payload);
+  }
+
+  com.fasterxml.jackson.databind.JsonNode draftFollowUp(Map<String, Object> payload) {
+    return completion(client, payload);
+  }
+
+  private static com.fasterxml.jackson.databind.JsonNode completion(
+      RestClient endpoint, Map<String, Object> payload) {
+    return endpoint
         .post()
         .uri("/v1/gateway/chat/completions")
         .body(payload)
@@ -108,9 +123,22 @@ class FiveU {
         .body(byte[].class);
   }
 
-  record Rates(List<Offer> offers, boolean complete, boolean reset, String version) {
+  byte[] bytes(long mid, long aid, int maxBytes) {
+    return client.get().uri("/v1/mailbox/messages/{m}/attachments/{a}", mid, aid)
+        .exchange((request, response) -> {
+          if (!response.getStatusCode().is2xxSuccessful())
+            throw new RestClientException("Attachment download returned " + response.getStatusCode());
+          return response.getBody().readNBytes(maxBytes + 1);
+        });
+  }
+
+  record Rates(List<Offer> offers, boolean complete, boolean reset, String version, boolean unavailable) {
     Rates(List<Offer> offers, boolean complete) {
-      this(offers, complete, false, null);
+      this(offers, complete, false, null, false);
+    }
+
+    Rates(List<Offer> offers, boolean complete, boolean reset, String version) {
+      this(offers, complete, reset, version, false);
     }
   }
 
@@ -145,9 +173,28 @@ class FiveU {
     return byTransit.thenComparing(byPrice);
   }
 
-  private LiveRate rate(Shipment shipment, RateQuery query, Instant now) {
-    var r = readRate(shipment, query.airline(), query.weight());
+  private LiveRate rate(Shipment shipment, RateQuery query, Instant now, boolean viaPage) {
+    var r = viaPage ? pageRate(shipment, query.airline(), query.weight(), now)
+        : readRate(shipment, query.airline(), query.weight());
     return new LiveRate(parseRate(r, now), Ledger.str(r, "dataset_version"));
+  }
+
+  /** Thrown when the hosted rate page cannot stand in for the rate API right now. */
+  static class PageDown extends RuntimeException {
+    PageDown(String message) {
+      super(message);
+    }
+  }
+
+  // The hosted rate page prices the same rates while the rate API answers 503.
+  Map<String, Object> pageRate(Shipment shipment, String airline, BigDecimal weight, Instant now) {
+    if (page == null) throw new PageDown("No portal page configured");
+    try {
+      return page.rate(shipment.origin(), shipment.destination(), airline, weight,
+          shipment.volumeCbm(), now);
+    } catch (IOException ex) {
+      throw new PageDown(ex.getMessage());
+    }
   }
 
   private Map<String, Object> readRate(Shipment shipment, String airline, BigDecimal weight) {
@@ -187,6 +234,12 @@ class FiveU {
     } catch (HttpClientErrorException.TooManyRequests ex) {
       backOff(ex, now);
       throw new WaveWorker.RetryLater("Portal rate limit. Waiting to recheck price.");
+    } catch (HttpServerErrorException.ServiceUnavailable ex) {
+      try {
+        rate = pageRate(shipment, candidate.airline(), weight, now);
+      } catch (PageDown | IllegalArgumentException pageFailed) {
+        throw ex; // Callers keep treating an outage as an outage, not as a changed rate.
+      }
     }
     var live = parseRate(rate, now);
     if ((!candidate.airline().equalsIgnoreCase(live.airline())
@@ -249,6 +302,8 @@ class FiveU {
     if (now.isBefore(retryAt)) return new Rates(offers, false, false, priorVersion);
     var confirmed = new LinkedHashMap<MarketMemory.Key, Offer>();
     boolean complete = true;
+    boolean unavailable = false;
+    boolean viaPage = false;
     String version = priorVersion;
     try {
       var queries = new ArrayList<RateQuery>();
@@ -293,7 +348,13 @@ class FiveU {
         if (priorVersion != null && verified.stream().anyMatch(offer -> query.coveredBy(offer, now)))
           continue;
         try {
-          var live = rate(shipment, query, now);
+          LiveRate live;
+          try {
+            live = rate(shipment, query, now, viaPage);
+          } catch (HttpServerErrorException.ServiceUnavailable ex) {
+            unavailable = viaPage = true;
+            live = rate(shipment, query, now, true);
+          }
           if (version != null && !version.equals(live.version())) {
             // The next pass must verify all offers against a single dataset.
             return new Rates(List.of(), false, true, null);
@@ -310,16 +371,22 @@ class FiveU {
           backOff(ex, now);
           complete = false;
           break;
+        } catch (PageDown ex) {
+          complete = false;
+          break;
         } catch (RestClientException | IllegalArgumentException ex) {
           complete = false;
         }
       }
+    } catch (HttpServerErrorException.ServiceUnavailable ex) {
+      unavailable = true;
+      complete = false;
     } catch (RestClientException | IllegalArgumentException ex) {
       complete = false;
     }
     marketMemory.record(shipment, confirmed, now);
     // Replace offers from before dataset versions were stored once fresh rates are available.
     boolean replaceLegacyOffers = priorVersion == null && !verified.isEmpty() && !offers.isEmpty();
-    return new Rates(offers, complete, replaceLegacyOffers, version);
+    return new Rates(offers, complete, replaceLegacyOffers, version, unavailable);
   }
 }

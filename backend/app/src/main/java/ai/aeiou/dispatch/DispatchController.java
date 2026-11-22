@@ -14,14 +14,17 @@ class DispatchController {
   private final Catalog catalog;
   private final FiveU upstream;
   private final PortalBookings bookings;
+  private final CarrierTariffs tariffs;
 
   DispatchController(
-      Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings) {
+      Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings,
+      CarrierTariffs tariffs) {
     this.bookings = bookings;
     this.ledger = ledger;
     this.wave = wave;
     this.catalog = catalog;
     this.upstream = upstream;
+    this.tariffs = tariffs;
   }
 
   @GetMapping("/status")
@@ -46,6 +49,18 @@ class DispatchController {
   record Invite(Shipment shipment, String email) {}
 
   record Reply(String body) {}
+
+  record TariffDecision(String decision) {}
+
+  @GetMapping("/tariff-sheets")
+  CarrierTariffs.Queue tariffSheets() {
+    return tariffs.queue();
+  }
+
+  @PostMapping(path = "/tariff-sheets/{id}/decision", consumes = MediaType.APPLICATION_JSON_VALUE)
+  Map<String, String> tariffDecision(@PathVariable long id, @RequestBody TariffDecision input) {
+    return Map.of("state", tariffs.decide(id, input.decision()));
+  }
 
   @PostMapping("/messages/{id}/price")
   WaveWorker.Draft price(@PathVariable long id, @RequestBody Price input) {
