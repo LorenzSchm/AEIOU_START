@@ -1166,8 +1166,9 @@ class RfqGateway {
     var rows = ledger.jdbc().queryForList("SELECT result FROM rfq_parse WHERE request_id=?", String.class, id);
     if (rows.isEmpty() || rows.getFirst() == null) return;
     JsonNode result = ledger.read(rows.getFirst(), JsonNode.class);
-    if (result == null || !flag(result, "pickup_required")) return;
-    var stored = ledger.read(mail.get("fields"), Shipment.class);
+    if (result == null || !result.has("pickup_required") || !flag(result, "pickup_required")) return;
+    // Callers may hold an older copy of the message, so read the stored fields fresh.
+    var stored = ledger.read(ledger.mail(id).get("fields"), Shipment.class);
     if (stored == null || stored.pickupZone() != null) return;
     var local = MailParser.request(Ledger.str(mail, "subject"), Ledger.str(mail, "body"),
         !ledger.read(mail.get("attachments"), List.class).isEmpty(), catalog);
