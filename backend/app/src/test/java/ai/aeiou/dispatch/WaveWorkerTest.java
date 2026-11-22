@@ -4061,4 +4061,33 @@ class WaveWorkerTest {
     worker.work();
     assertEquals(5, outbound.size());
   }
+
+  @Test
+  void anUnexpectedErrorIsRetriedBeforeTheRequestIsParked() {
+    receive(7, "buyer@example.invalid", "RFQ CGN to SGN",
+        "Cheapest air freight for 100 kg and 0.2 cbm from CGN to SGN.", null);
+    var offer = new Offer("Test Cargo", 2, new java.math.BigDecimal("50.00"), new java.math.BigDecimal("100"),
+        "portal", "TEST", START.plusSeconds(900));
+    when(upstream.rates(any(), any()))
+        .thenThrow(new IllegalArgumentException("transient upstream reply"))
+        .thenReturn(new FiveU.Rates(List.of(offer), true));
+    worker.work();
+    assertNotEquals("review", ledger.mail(7).get("stage"), "one unexpected error must not park the request");
+    clock.current = START.plusSeconds(5);
+    worker.work();
+    assertEquals("collecting", ledger.mail(7).get("stage"));
+    assertFalse(outbound.isEmpty(), "the retried request must go on to invite carriers");
+  }
+
+  @Test
+  void aRequestIsParkedAfterRepeatedUnexpectedErrors() {
+    receive(7, "buyer@example.invalid", "RFQ CGN to SGN",
+        "Cheapest air freight for 100 kg and 0.2 cbm from CGN to SGN.", null);
+    when(upstream.rates(any(), any())).thenThrow(new IllegalArgumentException("broken"));
+    for (int i = 0; i < 3; i++) {
+      clock.current = START.plusSeconds(i * 5L);
+      worker.work();
+    }
+    assertEquals("review", ledger.mail(7).get("stage"));
+  }
 }

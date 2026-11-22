@@ -219,12 +219,23 @@ class WaveWorker {
       } catch (Conflict ex) {
         ledger.stage(id, "review", ex.getMessage());
       } catch (RuntimeException ex) {
-        log.warn("RFQ {} held: {}", id, ex.getClass().getSimpleName());
+        // An unexpected error is often transient (an upstream reply, a race): retry on the next
+        // ticks before parking the request, and keep the stack trace so the cause is visible.
+        int failures = unexpected.merge(id, 1, Integer::sum);
+        if (failures < UNEXPECTED_RETRIES) {
+          log.warn("RFQ {} failed ({} of {}), retrying on the next tick", id, failures, UNEXPECTED_RETRIES, ex);
+          continue;
+        }
+        unexpected.remove(id);
+        log.warn("RFQ {} held after {} failures", id, failures, ex);
         ledger.stage(
             id, "review", "Automatic pricing interrupted. Inspect offers and delivery records.");
       }
     }
   }
+
+  private static final int UNEXPECTED_RETRIES = 3;
+  private final java.util.Map<Long, Integer> unexpected = new java.util.concurrent.ConcurrentHashMap<>();
 
   static class Conflict extends RuntimeException {
     Conflict(String msg) {
@@ -740,6 +751,8 @@ class WaveWorker {
         invite(id, shipment, carrier, details);
       } catch (Conflict ex) {
         log.info("RFQ {} replacement trucker {}: {}", id, carrier.name(), ex.getMessage());
+      } catch (IllegalArgumentException ex) {
+        log.warn("RFQ {} skipped replacement trucker {}", id, carrier.name(), ex);
       }
     }
   }
@@ -861,6 +874,8 @@ class WaveWorker {
           invite(id, shipment, carrier, details, null, entry.pieces(), tenderId, number);
         } catch (Conflict ex) {
           log.info("RFQ {} shipment {} bid to {}: {}", id, number, carrier.name(), ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+          log.warn("RFQ {} shipment {} skipped bid to {}", id, number, carrier.name(), ex);
         }
       }
       var tenders = ledger.tenders(tenderId);
@@ -1000,6 +1015,9 @@ class WaveWorker {
         invite(id, shipment, carrier, details);
       } catch (Conflict ex) {
         log.info("RFQ {} bid to {}: {}", id, carrier.name(), ex.getMessage());
+      } catch (IllegalArgumentException ex) {
+        // One carrier that cannot be invited must not stop the bids to the others.
+        log.warn("RFQ {} skipped bid to {}", id, carrier.name(), ex);
       }
     }
   }
