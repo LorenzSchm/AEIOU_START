@@ -453,3 +453,5 @@ fieldset:disabled { opacity: 0.6; }
 /* Rendering budget: skip layout/paint for queue rows outside the viewport, and for the hidden
    queue view entirely (the hidden overview must stay laid out so its globe can pre-build). */
 .queue-list > li { min-width: 0; content-visibility: auto; contain-intrinsic-block-size: auto 86px; }
+/* End-of-list marker for loading the next page; takes no visible space. */
+.queue-list > li.queue-more { height: 1px; content-visibility: visible; animation: none; }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const base = "/api/v1";
-const MOCK = process.env.NEXT_PUBLIC_MOCK === "1";
+export const MOCK = process.env.NEXT_PUBLIC_MOCK === "1";
 
 export async function api(path, data) {
   if (MOCK) {
@@ -38,7 +38,7 @@ export async function api(path, data) {
  * didn't change, and the previous array when nothing changed at all. Memoised views then skip
  * re-rendering on polls that bring no news, instead of re-rendering ~400 rows every 2 s.
  */
-function shareMessages(prev, next) {
+export function shareMessages(prev, next) {
   if (!prev) return next;
   const byId = new Map(prev.map((m) => [m.id, m]));
   let same = prev.length === next.length;
@@ -53,7 +53,7 @@ function shareMessages(prev, next) {
   });
   return same ? prev : out;
 }
-const shareValue = (prev, next) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
+export const shareValue = (prev, next) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
 
 /** Replaces or inserts one message, keeping the inbox order (newest id first) and every other object. */
 function upsertMessage(messages, message) {
@@ -99,8 +99,11 @@ export function useDispatchData() {
         directory: dir,
         summary: shareValue(old?.summary, summary),
       };
-      return old && next.status === old.status && next.messages === old.messages && next.directory === old.directory
-        && next.summary === old.summary ? old : next;
+      if (old && next.status === old.status && next.messages === old.messages && next.directory === old.directory
+        && next.summary === old.summary) return old;
+      // version: bumps when messages or summaries change, so paged views know to refetch.
+      next.version = (old?.version ?? 0) + (old && next.messages === old.messages && next.summary === old.summary ? 0 : 1);
+      return next;
     });
     setError("");
   }, [directory]);
@@ -144,13 +147,14 @@ export function useDispatchData() {
         messages: shareMessages(old?.messages, s.messages),
         directory: dir,
         summary: s.summary ?? null,
+        version: (old?.version ?? 0) + 1,
       }));
       setError("");
     });
-    on("message", ({ message }) => setData((old) => old && { ...old, messages: upsertMessage(old.messages, message) }));
-    on("removed", ({ id }) => setData((old) => old && { ...old, messages: old.messages.filter((m) => m.id !== id) }));
+    on("message", ({ message }) => setData((old) => old && { ...old, messages: upsertMessage(old.messages, message), version: old.version + 1 }));
+    on("removed", ({ id }) => setData((old) => old && { ...old, messages: old.messages.filter((m) => m.id !== id), version: old.version + 1 }));
     on("status", ({ status }) => setData((old) => old && { ...old, status: shareValue(old.status, status) }));
-    on("summary", ({ summary }) => setData((old) => old && { ...old, summary }));
+    on("summary", ({ summary }) => setData((old) => old && { ...old, summary, version: old.version + 1 }));
     source.onerror = () => {
       if (!active) return;
       // EventSource reconnects by itself and gets a fresh snapshot. Only give up after repeated failures.

@@ -7,45 +7,34 @@ import ProcessStrip from "../case/ProcessStrip";
 import { deriveProcess } from "../../lib/process";
 import { clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
 import { inWindow, useNow } from "../../lib/clock";
+import { useQueuePage } from "../../lib/pages";
 import { isVoiceMessage } from "../../lib/voice";
 import "../case/voice.css";
 
 const threadKey = (m) => m.thread_id ?? (m.root != null && m.root !== m.id ? m.root : m.id);
 
-/**
- * Messages grouped per thread, reusing the previous array for every thread whose messages are the
- * same objects as last time (polls hand us structurally-shared data, see useDispatchData). Rows only
- * re-render when their own thread changed.
- */
-function useThreads(messages) {
-  const prev = useRef(new Map());
-  return useMemo(() => {
-    const next = new Map();
-    for (const m of messages) {
-      const k = threadKey(m);
-      if (!next.has(k)) next.set(k, []);
-      next.get(k).push(m);
-    }
-    for (const [k, list] of next) {
-      const old = prev.current.get(k);
-      if (old && old.length === list.length && old.every((m, i) => m === list[i])) next.set(k, old);
-    }
-    prev.current = next;
-    return next;
-  }, [messages]);
+/** Loads the next page when the end of the list scrolls into view. */
+function useEndOfList(onEnd, enabled) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !enabled) return;
+    const observer = new IntersectionObserver((entries) => entries[0].isIntersecting && onEnd(), {
+      root: el.closest(".queue-list"), rootMargin: "400px 0px",
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [onEnd, enabled]);
+  return ref;
 }
 
-function Queue({ messages, selectedId, onSelect, scope, setScope, active = true }) {
+/** The queue, one server page at a time (GET /queue); it refetches when the live data changes. */
+function Queue({ messages, version, selectedId, onSelect, scope, setScope, active = true }) {
   const [filter, setFilter] = useState("");
-  const threads = useThreads(messages);
-  const top = useMemo(() => messages.filter((m) => !m.root || m.root === m.id), [messages]);
-  const exceptions = top.filter(needsAttention);
-  const requests = top.filter((m) => m.kind === "request");
-  const base = scope === "attention" ? exceptions : scope === "requests" ? requests : messages;
-  const q = filter.toLowerCase();
-  const list = base.filter((m) =>
-    !q || (m.subject + " " + m.sender + " " + m.id + " " + (m.body || "") + " " + (m.voice_transcript || "") + " " + (m.fields?.origin || "") + " " + (m.fields?.destination || "")).toLowerCase().includes(q),
-  );
+  const page = useQueuePage({ scope, search: filter, version, messages });
+  const list = page.rows;
+  const counts = page.counts ?? { attention: 0, requests: 0 };
+  const endRef = useEndOfList(page.loadMore, page.hasMore);
   // ↑/↓ move through the visible list (Mail-style). Ignored while typing or when an overlay handled the key.
   useEffect(() => {
     if (!active) return;
@@ -79,8 +68,8 @@ function Queue({ messages, selectedId, onSelect, scope, setScope, active = true 
           value={scope}
           onChange={setScope}
           options={[
-            { value: "attention", label: "Attention", count: exceptions.length },
-            { value: "requests", label: "Requests", count: requests.length },
+            { value: "attention", label: "Attention", count: counts.attention },
+            { value: "requests", label: "Requests", count: counts.requests },
             { value: "all", label: "All mail" },
           ]}
         />
@@ -95,11 +84,13 @@ function Queue({ messages, selectedId, onSelect, scope, setScope, active = true 
             New rows still fade in via CSS (.queue-list > li). */}
         {list.map((m) => (
           <li key={m.id}>
-            <Row m={m} thread={threads.get(threadKey(m))} active={m.id === selectedId} onSelect={onSelect} />
+            <Row m={m} thread={page.threads[threadKey(m)]} active={m.id === selectedId} onSelect={onSelect} />
           </li>
         ))}
+        {page.hasMore && <li ref={endRef} className="queue-more" aria-hidden="true" />}
       </ul>
-      {!list.length && (
+      {page.error && <p className="banner banner-bad" role="alert">{page.error}</p>}
+      {page.loaded && !list.length && (
         <div className="empty-state">
           <Icon name={scope === "attention" ? "check" : "mail"} size={28} />
           <strong>{filter ? "No matches" : scope === "attention" ? "Nothing needs you" : "Inbox empty"}</strong>

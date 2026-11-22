@@ -255,7 +255,7 @@ export default function Page() {
             )}
             {seen.current.has("queue") && (
               <KeptView name="queue" active={nav.view === "queue"}>
-                <Queue messages={messages} selectedId={nav.caseId} scope={nav.scope} active={nav.view === "queue"}
+                <Queue messages={messages} version={data.version} selectedId={nav.caseId} scope={nav.scope} active={nav.view === "queue"}
                        setScope={setScope} onSelect={openCase} />
               </KeptView>
             )}
@@ -266,7 +266,7 @@ export default function Page() {
             )}
             {seen.current.has("crm") && (
               <KeptView name="crm" active={nav.view === "crm"}>
-                <Crm messages={messages} onOpen={openCase} />
+                <Crm messages={messages} summary={data.summary} version={data.version} onOpen={openCase} />
               </KeptView>
             )}
           </>

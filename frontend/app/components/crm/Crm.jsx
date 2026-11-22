@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Icon from "../ui/Icon";
 import { Chip, RouteBadge, Segmented } from "../ui/primitives";
 import { crmModel, initials } from "../../lib/crm";
+import { useShipmentRows } from "../../lib/pages";
 import { eur, transitLabel } from "../../lib/format";
 import { fadeUp, stagger } from "../../lib/motion";
 import "./crm.css";
@@ -172,8 +173,8 @@ function sortRows(rows, columns, sort) {
   });
 }
 
-function Table({ label, columns, rows, sort, onSort, onRow, rowKey, rowLabel, empty }) {
-  const sorted = useMemo(() => sortRows(rows, columns, sort), [rows, columns, sort]);
+function Table({ label, columns, rows, sort, onSort, onRow, rowKey, rowLabel, empty, presorted, more }) {
+  const sorted = useMemo(() => (presorted ? rows : sortRows(rows, columns, sort)), [rows, columns, sort, presorted]);
   if (!rows.length) return empty;
   return (
     <div className="crm-scroll">
@@ -209,6 +210,13 @@ function Table({ label, columns, rows, sort, onSort, onRow, rowKey, rowLabel, em
           ))}
         </tbody>
       </table>
+      {more?.hasMore && (
+        <div className="crm-more">
+          <button type="button" className="crm-link" onClick={more.loadMore}>
+            Show more · {more.total - rows.length} left
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -231,10 +239,19 @@ function bookingStatus(d) {
 
 /* ---------- View ---------- */
 
-function Crm({ messages, onOpen }) {
-  const model = useMemo(() => crmModel(messages), [messages]);
-  const now = useMemo(() => Date.now(), [messages]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { kpis, funnel, reasons, bookings, customers, deals } = model;
+/**
+ * Shipments. Figures come from the server summary and the Bookings / Lost & open tables are server
+ * pages (GET /shipments/rows), refetched when the live data changes. Without a summary (mock mode)
+ * the local model fills in.
+ */
+function Crm({ messages, summary, version, onOpen }) {
+  const local = useMemo(() => (summary?.shipments ? null : crmModel(messages)), [messages, summary]);
+  const model = summary?.shipments ?? local;
+  const now = useMemo(() => Date.now(), [messages, version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { kpis, funnel, reasons, customers } = model;
+  const dealCount = funnel.find((f) => f.key === "rfq").n;
+  const bookingCount = funnel.find((f) => f.key === "booked").n;
+  const pipelineCount = reasons.reduce((n, r) => n + r.n, 0);
   const [tab, setTab] = useState("bookings");
   const [query, setQuery] = useState("");
   const [customer, setCustomer] = useState(null);
@@ -244,17 +261,11 @@ function Crm({ messages, onOpen }) {
   const [lostSort, sortLost] = useSort({ key: "received", dir: -1 });
 
   const q = query.trim().toLowerCase();
-  const match = (d) =>
-    (!customer || d.email === customer) &&
-    (!q || [d.customer, d.email, d.origin, d.destination, d.carrier, d.booking?.booking_reference, d.booking?.team_reference, "#" + d.id, d.result.label]
-      .filter(Boolean).join(" ").toLowerCase().includes(q));
 
-  const bookingRows = useMemo(() => bookings.filter(match), [bookings, customer, q]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pipeline = useMemo(() => deals.filter((d) => d.result.group !== "won"), [deals]);
-  const pipelineRows = useMemo(
-    () => pipeline.filter((d) => match(d) && (!reason || d.result.group + ":" + d.result.key === reason)),
-    [pipeline, customer, q, reason], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const bookingPage = useShipmentRows({ tab: "bookings", customer, search: query, sort: bookSort, version, messages });
+  const pipelinePage = useShipmentRows({ tab: "pipeline", customer, reason, search: query, sort: lostSort, version, messages });
+  const bookingRows = bookingPage.rows;
+  const pipelineRows = pipelinePage.rows;
   const customerRows = useMemo(
     () => customers.filter((c) => !q || (c.name + " " + c.email + " " + (c.topDestination || "")).toLowerCase().includes(q)),
     [customers, q],
@@ -378,7 +389,7 @@ function Crm({ messages, onOpen }) {
     <div className="crm">
       <div className="tiles crm-tiles">
         <Tile i={0} icon="funnel" label="Conversion" value={pct(kpis.conversion)} tone={kpis.conversion ? "ok" : undefined}
-              sub={bookings.length + " of " + deals.length + " RFQs booked · " + pct(kpis.quoteToBook) + " of quotes"}>
+              sub={bookingCount + " of " + dealCount + " RFQs booked · " + pct(kpis.quoteToBook) + " of quotes"}>
           <Meter value={kpis.conversion} />
         </Tile>
         <Tile i={1} icon="euro" label="Booked value" value={eur(kpis.bookedValue)}
@@ -396,7 +407,7 @@ function Crm({ messages, onOpen }) {
             <span className="muted">step conversion · drop-off</span>
           </div>
           <Funnel steps={funnel} />
-          <Outcome won={bookings.length} lost={kpis.lostCount} open={kpis.openCount}
+          <Outcome won={bookingCount} lost={kpis.lostCount} open={kpis.openCount}
                    wonValue={kpis.bookedValue} lostValue={kpis.lostValue} />
         </motion.section>
         <motion.section className="card glass" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={stagger(5, 0.05)}>
@@ -416,9 +427,9 @@ function Crm({ messages, onOpen }) {
             value={tab}
             onChange={setTab}
             options={[
-              { value: "bookings", label: "Bookings", count: bookings.length },
+              { value: "bookings", label: "Bookings", count: bookingCount },
               { value: "customers", label: "Customers", count: customers.length },
-              { value: "pipeline", label: "Lost & open", count: pipeline.length },
+              { value: "pipeline", label: "Lost & open", count: pipelineCount },
             ]}
           />
           <label className="search">
@@ -446,9 +457,9 @@ function Crm({ messages, onOpen }) {
           <motion.div key={tab} className="crm-tab" {...fadeUp}>
             {tab === "bookings" && (
               <Table label="Bookings" columns={bookingCols} rows={bookingRows} sort={bookSort} onSort={sortBookings}
-                     onRow={openDeal} rowKey={(d) => d.id}
+                     presorted more={bookingPage} onRow={openDeal} rowKey={(d) => d.id}
                      rowLabel={(d) => "Booking " + d.booking.booking_reference + ", " + d.customer + ", " + (d.origin || "?") + " to " + (d.destination || "?")}
-                     empty={filtered && bookings.length
+                     empty={filtered && bookingCount
                        ? <Empty icon="search" title="No matching bookings" text="Try another search or clear the filter." />
                        : <Empty icon="book" title="No bookings yet" text="Booked shipments land here once a customer accepts a quote." />} />
             )}
@@ -462,9 +473,9 @@ function Crm({ messages, onOpen }) {
             )}
             {tab === "pipeline" && (
               <Table label="Lost and open requests" columns={pipelineCols} rows={pipelineRows} sort={lostSort} onSort={sortLost}
-                     onRow={openDeal} rowKey={(d) => d.id}
+                     presorted more={pipelinePage} onRow={openDeal} rowKey={(d) => d.id}
                      rowLabel={(d) => "Request " + d.id + ", " + d.customer + ", " + d.result.label}
-                     empty={filtered && pipeline.length
+                     empty={filtered && pipelineCount
                        ? <Empty icon="search" title="No matching requests" text="Try another search or clear the filter." />
                        : <Empty icon="check" title="Nothing lost" text="Every request so far turned into a booking." />} />
             )}
