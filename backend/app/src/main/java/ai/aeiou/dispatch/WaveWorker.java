@@ -114,6 +114,26 @@ class WaveWorker {
   synchronized void recheckOpenExtractions() {
     if (automatic) {
       var receivedAfter = clock.instant().minusSeconds(355);
+      // A restart during a gateway call leaves its claim pending. Nothing is in flight now, so
+      // release the claim of every open RFQ and let it parse again instead of waiting for review.
+      for (long open : ledger.jdbc().queryForList("""
+          SELECT m.id FROM mail m JOIN wave_case w ON w.id=m.id JOIN rfq_parse p ON p.request_id=m.id
+          WHERE m.kind='request' AND w.operator=0 AND julianday(m.received)>julianday(?)
+            AND p.state IN ('pending','unconfirmed')
+            AND NOT EXISTS (SELECT 1 FROM deliveries WHERE action='quote:'||m.id)
+          """, Long.class, receivedAfter.toString())) {
+        ledger.transactions().executeWithoutResult(tx -> {
+          ledger.jdbc().update("DELETE FROM rfq_parse WHERE request_id=? AND state IN ('pending','unconfirmed')", open);
+          ledger.jdbc().update("""
+              UPDATE wave_case SET reason=NULL WHERE id=? AND (reason LIKE '% the RFQ parse%'
+                OR reason LIKE '%usable RFQ parse%' OR reason LIKE 'Gateway parse unconfirmed%')
+              """, open);
+          ledger.jdbc().update("""
+              UPDATE mail SET stage='new' WHERE id=? AND stage='review'
+                AND (SELECT reason FROM wave_case WHERE id=?) IS NULL
+              """, open, open);
+        });
+      }
       gateway.recheckOpenConflicts(receivedAfter);
       ledger.recheckOpenTruckBids(receivedAfter, catalog);
       for (var request : ledger.jdbc().queryForList("""

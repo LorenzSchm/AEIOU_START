@@ -4355,30 +4355,66 @@ class WaveWorkerTest {
   }
 
   @Test
-  void missingGatewayAcknowledgmentHoldsQuoteAcrossRestart() throws Exception {
+  void gatewayTimeoutRetriesAnIncompleteJavaParseInsteadOfParkingTheRequest() throws Exception {
     receive(
         7,
         "buyer@hackloop.mail",
         "RFQ FRA to LAX",
         "Lowest cost for one tenth of a tonne and 0.2 cbm.",
         null);
-    when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("timeout"));
+    when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("timeout"))
+        .thenReturn(gatewayResponse("""
+            {"origin":"FRA","destination":"LAX","weight_kg":100,"volume_cbm":0.2,"preference":"cheapest",
+             "pickup_required":false,"pickup_zone":null,"needs_review":false}
+            """));
     worker.work();
-    assertEquals("review", ledger.mail(7).get("stage"));
+    assertNotEquals("review", ledger.mail(7).get("stage"));
     assertTrue(outbound.isEmpty());
-    restart();
-    var s =
-        new Shipment(
-            "FRA",
-            "LAX",
-            java.math.BigDecimal.valueOf(100),
-            java.math.BigDecimal.valueOf(0.2),
-            "cheapest",
-            null,
-            null,
-            0);
-    assertThrows(WaveWorker.Conflict.class, () -> worker.price(7, s, null));
+    worker.work();
     verify(upstream, times(1)).parseRfq(anyMap());
+    restart();
+    worker.recheckOpenExtractions();
+    clock.current = START.plusSeconds(11);
+    worker.work();
+    verify(upstream, times(2)).parseRfq(anyMap());
+    assertEquals("FRA", ledger.read(ledger.mail(7).get("fields"), Shipment.class).origin());
+    assertFalse(outbound.isEmpty(), "carrier invitations go out once the retried parse is done");
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+  }
+
+  @Test
+  void gatewayOutageStillQuotesAJavaCompleteRequestOnTheVerifiedRateInTheLastMinute() throws Exception {
+    restart(false, true);
+    request("");
+    when(upstream.parseRfq(anyMap())).thenThrow(new org.springframework.web.client.HttpServerErrorException(
+        HttpStatus.BAD_GATEWAY));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 2,
+        new BigDecimal("80.00"), new BigDecimal("100"), "portal", "R-outage0000000001", START.plusSeconds(900))), true));
+    for (long second = 0; second <= 290; second += 10) {
+      clock.current = START.plusSeconds(second);
+      worker.work();
+    }
+    assertNull(ledger.delivery("quote:7"), "the quote check is retried while the window allows");
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+    clock.current = START.plusSeconds(301);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 80.00 all in"), () -> String.valueOf(outbound.getLast()));
+    worker.work();
+    assertEquals(1, outbound.stream().filter(m -> m.get("to").equals("buyer@hackloop.mail")).count());
+  }
+
+  @Test
+  void restartDuringAGatewayCallReleasesItsPendingClaim() throws Exception {
+    request("");
+    ledger.jdbc().update("INSERT INTO rfq_parse(request_id,state,model) VALUES(7,'pending','gpt-4o-mini')");
+    ledger.stage(7, "review", "OpenAI did not confirm a usable RFQ parse. Check the attempt before retrying.");
+    restart();
+    worker.recheckOpenExtractions();
+    assertEquals("new", ledger.mail(7).get("stage"));
+    worker.work();
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+    assertFalse(outbound.isEmpty());
   }
 
   @Test

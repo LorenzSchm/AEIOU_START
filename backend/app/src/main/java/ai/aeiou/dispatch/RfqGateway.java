@@ -18,6 +18,7 @@ import org.springframework.web.client.HttpClientErrorException;
 class RfqGateway {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RfqGateway.class);
   private static final int INPUT_CHARS = 8000;
+  private static final long GATEWAY_RETRY_SECONDS = 10;
   private static final String UNVERIFIED_STANDARD_DATES =
       "Confirm the cargo ready date and arrival deadline flagged by the gateway.";
   private static final String PROMPT =
@@ -879,17 +880,62 @@ class RfqGateway {
                 }
               });
     } catch (HttpClientErrorException ex) {
-      if (standard && ex.getStatusCode().value() == 429) {
+      if (ex.getStatusCode().value() == 429) {
         ledger.transactions().executeWithoutResult(tx -> {
           ledger.jdbc().update("INSERT OR REPLACE INTO retry VALUES(?,?)", "gateway-quote:" + id, retryEpoch(ex));
           ledger.jdbc().update("DELETE FROM rfq_parse WHERE request_id=? AND state='pending'", id);
         });
         throw quoteRetry();
       }
-      throw rejected(id, ex);
+      throw extractionUnavailable(id, local, applyExtraction, rejected(id, ex));
     } catch (Exception ex) {
-      throw unconfirmed(id);
+      throw extractionUnavailable(id, local, applyExtraction, unconfirmed(id));
     }
+  }
+
+  /**
+   * The gateway failed (an error, a timeout or an unusable answer). Parking the RFQ for review
+   * loses it, so continue on Java's own parse when that is complete: it is the authoritative
+   * candidate the model only cross-checks. Otherwise ask the gateway again shortly.
+   */
+  private WaveWorker.Conflict extractionUnavailable(long id, MailParser.Parsed local, boolean applyExtraction,
+      WaveWorker.Conflict failure) {
+    boolean complete = local.issue() == null;
+    ledger.transactions().executeWithoutResult(tx -> {
+      ledger.jdbc().update("DELETE FROM rfq_parse WHERE request_id=? AND state IN ('pending','unconfirmed')", id);
+      if (complete) {
+        ledger.jdbc().update("INSERT OR IGNORE INTO rfq_parse(request_id,state,model) VALUES(?,'done','java')", id);
+        if (applyExtraction) {
+          ledger.jdbc().update("UPDATE mail SET fields=? WHERE id=?", ledger.write(local.shipment()), id);
+          ledger.jdbc().update("UPDATE wave_case SET reason=NULL WHERE id=?", id);
+        }
+      } else {
+        ledger.jdbc().update("INSERT OR REPLACE INTO retry VALUES(?,?)", "gateway-quote:" + id,
+            clock.instant().plusSeconds(GATEWAY_RETRY_SECONDS).getEpochSecond());
+      }
+    });
+    log.warn("RFQ {}: {} {}", id, failure.getMessage(),
+        complete ? "Continuing on the complete Java parse." : "Retrying shortly.");
+    return complete ? new WaveWorker.RetryLater("Gateway unavailable. Continuing on the Java parse.") : quoteRetry();
+  }
+
+  /**
+   * The quote check could not run. Ask again shortly while the quote window allows; in its last
+   * minute send on the verified rate and Java's authoritative parse rather than not at all.
+   */
+  private void quoteCheckUnavailable(long id, Map<String, Object> mail, String retryKey, Exception ex) {
+    ledger.transactions().executeWithoutResult(tx -> {
+      ledger.jdbc().update("""
+          UPDATE rfq_parse SET state='done',model='java' WHERE request_id=? AND state='pending'
+          """, id);
+      ledger.jdbc().update("INSERT OR REPLACE INTO retry VALUES(?,?)", retryKey,
+          clock.instant().plusSeconds(GATEWAY_RETRY_SECONDS).getEpochSecond());
+    });
+    var received = Ledger.instant(mail.get("received"));
+    boolean lastMinute = received != null && !clock.instant().isBefore(received.plusSeconds(300));
+    log.warn("RFQ {}: quote check unavailable ({}){}", id, ex.getClass().getSimpleName(),
+        lastMinute ? ", sending on the verified rate" : ", retrying shortly");
+    if (!lastMinute) throw quoteRetry();
   }
 
   void checkQuote(long id, Map<String, Object> mail, Shipment shipment) {
@@ -951,9 +997,11 @@ class RfqGateway {
         });
         throw quoteRetry();
       }
-      throw rejected(id, ex);
+      quoteCheckUnavailable(id, mail, retryKey, ex);
+    } catch (WaveWorker.Conflict ex) {
+      throw ex;
     } catch (Exception ex) {
-      throw unconfirmed(id);
+      quoteCheckUnavailable(id, mail, retryKey, ex);
     }
   }
 
