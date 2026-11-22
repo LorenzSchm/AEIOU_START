@@ -188,8 +188,10 @@ public final class Catalog {
     var airlines = carriers.stream()
         .filter(c -> !c.truck())
         .filter(eligible)
-        .filter(c -> airlineRoutes.containsKey(c.email())
-            ? airlineRoutes.get(c.email()).contains(route) : c.serves(s.destination()))
+        // The carrier list decides coverage (invitations to other destinations are refused);
+        // learned routes can only narrow it.
+        .filter(c -> c.serves(s.destination())
+            && (!airlineRoutes.containsKey(c.email()) || airlineRoutes.get(c.email()).contains(route)))
         .sorted(Comparator.comparing(c -> !airlineRoutes.containsKey(c.email())))
         .toList();
     var trucks = carriers.stream().filter(c -> c.truck() && c.serves(s.pickupZone()))

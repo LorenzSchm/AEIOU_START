@@ -4445,4 +4445,16 @@ class WaveWorkerTest {
     assertEquals("81", s.pickupZone());
     assertEquals("fastest", s.preference());
   }
+
+  @Test
+  void airlinesOutsideTheCarrierListAreNeverSelectedFromLearnedRoutes() {
+    // Live #55685 / #50131: Danube Wings Cargo had a learned DUS-YYZ route but does not serve YYZ, so
+    // every invitation to it was refused (and before c2968d1 stopped the whole request).
+    var shipment = new Shipment("DUS", "YYZ", new BigDecimal("1604"), new BigDecimal("11.33"), "fastest", "40", null, 0);
+    var selected = catalog.invitations(shipment,
+        Map.of("danube-wings-cargo@hackloop.mail", Set.of("DUS-YYZ")), c -> true);
+    assertTrue(selected.stream().noneMatch(c -> c.email().equals("danube-wings-cargo@hackloop.mail")),
+        () -> selected.stream().map(c -> c.email()).toList().toString());
+    assertTrue(selected.stream().filter(c -> !c.truck()).allMatch(c -> c.serves("YYZ")));
+  }
 }
