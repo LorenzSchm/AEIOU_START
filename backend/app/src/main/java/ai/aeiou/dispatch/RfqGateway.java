@@ -759,7 +759,10 @@ class RfqGateway {
             .jdbc()
             .queryForList("SELECT state FROM rfq_parse WHERE request_id=?", String.class, id);
     if (!states.isEmpty()) {
-      if ("done".equals(states.getFirst())) return;
+      if ("done".equals(states.getFirst())) {
+        repairMissedPickup(id, mail);
+        return;
+      }
       throw new WaveWorker.Conflict(
           "Gateway parse unconfirmed. Check the recorded attempt before retrying.");
     }
@@ -1152,6 +1155,29 @@ class RfqGateway {
   private static BigDecimal preserveConvertedTotal(BigDecimal exact, BigDecimal extracted, boolean converted) {
     return converted && exact != null && extracted != null
         && exact.setScale(2, java.math.RoundingMode.HALF_UP).compareTo(extracted) == 0 ? exact : extracted;
+  }
+
+  /**
+   * A request parsed by an earlier build can carry fields without the pickup the customer asked
+   * for. Quoting those fields would leave the truck cost out of the price, so re-check them against
+   * the recorded extraction: save the corrected fields and continue on the next tick, or hold.
+   */
+  private void repairMissedPickup(long id, Map<String, Object> mail) {
+    var rows = ledger.jdbc().queryForList("SELECT result FROM rfq_parse WHERE request_id=?", String.class, id);
+    if (rows.isEmpty() || rows.getFirst() == null) return;
+    JsonNode result = ledger.read(rows.getFirst(), JsonNode.class);
+    if (result == null || !flag(result, "pickup_required")) return;
+    var stored = ledger.read(mail.get("fields"), Shipment.class);
+    if (stored == null || stored.pickupZone() != null) return;
+    var local = MailParser.request(Ledger.str(mail, "subject"), Ledger.str(mail, "body"),
+        !ledger.read(mail.get("attachments"), List.class).isEmpty(), catalog);
+    var parsed = standardExtraction ? validateStandard(result, mail, local, false) : validate(result, mail, false);
+    if (parsed.issue() != null || parsed.shipment() == null || parsed.shipment().pickupZone() == null)
+      throw new WaveWorker.Conflict("The customer asked for pickup, but no pickup zone is confirmed.");
+    ledger.jdbc().update("UPDATE mail SET fields=? WHERE id=?", ledger.write(parsed.shipment()), id);
+    log.warn("RFQ {}: added the requested pickup zone {} to fields from an earlier parse", id,
+        parsed.shipment().pickupZone());
+    throw new WaveWorker.RetryLater("Pickup details corrected. Continuing on the next tick.");
   }
 
   private MailParser.Parsed validateStandard(JsonNode response, Map<String, Object> mail,

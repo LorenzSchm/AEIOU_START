@@ -4206,4 +4206,30 @@ class WaveWorkerTest {
     assertTrue(outbound.stream().anyMatch(m -> String.valueOf(m.get("subject")).contains("pickup from postcode 40073")));
     assertNotEquals("review", ledger.mail(7).get("stage"));
   }
+
+  @Test
+  void live51336NeverQuotesStaleFieldsWithoutTheRequestedPickup() throws Exception {
+    restart(false, true);
+    receive(7, "anna.sonnberg@hackloop.mail", "RE: FW: VIENNA AIRPORT - SYD / 51 CTN 260 KGS", "Merhaba,\n\nATL’deki alıcımız, ambalaj makinelerine ait yedek parçaları bizden, Almanya’dan ithal ediyor. Alıcımızın bu import işlemi için ATL’ye hava taşımayı biz organize ediyoruz.\n\nGönderi 2 parçadan oluşuyor; brüt ağırlığı 1241 kg, toplam hacmi 4.68 cbm. Yük, 2026-11-28 tarihinde 40073 Duesseldorf, Germany adresindeki tesisimizden teslim alınmaya hazır olacak. Tesisimizden kalkış havalimanına kadar kamyonlu taşımayı da sizin organize etmenizi rica ederim.\n\nBu import gönderisi için en ucuz seçeneği istiyoruz. Tesisten teslim alma ve havalimanına taşıma dahil, ATL’ye kadar tüm masrafları kapsayan fiyat teklifinizi EUR cinsinden iletebilir misiniz?\n\nTeşekkür ederim.\n\nKind regards\nAnna Sonnberg\nHead of Purchasing and Logistics\nSonnberg Kaffeeroesterei GmbH\n\n\n-----Original Message-----\nSent: 2026-10-19\nSubject: VIENNA AIRPORT - SYD / 51 CTN 260 KGS\n\nDear team,\n\npls quote air freight ex VIENNA AIRPORT to SYD:\n51 CTN / 260 KGS / 15.1 CBM, machine parts\nFCA, cargo ready next week.\n\nThanks", null);
+    // State an earlier build left behind: the extraction is done and asks for pickup, but the
+    // stored fields have no pickup zone.
+    ledger.jdbc().update("INSERT OR REPLACE INTO rfq_parse(request_id,state,model,result) VALUES(7,'done','gpt-4o-mini',?)",
+        "{\"origin\":\"DUS\",\"destination\":\"ATL\",\"weight_kg\":1241,\"volume_cbm\":4.68,\"preference\":\"cheapest\","
+            + "\"pickup_required\":true,\"pickup_zone\":\"73\",\"needs_review\":false,\"ready_date\":\"2026-11-28\","
+            + "\"arrive_by\":null,\"arrival_deadline_requested\":false,\"_quote_provider\":\"5u\"}");
+    ledger.jdbc().update("UPDATE mail SET fields=? WHERE id=7",
+        "{\"origin\":\"DUS\",\"destination\":\"ATL\",\"weight_kg\":1241,\"volume_cbm\":4.68,\"preference\":\"cheapest\","
+            + "\"pickup_zone\":null,\"pickup_eur\":null,\"pickup_days\":0.0}");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Solace Air Cargo", 3,
+        new BigDecimal("2941.17"), new BigDecimal("1241"), "portal", "R-solace0000000001", START.plusSeconds(900))), true));
+    for (int i = 0; i < 3; i++) {
+      clock.current = START.plusSeconds(5L * i);
+      worker.work();
+    }
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("40", s.pickupZone());
+    assertNull(ledger.delivery("quote:7"), "no quote may go out before the pickup is priced");
+    assertTrue(outbound.stream().anyMatch(m -> String.valueOf(m.get("subject")).contains("pickup from postcode 40073")),
+        () -> String.valueOf(outbound.stream().map(m -> m.get("subject")).toList()));
+  }
 }
