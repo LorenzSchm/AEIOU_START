@@ -4469,4 +4469,25 @@ class WaveWorkerTest {
     var cheap = MailParser.request("FRA–TLV hava kargo teklifi", body.replace("en hızlı", "en ucuz"), false, catalog);
     assertEquals("cheapest", cheap.shipment().preference());
   }
+
+  @Test
+  void live56546AllApplicableChargesIsAKnownService() {
+    String body = """
+        Dear Sir or Madam,
+
+        Could you please quote your cheapest air freight option to BOM (Mumbai, IN), including truck pickup from our site in 72301 Tuebingen, Germany, and transport to the departure airport?
+
+        The laboratory glassware will be ready for pickup on 2026-11-26. The shipment consists of 5 pieces, with a gross weight of 110 kg and a total volume of 0.39 cbm.
+
+        Please provide an all-in price in EUR, including the pickup and all applicable charges.
+
+        Kind regards
+        Anna Sonnberg""";
+    receive(7, "anna@hackloop.mail", "RE: FW: BRUSSELS AIRPORT - MEX / 112 PCS 414 KGS", body, null);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 3,
+        new BigDecimal("900.00"), new BigDecimal("110"), "portal", "R-test000000000002", START.plusSeconds(900))), true));
+    worker.work();
+    assertNotEquals("review", ledger.mail(7).get("stage"),
+        () -> ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=7", String.class));
+  }
 }

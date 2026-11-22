@@ -47,7 +47,7 @@ final class QuoteChecks {
           + "(?:cargo acceptance cut[ -]?off\\b|(?:(?:estimated|planned|expected|scheduled|earliest|next)(?: available)? |available )?"
           + "(?:transit|arrival|departure|delivery)(?: (?:times?|dates?))?\\b)|"
           + "(?:pdf|xlsx|xls|excel|word|docx|csv|txt|attachment|offer|carrier name|routing|"
-          + "weight|volume|dimensions|service details|confirmation|all (?:fees|charges|costs))\\b)");
+          + "weight|volume|dimensions|service details|confirmation|all (?:(?:applicable|other|additional|related|relevant|necessary|associated) )?(?:fees|charges|costs|surcharges))\\b)");
   private static final Pattern SCHEDULE = pattern(
       "\\b(?:cut[ -]?off|flight schedule|confirmed (?:flight|departure|pickup|collection|arrival) "
           + "(?:time|date|slot)|pickup (?:appointment|slot|time window)|collection (?:appointment|slot|time window)|"
@@ -65,6 +65,19 @@ final class QuoteChecks {
   private static final Pattern CARRIER_CUTOFF = pattern("(?m)^\\h*Cargo acceptance cutoff:\\h*" + OFFSET_TIME + "\\h*$");
   private static final Pattern CARRIER_ARRIVAL = pattern("(?m)^\\h*Scheduled arrival:\\h*" + OFFSET_TIME + "\\h*$");
   private static final Pattern SCHEDULE_REPLY = pattern("(?m)^\\h*(?:Cargo acceptance cut[ -]?off|Scheduled arrival):");
+
+  private static final Pattern KNOWN_PART = pattern(
+      "^(?:the |a |an |our |your )?(?:(?:truck(?:ing)? )?(?:pick[ -]?up|collection)|truck(?:ing)?|"
+          + "(?:road )?transport to (?:the )?(?:departure )?airport|air ?freight|"
+          + "(?:all|any|every)(?: (?:applicable|other|additional|related|relevant|necessary|associated))?"
+          + " (?:fees?|charges?|costs?|surcharges?))$");
+
+  /** "the pickup and all applicable charges": every listed part is something the all-in price covers. */
+  static boolean knownParts(String charge) {
+    for (String part : charge.strip().split("(?iu)\\h*,\\h*|\\h+(?:and|plus|as well as)\\h+"))
+      if (!part.isBlank() && !KNOWN_PART.matcher(part.strip()).find()) return false;
+    return true;
+  }
 
   record FlightSchedule(OffsetDateTime cutoff, OffsetDateTime arrival) {}
 
@@ -128,7 +141,8 @@ final class QuoteChecks {
     var other = UNKNOWN_CHARGE.matcher(chargeText);
     while (other.find()) {
       String charge = other.group(1);
-      if (!PRICED_CHARGE.matcher(charge).find() && !charge.matches("(?iu)(?:the )?(?:all|any|every)\\h+(?:fees?|charges?|costs?)"))
+      if (!PRICED_CHARGE.matcher(charge).find() && !charge.matches("(?iu)(?:the )?(?:all|any|every)\\h+(?:fees?|charges?|costs?)")
+          && !knownParts(charge))
         throw new WaveWorker.Conflict(REVIEW + " Check " + charge + ".");
       if (PRICED_CHARGE.matcher(charge).find() && LINKED_CHARGES.matcher(charge).find()
           && !PRICED_CHARGE.matcher(charge).replaceAll("").isBlank()) {
