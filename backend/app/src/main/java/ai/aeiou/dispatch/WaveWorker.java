@@ -905,6 +905,7 @@ class WaveWorker {
       boolean transcribing = recoverAttachedBids(tenderId, id);
       if (shipment.pickupZone() != null)
         askTruckTransit(id, shipment, details, tenders, deadline, false);
+      waiting |= comparePortalRates(id, tenderId, number, shipment, received, deadline);
       waiting |= (tenders.stream().anyMatch(tender -> tender.get("reply_id") == null)
               && clock.instant().isBefore((first == null ? received : first).plusSeconds(waitSeconds)))
           || (transcribing && clock.instant().isBefore(deadline.minusSeconds(20)));
@@ -921,7 +922,7 @@ class WaveWorker {
     for (var leg : shipments) {
       var shipment = leg.shipment();
       var details = leg.details();
-      var calculation = calculate(id, shipment, null, false,
+      var calculation = calculate(id, shipment, null, true,
           new PricingContext(mail, details, received, deadline, null, CargoInsurance.from(details.message())),
           leg.tenderId());
       var draft = calculation.draft();
@@ -965,8 +966,13 @@ class WaveWorker {
     var reply = Map.<String, Object>of("to", mail.get("sender"), "in_reply_to", id,
         "subject", "Re: " + mail.get("subject"), "body", copy.body());
     send(action, reply, () -> ledger.transactions().execute(tx -> {
-      for (int index = 0; index < shipments.size(); index++)
-        checkSheetRate(shipments.get(index).shipment(), received, drafts.get(index));
+      for (int index = 0; index < shipments.size(); index++) {
+        var leg = shipments.get(index);
+        checkSheetRate(leg.shipment(), received, drafts.get(index));
+        // Each shipment keeps its own proposal and portal rate ID so it can be booked on its own.
+        ledger.jdbc().update("UPDATE shipment_leg SET shipment=?,proposal=?,booking=NULL WHERE leg_id=?",
+            ledger.write(leg.shipment()), ledger.write(drafts.get(index)), leg.tenderId());
+      }
       return ledger.jdbc().update("""
         INSERT OR IGNORE INTO deliveries(action,state,payload,attempted_at)
         SELECT ?,'pending',?,? WHERE NOT EXISTS (
@@ -976,6 +982,46 @@ class WaveWorker {
       ledger.jdbc().update("UPDATE mail SET proposal=NULL WHERE id=?", id);
       ledger.stage(id, "sent", null);
     });
+  }
+
+  /**
+   * Compares portal rates for one separately priced shipment the way a single shipment does: offers,
+   * completeness and dataset version persist per shipment, and the quote waits for a complete
+   * comparison as long as a single-shipment quote would. Returns true while the comparison holds the quote.
+   */
+  private boolean comparePortalRates(long id, long legId, int number, Shipment s, Instant received,
+      Instant deadline) {
+    ledger.jdbc().update("INSERT OR IGNORE INTO shipment_leg(leg_id,request_id,number) VALUES(?,?,?)",
+        legId, id, number);
+    var leg = ledger.jdbc().queryForMap("SELECT * FROM shipment_leg WHERE leg_id=?", legId);
+    long queried = Ledger.id(leg.get("queried"));
+    var offers = new ArrayList<Offer>(Arrays.asList(cached(leg)));
+    var now = clock.instant();
+    if (queried == 0
+        || (queried > 0
+            && now.getEpochSecond() - queried >= (offers.isEmpty()
+                && !now.isBefore(received.plusSeconds(PORTAL_COMPARISON_SECONDS)) ? 5 : 35)
+            && now.isBefore(deadline.minusSeconds(35)))) {
+      var result = offers.isEmpty() ? upstream.rates(s, now)
+          : upstream.rates(s, now, offers, (String) leg.get("portal_version"));
+      if (result.reset()) offers.clear();
+      for (var o : result.offers()) {
+        offers.removeIf(old -> old.airline().equals(o.airline()) && old.billedKg().compareTo(o.billedKg()) == 0);
+        offers.add(o);
+      }
+      queried = result.complete() ? -1 : clock.instant().getEpochSecond();
+      if (result.reset() && offers.isEmpty()) queried = 0;
+      ledger.jdbc().update("UPDATE shipment_leg SET offers=?,queried=?,portal_version=? WHERE leg_id=?",
+          ledger.write(offers), queried, result.version(), legId);
+    }
+    now = clock.instant();
+    return queried != -1 && (offers.isEmpty() ? now.isBefore(deadline.minusSeconds(60))
+        : now.isBefore(received.plusSeconds(PORTAL_COMPARISON_SECONDS)));
+  }
+
+  private Offer[] legOffers(long legId) {
+    var legs = ledger.jdbc().queryForList("SELECT offers FROM shipment_leg WHERE leg_id=?", legId);
+    return legs.isEmpty() ? new Offer[0] : cached(legs.getFirst());
   }
 
   private boolean hasSeparateQuoteFollowUp(long id, Map<String, Object> mail) {
@@ -1181,7 +1227,8 @@ class WaveWorker {
     var excluded = carrierRestrictions.forRequest(id, m);
     var offers = new ArrayList<>(tariffOffers(s, context.received()));
     var portal = cachedPortal
-        ? List.of(cached(ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id)))
+        ? List.of(tenderId == id ? cached(ledger.jdbc().queryForMap("SELECT * FROM wave_case WHERE id=?", id))
+            : legOffers(tenderId))
         : upstream.rates(s, clock.instant()).offers();
     portal.stream()
         .filter(o -> cachedPortal

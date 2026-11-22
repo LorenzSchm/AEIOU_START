@@ -977,6 +977,149 @@ class WaveWorkerTest {
     verify(upstream, times(useFallback ? 1 : 0)).parseRfq(anyMap());
   }
 
+  // Live request #55685 (round 185), verbatim.
+  private static final String ROUND_185 = """
+      Hi there,
+
+      Hope your week’s going well. Could you quote the fastest air freight option for each of the two shipments below? Both will be ready for pickup on 2026-11-27 at our site in 40053 (Duesseldorf), Germany. Please arrange the truck from our site to the airport.
+
+      1. To YYZ (Toronto, CA): precision instruments, 12 pieces, gross weight 1604 kg, volume 11.33 cbm.
+      2. To BOM (Mumbai, IN): machine parts, 10 pieces, gross weight 620 kg, volume 2.75 cbm.
+
+      Could you send both quotes in the same reply, with a separate all-in price in EUR for each shipment rather than a combined price?
+
+      Thanks for taking a look!
+
+      Cheers,
+      Klaus Weidner
+      Weidner Spielwaren GmbH, Nuremberg""";
+  // The truckers' replies to #55685, verbatim. Schwabenbote left road transit open for shipment 1.
+  private static final Map<String, List<String>> ROUND_185_TRUCKS = Map.of(
+      "hansekogge-trucking@hackloop.mail", List.of("""
+          Dear Team AEIOU,
+
+          Our all-in rate for collection and delivery to DUS is 233.37 EUR. The rate is valid until 22 Nov 2026 09:54 UTC.
+
+          Estimated transit time from actual pickup to airport delivery, excluding any wait before collection: 24 hours.
+
+          Offer reference: TRK-17752. No booking is required for pickup.
+
+          Kind regards,
+          Hansekogge Trucking""", """
+          Dear Team AEIOU,
+
+          Our all-in rate for collection and delivery to DUS is 131.60 EUR. The estimated transit time from actual pickup to airport delivery is 24 hours, excluding any waiting time before collection.
+
+          This rate is valid until 22 Nov 2026 09:54 UTC. Our offer reference is TRK-17799. No booking is required for pickup.
+
+          Kind regards,
+          Hansekogge Trucking"""),
+      "schwabenbote-transporte@hackloop.mail", List.of("""
+          Hi Team AEIOU,
+
+          Our all-in rate for collection and delivery to DUS is 228.37 EUR, valid through 22 Nov 2026 09:54 UTC.
+
+          Estimated time to pickup: 21 hours. This does not include transit from pickup to airport delivery, which we can’t confirm at this stage.
+
+          Offer reference: TRK-17754. No booking is needed for pickup.
+
+          Best regards,
+          Schwabenbote Transporte""", """
+          Hi Team AEIOU,
+
+          Our all-in rate for collection and delivery to DUS is 126.60 EUR, valid until 22 Nov 2026 09:54 UTC.
+
+          Estimated transit time from actual pickup to airport delivery, excluding any wait before collection: 21 hours.
+
+          Offer reference: TRK-17793. No booking is required for pickup.
+
+          Best regards,
+          Schwabenbote Transporte"""));
+
+  /** Quotes #55685 from mocked portal rates (as seen live) and the recorded truck replies. */
+  private String quoteRound185(boolean portalCompleteAtFirst) {
+    String customer = "weidner-spielwaren@hackloop.mail";
+    receive(7, customer, "Air freight quotes for YYZ and BOM", ROUND_185, null);
+    Instant valid = START.plusSeconds(900);
+    var yyz = List.of(
+        new Offer("Juniper Cargo Lines", 2, new BigDecimal("4805.96"), new BigDecimal("1892.11"), "portal",
+            "R-JP-YYZ", valid),
+        new Offer("Aurelia Air Cargo", 4, new BigDecimal("3613.93"), new BigDecimal("1892.11"), "portal",
+            "R-AU-YYZ", valid),
+        new Offer("Tamarind Airways", 5, new BigDecimal("4295.09"), new BigDecimal("1892.11"), "portal",
+            "R-TM-YYZ", valid),
+        new Offer("Aurelia Air Cargo", 4, new BigDecimal("3420.00"), new BigDecimal("2000"), "portal",
+            "R-AU-YYZ-2000", valid));
+    var bom = List.of(
+        new Offer("Fjordline Air Cargo", 2, new BigDecimal("2213.40"), new BigDecimal("620"), "portal",
+            "R-FQ-BOM", valid),
+        new Offer("Lumen Air Cargo", 3, new BigDecimal("1853.80"), new BigDecimal("620"), "portal",
+            "R-LM-BOM", valid),
+        new Offer("Fjordline Air Cargo", 2, new BigDecimal("3040.00"), new BigDecimal("1000"), "portal",
+            "R-FQ-BOM-1000", valid));
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    when(upstream.rates(any(), any())).thenAnswer(call -> {
+      boolean toronto = "YYZ".equals(call.getArgument(0, Shipment.class).destination());
+      // A rate-limited first lookup returns nothing; the next pass completes the comparison.
+      if (!portalCompleteAtFirst && calls.getAndIncrement() < 2) return new FiveU.Rates(List.of(), false);
+      return new FiveU.Rates(toronto ? yyz : bom, true);
+    });
+    // The live check returns the air rate for the quoted rate ID.
+    doAnswer(call -> java.util.stream.Stream.concat(yyz.stream(), bom.stream())
+        .filter(offer -> offer.rateId().equals(call.getArgument(1, Offer.class).rateId())).findFirst().orElseThrow())
+        .when(upstream).currentRate(any(), any(), any());
+    worker.work();
+    for (int number = 1; number <= 2; number++) {
+      for (var invitation : List.copyOf(outbound)) {
+        String subject = invitation.get("subject").toString();
+        String to = invitation.get("to").toString();
+        if (!subject.contains("| shipment " + number + " | pickup")) continue;
+        // Hansekogge answers as it did live; the other invited trucker sends Schwabenbote's replies.
+        boolean hansekogge = to.equals("hansekogge-trucking@hackloop.mail");
+        String reply = ROUND_185_TRUCKS.get(hansekogge ? to : "schwabenbote-transporte@hackloop.mail")
+            .get(number - 1).replace("Schwabenbote Transporte", catalog.contact(to).orElseThrow().name());
+        receive(next.incrementAndGet(), to, "Re: " + subject, reply, Ledger.id(invitation.get("id")));
+      }
+    }
+    for (int seconds : new int[] {20, 40, 76, 85, 100}) {
+      clock.current = START.plusSeconds(seconds);
+      worker.work();
+    }
+    var replies = outbound.stream().filter(m -> customer.equals(m.get("to"))).toList();
+    assertEquals(1, replies.size());
+    return replies.getFirst().get("body").toString();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void round185PricesEachSeparateShipmentFromItsPortalRates(boolean portalCompleteAtFirst) {
+    String quote = quoteRound185(portalCompleteAtFirst);
+
+    // Fastest air per shipment from the portal, plus the balanced truck with confirmed transit.
+    assertTrue(quote.contains("1. DUS to YYZ — EUR 5039.33 all-in\n1604 kg · 11.33 m³ · Juniper Cargo Lines"), quote);
+    assertTrue(quote.contains("2. DUS to BOM — EUR 2340.00 all-in\n620 kg · 2.75 m³ · Fjordline Air Cargo"), quote);
+    var proposals = ledger.jdbc().queryForList(
+        "SELECT number,proposal FROM shipment_leg WHERE request_id=7 ORDER BY number");
+    assertEquals(2, proposals.size());
+    var first = ledger.read(proposals.get(0).get("proposal"), WaveWorker.Draft.class);
+    var second = ledger.read(proposals.get(1).get("proposal"), WaveWorker.Draft.class);
+    assertEquals("portal", first.offer().source());
+    assertEquals("R-JP-YYZ", first.offer().rateId());
+    assertEquals("Hansekogge Trucking", first.trucker());
+    assertEquals("portal", second.offer().source());
+    assertEquals("R-FQ-BOM", second.offer().rateId());
+    // Each shipment's comparison is kept and reused; an incomplete one is retried once.
+    verify(upstream, times(portalCompleteAtFirst ? 2 : 4)).rates(any(), any());
+    String other = ledger.jdbc().queryForObject("""
+        SELECT email FROM tender WHERE request_id=? AND leg='trucker' AND email<>'hansekogge-trucking@hackloop.mail'
+        """, String.class, Ledger.shipmentQuoteLeg(7, 1));
+    assertEquals(catalog.contact(other).orElseThrow().name(), second.trucker());
+    // The firm shipment-1 price without road transit is kept, and the transit is asked for.
+    assertEquals(new BigDecimal("228.37"), new BigDecimal(ledger.jdbc().queryForObject(
+        "SELECT euros FROM tender WHERE request_id=? AND email=?", String.class, Ledger.shipmentQuoteLeg(7, 1), other)));
+    assertNotNull(ledger.delivery("bid:7:" + other + ":shipment-1:transit"));
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"weight", "omitted", "pickup", "partial_source"})
   void round113RejectsUnverifiedGatewayFacts(String defect) {
