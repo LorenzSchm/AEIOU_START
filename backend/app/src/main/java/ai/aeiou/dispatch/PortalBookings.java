@@ -47,6 +47,31 @@ class PortalBookings {
       Pattern.compile(
           "[\\p{Lu}][\\p{L}’'&.-]*(?: [\\p{Lu}][\\p{L}’'&.-]*){0,5}(?:\\R[\\p{Lu}][\\p{L}’'&.-]*(?:"
               + " [\\p{Lu}][\\p{L}’'&.-]*){0,5}){0,3}");
+  private static final Pattern CONDITIONAL = Pattern.compile(
+      "(?iu)\\b(?:if|unless|until|hold|wait|cancel|not|never|wenn|nicht|stornieren|"
+          + "si|sauf|attendre|annuler|pas|eğer|şartıyla|değil|iptal|bekleyin)\\b");
+  private static final String SHIPMENT_TARGET =
+      "(?:the )?(first|second|third|1st|2nd|3rd) (?:shipment|consignment|one)"
+          + "|shipment (?:no\\.? ?|number |#)?([1-9])"
+          + "|(?:the )?(?:shipment|consignment) to ([a-z]{3})"
+          + "|(?:the )?([a-z]{3}) (?:shipment|consignment)"
+          + "|(both)(?: shipments| of them)?|(all)(?: (?:two|three))? shipments|them (both)";
+  private static final Pattern TARGET = Pattern.compile("(?iu)" + SHIPMENT_TARGET);
+  private static final String TARGETS =
+      "((?:" + SHIPMENT_TARGET + ")(?:(?:,| and|, and) (?:" + SHIPMENT_TARGET + "))*)";
+  private static final Pattern SHIPMENT_BOOKING = Pattern.compile(
+      "(?iu)(?:(?:yes|great|perfect|thanks|thank you)[,!]? )?(?:please )?(?:go ahead and |proceed to )?book "
+          + TARGETS
+          + "(?: as well| too)?(?: now| right away| today)?(?: as quoted)?(?: please)?");
+  private static final Pattern SHIPMENT_DEFERRAL = Pattern.compile(
+      "(?iu)we(?: will| shall|[’']ll) (?:confirm|decide on) " + TARGETS
+          + " (?:later|separately|soon|shortly|in due course)");
+  private static final Pattern SHIPMENT_PLEASANTRY = Pattern.compile(
+      "(?iu)(?:hi|hello|dear team(?: aeiou)?|good (?:morning|afternoon|evening)(?: team(?: aeiou)?)?"
+          + "|thank you(?: (?:very|so) much)?(?: for (?:your|the) (?:offers?|quotes?|prices|proposal))?"
+          + "|thanks(?: a lot)?|yes|great|perfect"
+          + "|(?:both|the|these|your) (?:prices|quotes|offers|rates)(?: both)? (?:work|look good|are fine)"
+          + " for us|(?:that|this) works for us|we accept (?:the|your|both) (?:offers?|quotes?|prices))");
   private final Ledger ledger;
   private final FiveU upstream;
   private final Clock clock;
@@ -81,6 +106,182 @@ class PortalBookings {
     if (blocks.length > 1 && NAME_SIGNATURE.matcher(blocks[1].strip()).matches()) text = blocks[0];
     String instruction = text.replaceAll("\\s+", " ").strip();
     return APPROVAL.matcher(instruction).matches() || TURKISH_APPROVAL.matcher(instruction).matches();
+  }
+
+  /**
+   * The shipments of a separately priced quote that the customer told us to book, by number
+   * (1-based); empty unless every sentence is a pleasantry, a booking instruction naming shipments
+   * or a deferral of other shipments. Conditions, holds and unnamed shipments never book.
+   */
+  static Set<Integer> acceptedShipments(String body, List<String> destinations) {
+    String authored = MailParser.authoredText(body);
+    if (CONDITIONAL.matcher(authored).find()) return Set.of();
+    String text = SIGNOFF.split(authored, 2)[0].strip();
+    String[] blocks = text.split("\\R\\h*\\R", 2);
+    if (blocks.length > 1 && NAME_SIGNATURE.matcher(blocks[1].strip()).matches()) text = blocks[0];
+    var booked = new TreeSet<Integer>();
+    var deferred = new TreeSet<Integer>();
+    for (String raw : text.replaceAll("\\s+", " ").strip().split("(?<=[.!?;])\\s+|[,;]?\\s+but\\s+")) {
+      String clause = raw.replaceAll("[.!?;,]+$", "").strip();
+      if (clause.isEmpty() || SHIPMENT_PLEASANTRY.matcher(clause).matches()) continue;
+      var booking = SHIPMENT_BOOKING.matcher(clause);
+      var deferral = SHIPMENT_DEFERRAL.matcher(clause);
+      Set<Integer> into;
+      String targets;
+      if (booking.matches()) {
+        into = booked;
+        targets = booking.group(1);
+      } else if (deferral.matches()) {
+        into = deferred;
+        targets = deferral.group(1);
+      } else {
+        return Set.of();
+      }
+      var named = TARGET.matcher(targets);
+      while (named.find()) {
+        var numbers = shipmentNumbers(named, destinations);
+        if (numbers.isEmpty()) return Set.of();
+        into.addAll(numbers);
+      }
+    }
+    if (booked.isEmpty() || booked.stream().anyMatch(deferred::contains)) return Set.of();
+    return Set.copyOf(booked);
+  }
+
+  private static Set<Integer> shipmentNumbers(java.util.regex.MatchResult target, List<String> destinations) {
+    int count = destinations.size();
+    if (target.group(5) != null || target.group(6) != null || target.group(7) != null) {
+      var all = new TreeSet<Integer>();
+      for (int number = 1; number <= count; number++) all.add(number);
+      return all;
+    }
+    int number;
+    if (target.group(1) != null) {
+      number = switch (target.group(1).toLowerCase(Locale.ROOT)) {
+        case "first", "1st" -> 1;
+        case "second", "2nd" -> 2;
+        default -> 3;
+      };
+    } else if (target.group(2) != null) {
+      number = Integer.parseInt(target.group(2));
+    } else {
+      String airport = (target.group(3) != null ? target.group(3) : target.group(4)).toUpperCase(Locale.ROOT);
+      if (Collections.frequency(destinations, airport) != 1) return Set.of();
+      number = destinations.indexOf(airport) + 1;
+    }
+    return number >= 1 && number <= count ? Set.of(number) : Set.of();
+  }
+
+  /** Books the shipments a customer approved from a quote with a separate price for each shipment. */
+  @Scheduled(fixedDelay = 2500)
+  void bookAcceptedShipments() {
+    if (!automatic) return;
+    long now = clock.instant().getEpochSecond();
+    var candidates = ledger.jdbc().queryForList("""
+        SELECT r.id, f.body FROM mail r
+        JOIN deliveries d ON d.action='quote:'||r.id AND d.state='sent'
+        JOIN mail f ON f.id=(SELECT max(x.id) FROM mail x WHERE x.kind='follow-up' AND x.sender=r.sender
+          AND (x.root IN (r.id,json_extract(d.response,'$.id')) OR x.reply_to=json_extract(d.response,'$.id'))
+          AND x.id>json_extract(d.response,'$.id'))
+        WHERE r.kind='request' AND r.proposal IS NULL
+          AND NOT EXISTS (SELECT 1 FROM deliveries u
+            WHERE u.action='requote:'||r.id OR u.action LIKE 'requote:'||r.id||':%')
+          AND EXISTS (SELECT 1 FROM shipment_leg l LEFT JOIN booking_attempt a ON a.request_id=l.leg_id
+            WHERE l.request_id=r.id AND l.proposal IS NOT NULL AND l.booking IS NULL
+              AND COALESCE(a.retry_at,0)<=?)
+        """, now);
+    for (var row : candidates) {
+      long id = Ledger.id(row.get("id"));
+      var legs = ledger.jdbc().queryForList("""
+          SELECT l.*,COALESCE(a.retry_at,0) AS retry_at FROM shipment_leg l
+          LEFT JOIN booking_attempt a ON a.request_id=l.leg_id
+          WHERE l.request_id=? AND l.proposal IS NOT NULL ORDER BY l.number
+          """, id);
+      var destinations = legs.stream()
+          .map(leg -> ledger.read(leg.get("shipment"), Shipment.class).destination()).toList();
+      var approved = acceptedShipments(Ledger.str(row, "body"), destinations);
+      for (int index = 0; index < legs.size(); index++) {
+        var leg = legs.get(index);
+        if (!approved.contains(index + 1) || leg.get("booking") != null
+            || Ledger.id(leg.get("retry_at")) > now) continue;
+        try {
+          bookShipment(id, leg);
+        } catch (RuntimeException e) {
+          String issue = recordFailure(Ledger.id(leg.get("leg_id")), e);
+          log.warn("RFQ {} shipment {}: {}", id, leg.get("number"), issue);
+        }
+      }
+    }
+  }
+
+  private String recordFailure(long attempt, RuntimeException e) {
+    long retry = clock.instant().getEpochSecond() + 30;
+    if ((e instanceof WaveWorker.Conflict && !(e instanceof WaveWorker.RetryLater))
+        || (e instanceof HttpClientErrorException ex
+            && ex.getStatusCode().value() != 429
+            && ex.getStatusCode().value() != 408)) retry = Long.MAX_VALUE;
+    String issue = "Booking needs attention: "
+        + (e instanceof WaveWorker.Conflict ? e.getMessage() : e.getClass().getSimpleName());
+    ledger.jdbc().update("UPDATE booking_attempt SET retry_at=?,issue=? WHERE request_id=?", retry, issue, attempt);
+    return issue;
+  }
+
+  private synchronized void bookShipment(long id, Map<String, Object> leg) {
+    long legId = Ledger.id(leg.get("leg_id"));
+    if (ledger.jdbc().queryForObject("SELECT booking FROM shipment_leg WHERE leg_id=?", String.class, legId) != null)
+      return;
+    var m = ledger.mail(id);
+    var draft = ledger.read(leg.get("proposal"), WaveWorker.Draft.class);
+    var shipment = ledger.read(leg.get("shipment"), Shipment.class);
+    Long quote = ledger.jdbc().queryForObject(
+        "SELECT json_extract(response,'$.id') FROM deliveries WHERE action=? AND state='sent'", Long.class,
+        "quote:" + id);
+    if (draft == null || draft.offer() == null || shipment == null || !"portal".equals(draft.offer().source())
+        || draft.offer().rateId() == null || draft.offer().rateId().isBlank()) {
+      ledger.jdbc().update("INSERT OR IGNORE INTO booking_attempt(request_id,rate_id,submitted,quote_id)"
+          + " VALUES(?,'',0,?)", legId, quote);
+      throw new WaveWorker.Conflict("Coordinate this booking with the carrier.");
+    }
+    ledger.jdbc().update(
+        "INSERT OR IGNORE INTO booking_attempt(request_id,rate_id,submitted,quote_id) VALUES(?,?,0,?)",
+        legId, draft.offer().rateId(), quote);
+    if (draft.insurance() != null || CargoInsurance.from(m) != null)
+      throw new WaveWorker.Conflict(CargoInsurance.BOOKING_REVIEW);
+    if (ledger.quoteReplies(id, Ledger.str(m, "sender"), quote).stream()
+        .anyMatch(reply -> QuoteChecks.changesQuote(Ledger.str(reply, "body"))))
+      throw new WaveWorker.Conflict("Waiting for an updated quote after the shipment change.");
+    var attempt = ledger.jdbc().queryForMap("SELECT * FROM booking_attempt WHERE request_id=?", legId);
+    String rate = Ledger.str(attempt, "rate_id");
+    if (Ledger.id(attempt.get("submitted")) == 0) rate = verifiedShipmentRate(legId, shipment, draft);
+    // One booking per shipment: the request's team reference plus the shipment number.
+    String reference = "AEIOU-" + id + "-" + leg.get("number");
+    Map<String, Object> receipt;
+    try {
+      receipt = reserve(reference, rate);
+    } catch (HttpClientErrorException.Gone expired) {
+      ledger.jdbc().update("UPDATE booking_attempt SET submitted=0 WHERE request_id=?", legId);
+      rate = verifiedShipmentRate(legId, shipment, draft);
+      receipt = reserve(reference, rate);
+    }
+    if (receipt == null || Ledger.str(receipt, "booking_reference").isBlank()
+        || !reference.equals(receipt.get("team_reference")) || !rate.equals(receipt.get("rate_id")))
+      throw new IllegalStateException("Booking acknowledgment missing");
+    ledger.jdbc().update("UPDATE shipment_leg SET booking=? WHERE leg_id=?", ledger.write(receipt), legId);
+    ledger.jdbc().update("UPDATE booking_attempt SET issue=NULL WHERE request_id=?", legId);
+  }
+
+  private String verifiedShipmentRate(long legId, Shipment shipment, WaveWorker.Draft draft) {
+    Offer current;
+    try {
+      current = draft.allIn(shipment, upstream.currentRate(shipment, draft.offer(), clock.instant()));
+    } catch (IllegalArgumentException | HttpClientErrorException.NotFound | HttpClientErrorException.Gone ex) {
+      throw requestFreshQuote(legId);
+    }
+    if (!draft.matchesQuotedTerms(current) || current.validUntil() == null
+        || !current.validUntil().isAfter(clock.instant().plusSeconds(4))) throw requestFreshQuote(legId);
+    ledger.jdbc().update("UPDATE booking_attempt SET rate_id=?,submitted=1 WHERE request_id=?",
+        current.rateId(), legId);
+    return current.rateId();
   }
 
   @Scheduled(fixedDelay = 2500)
@@ -231,8 +432,11 @@ class PortalBookings {
   }
 
   private Map<String, Object> reserve(long id, String rate) {
-    return upstream.post(
-        "/v1/portal/bookings", Map.of("rate_id", rate, "team_reference", "AEIOU-" + id));
+    return reserve("AEIOU-" + id, rate);
+  }
+
+  private Map<String, Object> reserve(String reference, String rate) {
+    return upstream.post("/v1/portal/bookings", Map.of("rate_id", rate, "team_reference", reference));
   }
 
   private boolean repliesToRevisedQuote(long request, long quote, Map<String, Object> reply) {

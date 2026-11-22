@@ -149,6 +149,14 @@ class Ledger implements AutoCloseable {
             + "offer TEXT NOT NULL,entered_at TEXT NOT NULL,PRIMARY KEY(request_id,rate_id))");
     ensureColumn("booking_attempt", "submitted", "INTEGER NOT NULL DEFAULT 1");
     ensureColumn("booking_attempt", "quote_id", "INTEGER");
+    // One row per separately priced shipment, keyed by its tender leg: the shipment's portal
+    // comparison (as wave_case keeps it for a single shipment), and after the quote the quoted
+    // shipment, its proposal and its portal booking.
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS shipment_leg(leg_id INTEGER PRIMARY KEY, request_id INTEGER NOT NULL,
+          number INTEGER NOT NULL, offers TEXT, queried INTEGER NOT NULL DEFAULT 0, portal_version TEXT,
+          shipment TEXT, proposal TEXT, booking TEXT)
+        """);
     // Existing operator drafts are preserved across the Python-to-Java handoff.
     db.update(
         "INSERT OR IGNORE INTO wave_case(id,opened,operator,reason) SELECT id,0,1,'Existing"
