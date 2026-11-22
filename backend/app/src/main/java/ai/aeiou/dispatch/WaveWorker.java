@@ -433,6 +433,41 @@ class WaveWorker {
         "If you have an air freight shipment, we would be glad to quote it.");
   }
 
+  /** True once anything of ours reached this customer in the request's thread: a quote, question or decline. */
+  private boolean customerContacted(long id, Map<String, Object> m) {
+    return ledger.jdbc().queryForObject("""
+        SELECT count(*) FROM deliveries WHERE json_extract(payload,'$.to')=?
+          AND (action LIKE '%:'||? OR action LIKE '%:'||?||':%')
+        """, Integer.class, m.get("sender"), id, id) > 0;
+  }
+
+  /**
+   * Tells a customer who heard nothing that we could not confirm a reliable price in time. Returns
+   * false to try again on a later tick (a rate limit) while the note is still timely.
+   */
+  private boolean sendWindowClosedNote(long id, Map<String, Object> m, Instant deadline) {
+    String action = "window-closed:" + id;
+    if (ledger.delivery(action) != null) return true;
+    var s = ledger.read(m.get("fields"), Shipment.class);
+    String route = s != null && s.origin() != null && s.destination() != null
+        ? " from " + s.origin() + " to " + s.destination() : "";
+    String approved = Greeting.at(m, clock.instant()) + "\n\n"
+        + "Thank you for your request. We were unable to confirm a reliable all-in rate for your shipment"
+        + route + " with our carriers in time, so we cannot send you a quote for it at the moment."
+        + " We apologise for the inconvenience and would be glad to quote your next shipment.\n\n"
+        + "Best regards,\nTeam AEIOU";
+    try {
+      send(action, Map.of("to", m.get("sender"), "in_reply_to", id, "subject", "Re: " + m.get("subject"),
+          "body", inCustomerLanguage(action, m, approved, List.of())));
+      return true;
+    } catch (RetryLater retry) {
+      return !clock.instant().isBefore(deadline.plusSeconds(60));
+    } catch (Conflict ex) {
+      log.info("RFQ {} window-closed note: {}", id, ex.getMessage());
+      return true;
+    }
+  }
+
   /** We quote air exports from Germany: an import into a German airport gets one polite decline. */
   private void declineImport(long id, Map<String, Object> m, String destination) {
     decline(id, m, "Air import into " + destination + ". We quote air exports from Germany only. Declined.",
@@ -507,6 +542,12 @@ class WaveWorker {
     }
     var deadline = ageLimit(m);
     if (!clock.instant().isBefore(deadline.minusSeconds(4))) {
+      // (Not after a long outage: a note hours late helps nobody.)
+      boolean silent = clock.instant().isBefore(deadline.plusSeconds(120)) && !customerContacted(id, m);
+      // A customer who heard nothing gets an honest note once the window has closed, so it can never
+      // be read as the first reply to the quote request.
+      if (silent && automatic && clock.instant().isBefore(deadline.plusSeconds(1))) return;
+      if (silent && automatic && !sendWindowClosedNote(id, m, deadline)) return;
       var reason = ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=?", String.class, id);
       ledger.stage(id, "expired", reason == null
           ? "Quote window closed before a verified quote was sent." : "Quote window closed. " + reason);

@@ -2665,7 +2665,34 @@ class WaveWorkerTest {
     worker.work();
     assertEquals("expired", ledger.mail(7).get("stage"));
     assertEquals("expired", ledger.mail(8).get("stage"));
-    assertEquals(1, outbound.size());
+    // The customer already has our question on #7; #8 heard nothing and gets one honest note.
+    assertNull(ledger.delivery("window-closed:7"));
+    assertEquals("sent", ledger.delivery("window-closed:8"));
+    assertEquals(2, outbound.size());
+    assertTrue(outbound.getLast().get("body").toString().contains("unable to confirm a reliable all-in rate"));
+    worker.work();
+    assertEquals(2, outbound.size());
+  }
+
+  @Test
+  void live36292TellsTheCustomerOnceTheWindowClosedWithoutAnyAirPrice() {
+    receive(7, "lindqvist@hackloop.mail", "Fastest air freight to LOS", "Hello,\n\nCould you please quote the"
+        + " fastest air freight option from FRA to LOS (Lagos, NG)? 1162 kg gross, 4.45 cbm, ready on 2026-11-27."
+        + " We will deliver it to FRA ourselves.\n\nSara\nLindqvist Medtech", null);
+    for (long second = 0; second <= 355; second += 5) {
+      clock.current = START.plusSeconds(second);
+      worker.work();
+    }
+    assertNull(ledger.delivery("window-closed:7"), "nothing goes to the customer inside the quote window");
+    assertNull(ledger.delivery("quote:7"));
+    clock.current = START.plusSeconds(361);
+    worker.work();
+    worker.work();
+    assertEquals("expired", ledger.mail(7).get("stage"));
+    assertEquals("sent", ledger.delivery("window-closed:7"));
+    var notes = outbound.stream().filter(mail -> "lindqvist@hackloop.mail".equals(mail.get("to"))).toList();
+    assertEquals(1, notes.size());
+    assertTrue(notes.getFirst().get("body").toString().contains("from FRA to LOS"), () -> String.valueOf(notes));
   }
 
   @Test
