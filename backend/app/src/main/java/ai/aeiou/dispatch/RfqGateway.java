@@ -1117,7 +1117,11 @@ class RfqGateway {
       if (phrase.startsWith(known.preference() + " ")
           && source.toLowerCase(Locale.ROOT).contains(phrase)) preference = known.preference();
     }
-    if (origin == null && zone != null) origin = catalog.zones.get(zone);
+    // The model sometimes reports the pickup postcode (e.g. "81843") as the origin. With a known
+    // pickup zone, anything that is not a departure airport becomes that zone's airport.
+    if (zone != null && catalog.zones.containsKey(zone)
+        && (origin == null || !catalog.zones.containsValue(origin.strip().toUpperCase(Locale.ROOT))))
+      origin = catalog.zones.get(zone);
     // A null extraction means uncertain; keep an airport code Java found explicitly in the email.
     if (origin == null && !pickup && zone == null && known.pickupZone() == null) origin = known.origin();
     String destination = text(response, "destination");

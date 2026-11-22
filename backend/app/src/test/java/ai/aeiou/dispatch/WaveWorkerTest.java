@@ -4288,4 +4288,19 @@ class WaveWorkerTest {
     assertEquals(1, outbound.size(), () -> String.valueOf(outbound));
     assertTrue(outbound.getFirst().get("body").toString().contains("air freight only"));
   }
+
+  @Test
+  void live54117UsesThePickupAirportWhenTheExtractionReportsThePostcodeAsOrigin() {
+    when(upstream.parseRfq(anyMap())).thenReturn(gatewayResponse("""
+        {"origin":"81843","destination":"SGN","weight_kg":1951,"volume_cbm":13.67,"preference":"fastest",\
+        "pickup_required":true,"pickup_zone":"81","needs_review":false,"reply_language":"tr"}"""));
+    receive(7, "lindqvist-medtech@hackloop.mail", "RE: FW: BRUSSELS AIRPORT - ASU / 225 CTN 390 KGS", "Merhaba,\n\nSGN (Ho Chi Minh City, VN) varışlı tekstil numuneleri için en hızlı seçeneği istiyoruz. Gönderi 7 parça, brüt 1951 kg ve 13.67 cbm.\n\nYük 2026-11-28 tarihinde 81843 (Munich South), Germany adresindeki tesisimizden alıma hazır. Havalimanına kamyon nakliyesini de siz organize edecek şekilde, tüm masraflar dahil EUR teklifinizi iletebilir misiniz?\n\nSara\nLindqvist Medtech\n\n\n-----Original Message-----\nSent: 2026-10-16\nSubject: BRUSSELS AIRPORT - ASU / 225 CTN 390 KGS\n\nDear team,\n\npls quote air freight ex BRUSSELS AIRPORT to ASU:\n225 CTN / 390 KGS / 15.8 CBM, automotive sensors\nFCA, cargo ready next week.\n\nThanks", null);
+    worker.work();
+
+    assertEquals("collecting", ledger.mail(7).get("stage"), () -> String.valueOf(ledger.mail(7)));
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertEquals("MUC", s.origin());
+    assertEquals("81", s.pickupZone());
+    assertEquals("fastest", s.preference());
+  }
 }
