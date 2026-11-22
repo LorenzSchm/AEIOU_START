@@ -183,7 +183,23 @@ public final class Catalog {
   }
 
   public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes,
-      Map<String, Double> truckTransit, Set<String> portalAirlines, java.util.function.Predicate<Carrier> eligible) {
+      Map<String, Double> truckTransit, Set<String> pricedAirlines, java.util.function.Predicate<Carrier> eligible) {
+    return invitations(s, airlineRoutes, truckTransit, Map.of(), pricedAirlines, eligible);
+  }
+
+  /**
+   * Carriers to ask for this shipment, at most {@link #MAX_INVITATIONS}.
+   *
+   * <p>With pickup, every trucker serving the zone is asked first: the board prices the truck leg
+   * from the most balanced bid over all of them. Airlines get the remaining slots, and only those
+   * whose lane price is not already known ({@code pricedAirlines}: lower-case names priced by the
+   * portal or by a kit or approved tariff sheet). Without any known price for the lane, one or two
+   * airlines are still asked; the truckers left out are then the slowest by {@code truckTransit}
+   * (fastest) or the least balanced by {@code truckHistory} (cheapest, keyed and named by email).
+   */
+  public List<Carrier> invitations(Shipment s, Map<String, Set<String>> airlineRoutes,
+      Map<String, Double> truckTransit, Map<String, Offer> truckHistory, Set<String> pricedAirlines,
+      java.util.function.Predicate<Carrier> eligible) {
     String route = s.origin() + "-" + s.destination();
     var airlines = carriers.stream()
         .filter(c -> !c.truck())
@@ -194,10 +210,11 @@ public final class Catalog {
             && (!airlineRoutes.containsKey(c.email()) || airlineRoutes.get(c.email()).contains(route)))
         .sorted(Comparator.comparing(c -> !airlineRoutes.containsKey(c.email())))
         .toList();
+    if (s.pickupZone() == null) return airlines.stream().limit(MAX_INVITATIONS).toList();
     var trucks = carriers.stream().filter(c -> c.truck() && c.serves(s.pickupZone()))
         .filter(eligible).toList();
-    boolean cheapestPickup = s.pickupZone() != null && "cheapest".equals(s.preference());
-    if (cheapestPickup && "60".equals(s.pickupZone())) {
+    boolean cheapest = "cheapest".equals(s.preference());
+    if (cheapest && "60".equals(s.pickupZone())) {
       // Use the pre-wave comparison for invitation order. Every quote still needs a fresh bid.
       var priority = Map.of("bodenseefracht@hackloop.mail", 0, "westfalenroute@hackloop.mail", 1,
           "domblick-kurierdienst@hackloop.mail", 2);
@@ -210,21 +227,26 @@ public final class Catalog {
           .sorted(Comparator.comparingDouble(c -> truckTransit.getOrDefault(c.email(), Double.POSITIVE_INFINITY)))
           .toList();
     }
-    int airlineLimit = s.pickupZone() == null ? MAX_INVITATIONS : 3;
-    if (cheapestPickup) {
-      // Keep a second airline bid when the directory only confirms the destination.
+    // An airline whose lane price is already known would only repeat it, so it gets no slot.
+    var unpriced = airlines.stream()
+        .filter(c -> !pricedAirlines.contains(c.name().toLowerCase(Locale.ROOT))).toList();
+    int minimumAirlines = 0;
+    if (pricedAirlines.isEmpty()) {
+      // Without any air price nothing can be quoted. Keep a second airline bid when the directory
+      // only confirms the destination.
       boolean exactAirLane = airlines.stream().anyMatch(carrier -> airlineRoutes.containsKey(carrier.email()));
-      int minimumAirlines = exactAirLane ? 1 : 2;
-      airlineLimit = Math.min(airlineLimit, Math.max(minimumAirlines, MAX_INVITATIONS - trucks.size()));
+      minimumAirlines = exactAirLane ? 1 : 2;
     }
-    var selected = new ArrayList<>(airlines.stream().limit(airlineLimit).toList());
-    int extraTrucks = trucks.size() - (MAX_INVITATIONS - selected.size());
-    if (extraTrucks > 0 && !portalAirlines.isEmpty()) {
-      var covered = selected.stream().filter(c -> portalAirlines.contains(c.name().toLowerCase(Locale.ROOT)))
-          .limit(extraTrucks).toList();
-      selected.removeAll(covered);
+    int airlineLimit = Math.min(3, Math.max(minimumAirlines, MAX_INVITATIONS - trucks.size()));
+    var selected = new ArrayList<>(unpriced.stream().limit(airlineLimit).toList());
+    int truckSlots = MAX_INVITATIONS - selected.size();
+    if (trucks.size() > truckSlots && cheapest && !"60".equals(s.pickupZone()) && !truckHistory.isEmpty()) {
+      // Leave out the truckers whose earlier bids were least balanced; unknown ones keep their slot.
+      var known = trucks.stream().map(c -> truckHistory.get(c.email())).filter(Objects::nonNull).toList();
+      var ranked = known.stream().sorted(QuotePlanner.balance(known)).map(Offer::airline).toList();
+      trucks = trucks.stream().sorted(Comparator.comparingInt(c -> ranked.indexOf(c.email()))).toList();
     }
-    selected.addAll(trucks.stream().limit(MAX_INVITATIONS - selected.size()).toList());
+    selected.addAll(trucks.stream().limit(truckSlots).toList());
     return selected;
   }
 

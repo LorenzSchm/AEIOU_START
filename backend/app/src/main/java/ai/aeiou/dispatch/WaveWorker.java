@@ -1049,7 +1049,17 @@ class WaveWorker {
         && invited.size() >= Catalog.MAX_INVITATIONS;
     var truckTransit = shipment.pickupZone() != null && "fastest".equals(shipment.preference())
         ? ledger.truckTransitBefore(id, shipment) : Map.<String, Double>of();
-    var selected = catalog.invitations(shipment, ledger.airlineRoutesBefore(id), truckTransit, portalAirlines,
+    var truckHistory = shipment.pickupZone() != null && "cheapest".equals(shipment.preference())
+        ? ledger.truckBidsBefore(id, shipment) : Map.<String, Offer>of();
+    // Airlines already priced for this lane by the portal or a kit or approved tariff sheet.
+    var priced = new HashSet<String>();
+    if (shipment.pickupZone() != null) {
+      priced.addAll(portalAirlines);
+      tariffOffers(shipment, Ledger.instant(ledger.mail(id).get("received")))
+          .forEach(offer -> priced.add(offer.airline().toLowerCase(Locale.ROOT)));
+      priced.removeIf(name -> carrierRestrictions.excludes(excluded, name));
+    }
+    var selected = catalog.invitations(shipment, ledger.airlineRoutesBefore(id), truckTransit, truckHistory, priced,
         carrier -> !carrierRestrictions.excludes(excluded, carrier.name())
             && (!limitToInvited || invited.contains(carrier.email())));
     if (!confirmedPickup || shipment.pickupZone() == null) return selected;

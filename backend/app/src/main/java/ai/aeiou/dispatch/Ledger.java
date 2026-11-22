@@ -281,6 +281,22 @@ class Ledger implements AutoCloseable {
     return transit;
   }
 
+  /** Each trucker's latest firm, timed bid for this pickup zone and airport, named by its email. */
+  Map<String, Offer> truckBidsBefore(long request, Shipment shipment) {
+    var bids = new HashMap<String, Offer>();
+    db.query("""
+        SELECT t.email,t.days,t.euros FROM tender t JOIN mail m ON m.id=t.reply_id AND m.sender=t.email
+        WHERE m.id<? AND m.kind='carrier' AND t.leg='trucker' AND t.euros IS NOT NULL
+          AND t.days>0 AND t.issue IS NULL
+          AND json_extract(t.terms,'$.origin')=? AND json_extract(t.terms,'$.pickup_zone')=?
+        ORDER BY m.id DESC
+        """, (org.springframework.jdbc.core.RowCallbackHandler) row ->
+            bids.putIfAbsent(row.getString("email"), new Offer(row.getString("email"), row.getDouble("days"),
+                row.getBigDecimal("euros"), BigDecimal.ZERO, "history", null, null)),
+        request, shipment.origin(), shipment.pickupZone());
+    return bids;
+  }
+
   static long shipmentQuoteLeg(long request, int number) {
     if (request <= 0 || number <= 0 || number >= SHIPMENT_SCOPE_SIZE)
       throw new IllegalArgumentException("Invalid shipment scope.");
