@@ -14,18 +14,35 @@ import org.springframework.stereotype.Component;
  * upserts new and changed rows by primary key and deletes rows that left SQLite since the last
  * push. Missing tables and columns are created. A failed sync never throws into the wave. The
  * scheduler only runs this on the writer that holds the {@link WriterLease}.
+ *
+ * <p>For incremental replica pulls it also installs change tracking on each mirrored table: a
+ * {@code sync_xid} column that a trigger stamps with the writing transaction's id on every real
+ * insert or update, a {@code sync_tombstone} log of deleted keys, and a marker row on TRUNCATE.
+ * Because triggers do the stamping, writes from older writers and scripts are tracked too. Readers
+ * that do not know these columns and tables ignore them.
  */
 @Component
 class PostgresMirror {
   private static final Logger log = LoggerFactory.getLogger(PostgresMirror.class);
   private static final String SEP = "\u001f";
   static final String ROWID = "sqlite_rowid";
+  static final String VERSION = "sync_xid";
+  static final String TOMBSTONES = "sync_tombstone";
+  static final String META = "sync_meta";
+  static final String PRUNED = "tombstones_pruned_through";
+  static final List<String> TRIGGERS = List.of("aeiou_sync_row", "aeiou_sync_gone", "aeiou_sync_truncate");
+  private static final long PRUNE_MS = 3_600_000;
   private final JdbcTemplate sqlite;
   private final Postgres postgres;
   // Last row pushed per table and primary key, so each tick only sends inserts and changes.
   private final Map<String, Map<String, String>> pushed = new HashMap<>();
   private final Map<String, Map<String, String>> remoteTypes = new HashMap<>();
   private final Set<String> rejected = new HashSet<>();
+  // Tables whose change tracking was checked on the current connection.
+  private final Set<String> tracked = new HashSet<>();
+  private boolean trackingReady;
+  private boolean trackingWarned;
+  private long prunedAt;
   private Connection pg;
   private String error;
 
@@ -46,11 +63,15 @@ class PostgresMirror {
       if (pg == null || !pg.isValid(3)) {
         Postgres.close(pg);
         pg = postgres.open();
+        tracked.clear();
+        remoteTypes.clear();
+        trackingReady = installTracking();
       }
       for (String table :
           sqlite.queryForList(
               "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
               String.class)) mirror(table);
+      if (trackingReady && System.currentTimeMillis() - prunedAt > PRUNE_MS) pruneTombstones();
       error = null;
     } catch (SQLException | RuntimeException ex) {
       if (error == null) log.warn("Postgres mirror failed: {}", ex.getMessage());
@@ -74,6 +95,7 @@ class PostgresMirror {
     if (keys.isEmpty()) return;
     var types = remoteTypes.get(table);
     if (types == null || !types.keySet().containsAll(columns)) types = ensureTable(table, info, keys);
+    if (trackingReady && tracked.add(table)) track(table, keys);
 
     var last = pushed.computeIfAbsent(table, t -> new HashMap<>());
     var current = new HashMap<String, String>();
@@ -158,6 +180,112 @@ class PostgresMirror {
     types = remoteColumns(table);
     remoteTypes.put(table, types);
     return types;
+  }
+
+  /** Creates the shared tracking functions and tables once per connection. Never fails the mirror. */
+  private boolean installTracking() {
+    try {
+      pg.setAutoCommit(false);
+      try (var st = pg.createStatement()) {
+        st.execute("CREATE TABLE IF NOT EXISTS " + TOMBSTONES + " (id bigserial PRIMARY KEY, tbl text NOT NULL,"
+            + " pk jsonb, xid xid8 NOT NULL DEFAULT pg_current_xact_id(), at timestamptz NOT NULL DEFAULT now())");
+        st.execute("CREATE INDEX IF NOT EXISTS " + TOMBSTONES + "_xid ON " + TOMBSTONES + " (xid)");
+        st.execute("CREATE TABLE IF NOT EXISTS " + META + " (key text PRIMARY KEY, value text)");
+        // A no-op update keeps its version, so a restarted writer re-sending its rows changes nothing.
+        st.execute("""
+            CREATE OR REPLACE FUNCTION aeiou_sync_touch() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+              IF TG_OP = 'UPDATE' AND to_jsonb(NEW) = to_jsonb(OLD) THEN RETURN NEW; END IF;
+              NEW.%s := pg_current_xact_id();
+              RETURN NEW;
+            END $$""".formatted(VERSION));
+        st.execute("""
+            CREATE OR REPLACE FUNCTION aeiou_sync_forget() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+              INSERT INTO %s (tbl, pk)
+                SELECT TG_TABLE_NAME, jsonb_object_agg(k, to_jsonb(OLD) -> k) FROM unnest(TG_ARGV) AS k;
+              RETURN OLD;
+            END $$""".formatted(TOMBSTONES));
+        st.execute("""
+            CREATE OR REPLACE FUNCTION aeiou_sync_reset() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+              INSERT INTO %s (tbl, pk) VALUES (TG_TABLE_NAME, NULL);
+              RETURN NULL;
+            END $$""".formatted(TOMBSTONES));
+      }
+      pg.commit();
+      return true;
+    } catch (SQLException ex) {
+      untracked(ex);
+      return false;
+    } finally {
+      autoCommit();
+    }
+  }
+
+  /** Adds the version column, its index and the three triggers to one table, if any is missing. */
+  private void track(String table, List<String> keys) {
+    try {
+      var present = new HashSet<String>();
+      try (var st = pg.prepareStatement(
+          "SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid"
+              + " WHERE c.relnamespace = current_schema()::regnamespace AND c.relname = ? AND NOT t.tgisinternal")) {
+        st.setString(1, table);
+        try (var rs = st.executeQuery()) {
+          while (rs.next()) present.add(rs.getString(1));
+        }
+      }
+      if (remoteTypes.get(table).containsKey(VERSION) && present.containsAll(TRIGGERS)) return;
+      String args = String.join(",", keys.stream().map(k -> "'" + k.replace("'", "''") + "'").toList());
+      pg.setAutoCommit(false);
+      try (var st = pg.createStatement()) {
+        st.execute("ALTER TABLE " + quote(table) + " ADD COLUMN IF NOT EXISTS " + VERSION + " xid8");
+        st.execute("CREATE INDEX IF NOT EXISTS " + quote(table + "_" + VERSION) + " ON " + quote(table) + " (" + VERSION + ")");
+        st.execute("CREATE OR REPLACE TRIGGER " + TRIGGERS.get(0) + " BEFORE INSERT OR UPDATE ON " + quote(table)
+            + " FOR EACH ROW EXECUTE FUNCTION aeiou_sync_touch()");
+        st.execute("CREATE OR REPLACE TRIGGER " + TRIGGERS.get(1) + " AFTER DELETE ON " + quote(table)
+            + " FOR EACH ROW EXECUTE FUNCTION aeiou_sync_forget(" + args + ")");
+        st.execute("CREATE OR REPLACE TRIGGER " + TRIGGERS.get(2) + " AFTER TRUNCATE ON " + quote(table)
+            + " FOR EACH STATEMENT EXECUTE FUNCTION aeiou_sync_reset()");
+      }
+      pg.commit();
+      remoteTypes.get(table).put(VERSION, "xid8");
+    } catch (SQLException ex) {
+      untracked(ex);
+    } finally {
+      autoCommit();
+    }
+  }
+
+  /**
+   * Drops tombstones older than a day and records the newest dropped transaction id, so a replica
+   * that last pulled before it knows it may have missed a delete and pulls in full.
+   */
+  private void pruneTombstones() {
+    prunedAt = System.currentTimeMillis();
+    try (var st = pg.createStatement()) {
+      st.executeUpdate("WITH gone AS (DELETE FROM " + TOMBSTONES + " WHERE at < now() - interval '1 day' RETURNING xid)"
+          + " INSERT INTO " + META + " (key, value) SELECT '" + PRUNED + "', max(xid)::text FROM gone HAVING count(*) > 0"
+          + " ON CONFLICT (key) DO UPDATE SET value = greatest(" + META + ".value::xid8, EXCLUDED.value::xid8)::text");
+    } catch (SQLException ex) {
+      untracked(ex);
+    }
+  }
+
+  private void untracked(SQLException ex) {
+    try {
+      if (!pg.getAutoCommit()) pg.rollback();
+    } catch (SQLException ignored) {
+    }
+    if (!trackingWarned) log.warn("Postgres change tracking unavailable, replicas pull in full: {}", ex.getMessage());
+    trackingWarned = true;
+  }
+
+  private void autoCommit() {
+    try {
+      pg.setAutoCommit(true);
+    } catch (SQLException ignored) {
+    }
   }
 
   private Map<String, String> remoteColumns(String table) throws SQLException {
