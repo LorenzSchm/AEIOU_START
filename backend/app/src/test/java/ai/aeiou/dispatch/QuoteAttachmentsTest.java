@@ -80,4 +80,11 @@ class QuoteAttachmentsTest {
       }
     }
   }
+
+  @Test
+  void live56801AnAllInPriceAsAPdfIsAPdfRequest() {
+    assertEquals(java.util.EnumSet.of(QuoteAttachments.Format.PDF), QuoteAttachments.requested("Air freight quote to LIM",
+        "Hi,\n\nPlease quote the fastest air freight option to LIM.\n\nPlease send your all-in price in EUR as a PDF"
+            + " attached to your reply so our purchasing department can file it.\n\nMira Petersen"));
+  }
 }

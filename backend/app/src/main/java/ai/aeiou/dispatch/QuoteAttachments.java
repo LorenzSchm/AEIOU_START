@@ -34,7 +34,8 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 
 final class QuoteAttachments {
   private static final Pattern OFFER = Pattern.compile(
-      "(?iu)\\b(?:quote|quotation|offer|bid|devis|offre|cotation|angebot|offerte|teklif\\p{L}*)\\b|报价|報價");
+      "(?iu)\\b(?:quote|quotation|offer|bid|price|pricing|rate|devis|offre|cotation|prix|tarif|angebot|preis|"
+          + "offerte|prijs|precio|prezzo|teklif\\p{L}*|fiyat\\p{L}*)\\b|报价|報價|价格|價格|価格|가격");
   private static final Pattern OUTPUT_REQUEST = Pattern.compile(
       "(?iu)\\b(?:attach|send|provide|submit|include|reply|return|deliver|need|needs|require|requires|"
           + "joindre|joignez|envoyer|envoyez|transmettre|fournir|schicken|senden|anhängen|beifügen|"
