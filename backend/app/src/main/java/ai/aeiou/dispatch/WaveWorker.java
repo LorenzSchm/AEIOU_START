@@ -1403,7 +1403,7 @@ class WaveWorker {
       String pickupWaitingDisclosure) {
     var language = details.language();
     var arrival = arrivalWindow(details);
-    String weight = s.weightKg().stripTrailingZeros().toPlainString();
+    String weight = Shipment.displayKg(s.weightKg());
     String priority = "fastest".equals(s.preference())
         ? language.text("quickest option", "solution la plus rapide", "schnellste Option", "最快方案", "en hızlı seçenek")
         : arrival == null
@@ -1432,8 +1432,8 @@ class WaveWorker {
         "%d. %s 至 %s — EUR %s 全包价")
         .formatted(number, s.origin(), s.destination(), offer.totalEur().toPlainString());
     return heading + "\n"
-        + "%s kg · %s m³ · %s".formatted(s.weightKg().stripTrailingZeros().toPlainString(),
-            s.volumeCbm().stripTrailingZeros().toPlainString(), offer.airline())
+        + "%s kg · %s m³ · %s".formatted(Shipment.displayKg(s.weightKg()),
+            Shipment.displayCbm(s.volumeCbm()), offer.airline())
         + "\n" + quoteService(details, s, offer, draft.pickupDays(), draft.pickupWaitingDisclosure())
         + (draft.insurance() == null ? "" : "\n" + draft.insurance().disclosure(language));
   }
@@ -2087,9 +2087,9 @@ class WaveWorker {
             "Hi,\n\nCould you quote "
                 + service
                 + " for a shipment weighing "
-                + s.weightKg().stripTrailingZeros().toPlainString()
+                + Shipment.displayKg(s.weightKg())
                 + " kg gross, with a total volume of "
-                + s.volumeCbm().stripTrailingZeros().toPlainString()
+                + Shipment.displayCbm(s.volumeCbm())
                 + " cbm" + (pieces == null ? "" : " across " + pieces + (pieces == 1 ? " piece" : " pieces")) + "?"
                 + (revisionReply == null ? dates : " These are the revised shipment details." + dates)
                 + (c.truck()
@@ -2235,7 +2235,7 @@ class WaveWorker {
         "This updated offer uses your total volume of %s m³.",
         "Cette offre mise à jour tient compte de votre volume total de %s m³.",
         "Dieses aktualisierte Angebot berücksichtigt Ihr Gesamtvolumen von %s m³.",
-        "本次更新报价按您的总体积 %s 立方米计算。").formatted(shipment.volumeCbm().toPlainString());
+        "本次更新报价按您的总体积 %s 立方米计算。").formatted(Shipment.displayCbm(shipment.volumeCbm()));
     if (rateChanged || sameAirShipment(prior, shipment)) {
       confirmation = language.text(
           "This is an updated offer. Please confirm whether you accept the revised all-in price.",
