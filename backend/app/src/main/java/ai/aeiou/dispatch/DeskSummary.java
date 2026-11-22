@@ -31,7 +31,102 @@ final class DeskSummary {
     out.put("overview", overview(messages, now.toEpochMilli()));
     out.put("shipments", shipments(messages, now.toEpochMilli()));
     out.put("score", score(messages));
+    out.put("desk", desk(messages, now.toEpochMilli()));
     return out;
+  }
+
+  /* ---------------- Desk chrome (page.jsx, Overview.jsx) ---------------- */
+
+  /** process.js globeState: the globe arc's state for a request. */
+  static String globeState(JsonNode request, long now) {
+    return switch (outcomeOf(request, now)) {
+      case "booked" -> "booked";
+      case "quoted" -> "quoted";
+      case "needs attention" -> "attention";
+      case "in progress" -> "active";
+      default -> "closed";
+    };
+  }
+
+  /** A JSON value as the desk reads it: missing and null both become null. */
+  private static JsonNode value(JsonNode node) {
+    return node == null || node.isMissingNode() || node.isNull() ? null : node;
+  }
+
+  /**
+   * What the desk's frame needs besides the three summaries, so it no longer needs every message: the
+   * inbox size and attention badge (sidebar), the first attention items and the globe's routes
+   * (Overview). Attention items carry only the fields the list renders and statusOf reads.
+   */
+  static Map<String, Object> desk(JsonNode messages, long now) {
+    int count = 0, attention = 0;
+    var items = new ArrayList<Map<String, Object>>();
+    var routes = new ArrayList<Map<String, Object>>();
+    for (var m : each(messages)) {
+      count++;
+      if (DeskPages.needsAttention(m)) {
+        attention++;
+        if (items.size() < 4) {
+          var item = new LinkedHashMap<String, Object>();
+          item.put("id", m.path("id").asLong());
+          item.put("kind", value(m.path("kind")));
+          item.put("stage", value(m.path("stage")));
+          item.put("delivery", value(m.path("delivery")));
+          item.put("booking", m.path("booking").isObject() ? true : null);
+          item.put("received", value(m.path("received")));
+          item.put("review_reason", value(m.path("review_reason")));
+          var fields = new LinkedHashMap<String, Object>();
+          fields.put("origin", value(m.path("fields").path("origin")));
+          fields.put("destination", value(m.path("fields").path("destination")));
+          item.put("fields", fields);
+          items.add(item);
+        }
+      }
+      var fields = m.path("fields");
+      if ("request".equals(text(m, "kind")) && truthy(fields, "origin") && truthy(fields, "destination")) {
+        var offer = m.path("proposal").path("offer");
+        var route = new LinkedHashMap<String, Object>();
+        route.put("id", m.path("id").asLong());
+        route.put("origin", value(fields.path("origin")));
+        route.put("destination", value(fields.path("destination")));
+        route.put("state", globeState(m, now));
+        route.put("airline", value(offer.path("airline")));
+        route.put("totalEur", value(offer.path("total_eur")));
+        route.put("days", value(offer.path("days")));
+        route.put("label", value(m.path("subject")));
+        routes.add(route);
+      }
+    }
+    var out = new LinkedHashMap<String, Object>();
+    out.put("messages", count);
+    out.put("attention", attention);
+    out.put("attention_items", items);
+    out.put("routes", routes);
+    return out;
+  }
+
+  /**
+   * The instants (epoch ms) at which a request's outcome can turn "expired" by the clock alone: the
+   * first millisecond after its six-minute window. Summaries change with time only at these instants,
+   * so a summary computed at {@code t1} is still current at {@code t2} unless one lies in (t1, t2].
+   */
+  static long[] expiries(JsonNode messages) {
+    var out = new ArrayList<Long>();
+    for (var m : each(messages)) {
+      if (!"request".equals(text(m, "kind"))) continue;
+      Long received = ms(m.path("received"));
+      if (received != null) out.add(received + WINDOW_MS + 1);
+    }
+    return out.stream().mapToLong(Long::longValue).sorted().toArray();
+  }
+
+  /** Whether any expiry lies in {@code (from, to]}. */
+  static boolean expiresBetween(long[] expiries, long from, long to) {
+    int i = java.util.Arrays.binarySearch(expiries, from + 1);
+    int at = i >= 0 ? i : -i - 1;
+    // binarySearch may land on any of several equal entries; step back to the first one above from.
+    while (at > 0 && expiries[at - 1] > from) at--;
+    return at < expiries.length && expiries[at] <= to;
   }
 
   /* ---------------- JavaScript-compatible value helpers ---------------- */

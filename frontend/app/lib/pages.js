@@ -181,3 +181,38 @@ export function useShipmentRows({ tab, customer, reason, search, sort, version, 
 
   return { ...state, error, loadMore, hasMore: state.rows.length < state.total };
 }
+
+/* ---------------- Case thread ---------------- */
+
+/**
+ * The open case: its message and every message of its thread (GET /messages/{id}/thread), refetched
+ * when the live data version moves. While another case loads, the previous one stays on screen so the
+ * sheet swaps content instead of closing. In mock mode the thread comes from the in-memory messages.
+ */
+export function useThread(caseId, { version, messages }) {
+  const [state, setState] = useState(null);
+  const request = useRef(0);
+
+  useEffect(() => {
+    const id = ++request.current;
+    if (caseId == null) {
+      setState(null);
+      return;
+    }
+    if (MOCK) {
+      const message = (messages || []).find((m) => m.id === caseId);
+      setState(message ? { message, thread: messages } : null);
+      return;
+    }
+    api("/messages/" + caseId + "/thread").then(
+      (t) => id === request.current && setState((old) => {
+        const same = old?.message.id === t.message.id;
+        return { message: same ? shareValue(old.message, t.message) : t.message, thread: shareMessages(same ? old.thread : null, t.thread) };
+      }),
+      // An unknown case (removed, or a stale link) closes the sheet; a failed refetch keeps what is shown.
+      (e) => id === request.current && /HTTP 404/.test(e.message) && setState(null),
+    );
+  }, [caseId, version, messages]);
+
+  return caseId == null ? null : state;
+}

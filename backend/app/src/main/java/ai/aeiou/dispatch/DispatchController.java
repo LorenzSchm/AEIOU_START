@@ -17,13 +17,15 @@ class DispatchController {
   private final CarrierTariffs tariffs;
   private final DeskStatus status;
   private final InboxFeed feed;
+  private final InboxCache inbox;
   private final com.fasterxml.jackson.databind.ObjectMapper json;
   private final java.time.Clock clock;
 
   DispatchController(
       Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings,
-      CarrierTariffs tariffs, DeskStatus status, InboxFeed feed,
+      CarrierTariffs tariffs, DeskStatus status, InboxFeed feed, InboxCache inbox,
       com.fasterxml.jackson.databind.ObjectMapper json, java.time.Clock clock) {
+    this.inbox = inbox;
     this.bookings = bookings;
     this.status = status;
     this.feed = feed;
@@ -68,7 +70,8 @@ class DispatchController {
   }
 
   /**
-   * Overview, Shipments and Scoreboard figures, computed on the server from the whole inbox (no LLM).
+   * Overview, Shipments and Scoreboard figures and the desk's frame (inbox size, attention badge and
+   * list, globe routes), computed on the server from the whole inbox (no LLM).
    * {@code at} pins the clock (ISO instant) so a result can be reproduced; it defaults to now.
    */
   @GetMapping("/summary")
@@ -79,7 +82,11 @@ class DispatchController {
     } catch (java.time.format.DateTimeParseException ex) {
       throw new IllegalArgumentException("at must be an ISO instant such as 2026-11-22T03:00:00Z.");
     }
-    return DeskSummary.of(json.valueToTree(ledger.inbox()), now);
+    var snapshot = inbox.current();
+    var result = DeskSummary.of(snapshot.tree(), now);
+    // Moves with every inbox rebuild, so a polling desk can tell that messages changed.
+    result.put("inbox_stamp", snapshot.build());
+    return result;
   }
 
   /** One page of the queue (attention, requests or all mail), with the threads its rows need. */
@@ -88,7 +95,7 @@ class DispatchController {
       @RequestParam(required = false) String q, @RequestParam(required = false) Long before,
       @RequestParam(defaultValue = "50") int limit) {
     if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be between 1 and 200.");
-    return DeskPages.queue(json.valueToTree(ledger.inbox()), scope, q, before, limit);
+    return DeskPages.queue(inbox.current().tree(), scope, q, before, limit);
   }
 
   /** One sorted, filtered page of the Shipments Bookings or Lost & open table. */
@@ -100,13 +107,44 @@ class DispatchController {
       @RequestParam(defaultValue = "0") int offset) {
     if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be between 1 and 200.");
     if (offset < 0) throw new IllegalArgumentException("offset must not be negative.");
-    var deals = DeskSummary.deals(json.valueToTree(ledger.inbox()), clock.instant().toEpochMilli());
+    var deals = DeskSummary.deals(inbox.current().tree(), clock.instant().toEpochMilli());
     return DeskPages.shipments(deals, tab, customer, reason, q, sort, dir, limit, offset);
   }
 
   @GetMapping("/messages")
   List<Map<String, Object>> messages() {
-    return ledger.inbox();
+    return inbox.current().messages();
+  }
+
+  /**
+   * One message and every message of its thread (itself included), newest first: what the case panel
+   * shows, without the whole inbox. 404 when the message is unknown.
+   */
+  @GetMapping("/messages/{id}/thread")
+  ResponseEntity<Map<String, Object>> thread(@PathVariable long id) {
+    var messages = inbox.current().messages();
+    var selected = messages.stream().filter(m -> Ledger.id(m.get("id")) == id).findFirst();
+    if (selected.isEmpty()) return ResponseEntity.notFound().build();
+    var result = new LinkedHashMap<String, Object>();
+    result.put("message", selected.get());
+    result.put("thread", threadOf(messages, selected.get()));
+    return ResponseEntity.ok(result);
+  }
+
+  /**
+   * The thread's messages in inbox order. The inbox gives every message its thread_id; the desk's
+   * thread rules (thread_id, else root, else id) all reduce to it, and the thread's root is included
+   * by id so the conversation can read the request's fields from it.
+   */
+  static List<Map<String, Object>> threadOf(List<Map<String, Object>> messages, Map<String, Object> selected) {
+    long key = threadKey(selected);
+    return messages.stream().filter(m -> threadKey(m) == key || Ledger.id(m.get("id")) == key).toList();
+  }
+
+  private static long threadKey(Map<String, Object> m) {
+    long id = Ledger.id(m.get("id"));
+    if (m.get("thread_id") != null) return Ledger.id(m.get("thread_id"));
+    return m.get("root") != null && Ledger.id(m.get("root")) != id ? Ledger.id(m.get("root")) : id;
   }
 
   @GetMapping("/directory")

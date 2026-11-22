@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Icon from "./components/ui/Icon";
 import Overview from "./components/overview/Overview";
@@ -11,7 +11,9 @@ import CaseSheet from "./components/case/CaseSheet";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import RateSheets from "./components/rates/RateSheets";
 import { useDispatchData } from "./lib/api";
-import { clock, needsAttention } from "./lib/format";
+import { useThread } from "./lib/pages";
+import { localDesk } from "./lib/desk";
+import { clock } from "./lib/format";
 import { spring } from "./lib/motion";
 
 const NAV = [
@@ -23,6 +25,7 @@ const NAV = [
   { id: "score", label: "Scoreboard", icon: "target", group: "5U challenge" },
 ];
 const EYEBROWS = { score: "5U challenge · Evaluation" };
+const NO_MESSAGES = [];
 
 function readUrl() {
   if (typeof window === "undefined") return { view: "overview", caseId: null, scope: "attention" };
@@ -167,9 +170,14 @@ export default function Page() {
     return () => cancel(id);
   }, [data]);
 
-  const messages = data?.messages || [];
-  const current = messages.find((m) => m.id === nav.caseId);
-  const attention = messages.filter(needsAttention).length;
+  // Live desks hold no messages: the frame figures come with the summary, the open case is fetched
+  // with its thread. Mock mode computes the same from its local messages.
+  const messages = data?.messages ?? NO_MESSAGES;
+  const desk = useMemo(() => data?.summary?.desk ?? localDesk(messages), [data?.summary, messages]);
+  const caseThread = useThread(nav.caseId, { version: data?.version, messages });
+  // The sheet needs the directory too, so it waits for the first data as before.
+  const current = data ? caseThread?.message : undefined;
+  const attention = desk.attention;
   const bad = error || data?.status?.error;
   const webhookMode = data?.status?.webhook_enabled;
   const lastDelivery = webhookMode ? data.status.last_webhook : data?.status?.last_poll;
@@ -210,7 +218,7 @@ export default function Page() {
             {readOnly
               ? <div><dt>Last sync</dt><dd className="mono">{clock(data.status.replica_synced)}</dd></div>
               : <div><dt>{webhookMode ? "Last webhook" : "Last poll"}</dt><dd className="mono">{clock(lastDelivery)}</dd></div>}
-            <div><dt>Inbox</dt><dd className="mono">{data ? messages.length : "—"}</dd></div>
+            <div><dt>Inbox</dt><dd className="mono">{data ? desk.messages : "—"}</dd></div>
             <div><dt>Kit rates</dt><dd className="mono">{data?.status?.tariffs ?? "—"}</dd></div>
           </dl>
         </div>
@@ -250,7 +258,7 @@ export default function Page() {
           <>
             {seen.current.has("overview") && (
               <KeptView name="overview" active={nav.view === "overview"}>
-                <Overview messages={messages} summary={data.summary} active={nav.view === "overview"} onOpen={openCase} />
+                <Overview messages={messages} summary={data.summary} desk={desk} active={nav.view === "overview"} onOpen={openCase} />
               </KeptView>
             )}
             {seen.current.has("queue") && (
@@ -281,7 +289,7 @@ export default function Page() {
       </AnimatePresence>
       <AnimatePresence>
         {current && (
-          <CaseSheet key="case-sheet" m={current} messages={messages} directory={data.directory}
+          <CaseSheet key="case-sheet" m={current} messages={caseThread.thread} directory={data.directory}
                      refresh={refresh} onClose={closeCase} onDirtyChange={onDirtyChange} showBoard={nav.view === "score"} />
         )}
       </AnimatePresence>

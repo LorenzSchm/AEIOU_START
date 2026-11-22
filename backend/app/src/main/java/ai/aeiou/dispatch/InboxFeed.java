@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,38 +22,49 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /**
  * Live desk data over Server-Sent Events ({@code GET /api/v1/events}).
  *
- * <p>A desk connects once and gets a {@code snapshot} (status and every message). After that it only
- * receives what changed: {@code message} for a new or changed message, {@code removed} for one that is
- * gone and {@code status} when the status line changes. Every event carries an increasing
- * {@code version}. A reconnecting desk simply gets a fresh snapshot.
+ * <p>A desk connects once and gets a {@code snapshot}: the status line and the summary (Overview,
+ * Shipments and Scoreboard figures plus the desk's frame: inbox size, attention badge and list, globe
+ * routes). It does not carry messages; views fetch the rows they show (queue and shipment pages, a
+ * case's thread). After that the desk only receives compact notices: {@code changed} with the ids of
+ * new, changed and removed messages, {@code summary} with the parts of the summary that changed (see
+ * {@link #patch}) and {@code status} when the status line changes. Every event carries an increasing {@code version}; a desk refetches what it
+ * shows when the version moves. A reconnecting desk simply gets a fresh snapshot.
  *
- * <p>Changes are found by comparing inbox snapshots once a second, so every writer in the worker,
- * the webhook and the read-only replica is covered without touching their code. The comparison runs
- * only while at least one desk is connected, on its own thread: the app's scheduled jobs are switched
- * off on a read-only desk, which still needs live updates.
+ * <p>Each second, while a desk is connected, the feed asks {@link InboxCache} for the inbox, which
+ * rebuilds it only when {@link LedgerWatch} sees the inbox tables change. Only then are messages
+ * compared and the summary recomputed. Summaries also move with the clock (a request expires six
+ * minutes after arrival), so the summary is also recomputed when a request crosses that mark. Every
+ * writer (worker, webhook, read-only replica) is covered without touching their code. The feed runs on
+ * its own thread: the app's scheduled jobs are switched off on a read-only desk, which still needs live
+ * updates.
  */
 @Component
 class InboxFeed {
   private static final Logger log = LoggerFactory.getLogger(InboxFeed.class);
   private static final long STREAM_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(30);
 
-  private final Ledger ledger;
+  private final InboxCache inbox;
   private final DeskStatus status;
   private final ObjectMapper json;
   private final java.time.Clock clock;
   private final ScheduledExecutorService ticks;
   private final List<SseEmitter> desks = new CopyOnWriteArrayList<>();
 
-  // Guarded by "this": the last snapshot every connected desk has been brought up to.
+  // Guarded by "this": the state every connected desk has been brought up to.
+  private InboxCache.Snapshot lastInbox;
+  private long[] expiries = new long[0];
   private Map<Long, String> lastMessages = Map.of();
   private String lastStatus = "";
-  private String lastSummary = "";
+  private Map<String, Object> lastSummary;
+  private String lastSummaryKey = "";
+  private long lastSummaryAt;
   private long version;
   private long sinceHeartbeat;
+  private long summaries;
 
-  InboxFeed(Ledger ledger, DeskStatus status, ObjectMapper json, java.time.Clock clock,
+  InboxFeed(InboxCache inbox, DeskStatus status, ObjectMapper json, java.time.Clock clock,
       @Value("${dispatch.events-ms:1000}") long intervalMs) {
-    this.ledger = ledger;
+    this.inbox = inbox;
     this.status = status;
     this.json = json;
     this.clock = clock;
@@ -72,20 +84,22 @@ class InboxFeed {
     desk.onError(error -> desks.remove(desk));
     synchronized (this) {
       try {
-        var messages = ledger.inbox();
-        var current = status.current();
-        var summary = summary(messages);
-        // Bring the shared baseline up to date first, so the next tick only sends later changes.
-        if (desks.isEmpty()) {
-          lastMessages = InboxDiff.index(messages, this::write);
-          lastStatus = write(current);
-          lastSummary = summaryKey(summary);
+        // With no desk connected the baseline is stale: bring it up to date first, so the next tick
+        // only sends later changes. Otherwise the new desk starts from the baseline the others have.
+        if (desks.isEmpty() || lastSummary == null) {
+          var snapshot = inbox.current();
+          long now = clock.millis();
+          adopt(snapshot);
+          lastMessages = InboxDiff.index(snapshot.messages(), this::write);
+          lastStatus = write(status.current());
+          lastSummary = summary(snapshot, now);
+          lastSummaryKey = summaryKey(lastSummary);
+          lastSummaryAt = now;
         }
         var snapshot = new LinkedHashMap<String, Object>();
         snapshot.put("version", version);
-        snapshot.put("status", current);
-        snapshot.put("summary", summary);
-        snapshot.put("messages", messages);
+        snapshot.put("status", json.readTree(lastStatus));
+        snapshot.put("summary", lastSummary);
         send(desk, "snapshot", snapshot);
         desks.add(desk);
       } catch (IOException | RuntimeException failed) {
@@ -99,29 +113,51 @@ class InboxFeed {
     return desks.size();
   }
 
+  /** How many summaries the feed computed: on connect, after an inbox change or at an expiry. */
+  synchronized long summaries() {
+    return summaries;
+  }
+
   synchronized void tick() {
     if (desks.isEmpty()) return;
     try {
-      var messages = ledger.inbox();
-      var next = InboxDiff.index(messages, this::write);
-      var changes = InboxDiff.between(lastMessages, next);
+      var snapshot = inbox.current();
+      long now = clock.millis();
+      boolean inboxChanged = snapshot != lastInbox;
+      var changes = new InboxDiff.Changes(List.of(), List.of());
+      Map<Long, String> next = lastMessages;
+      if (inboxChanged) {
+        next = InboxDiff.index(snapshot.messages(), this::write);
+        changes = InboxDiff.between(lastMessages, next);
+        adopt(snapshot);
+      }
       String nextStatus = write(status.current());
       boolean statusChanged = !nextStatus.equals(lastStatus);
-      // Summaries also move with the clock (a request expires after 6 minutes), so compare every tick.
-      var summary = summary(messages);
-      String nextSummary = summaryKey(summary);
-      boolean summaryChanged = !nextSummary.equals(lastSummary);
+      // The summary depends only on the inbox and the clock, and on the clock only when a request
+      // crosses its six-minute mark.
+      Map<String, Object> summary = lastSummary;
+      String nextSummaryKey = lastSummaryKey;
+      if (!changes.isEmpty() || DeskSummary.expiresBetween(expiries, lastSummaryAt, now)) {
+        summary = summary(snapshot, now);
+        nextSummaryKey = summaryKey(summary);
+        lastSummaryAt = now;
+      }
+      boolean summaryChanged = !nextSummaryKey.equals(lastSummaryKey);
       if (!changes.isEmpty() || statusChanged || summaryChanged) {
         version++;
-        var byId = new java.util.HashMap<Long, Map<String, Object>>();
-        for (var m : messages) byId.put(Ledger.id(m.get("id")), m);
-        for (long id : changes.upserted()) broadcast("message", Map.of("version", version, "message", byId.get(id)));
-        for (long id : changes.removed()) broadcast("removed", Map.of("version", version, "id", id));
+        if (!changes.isEmpty()) {
+          var notice = new LinkedHashMap<String, Object>();
+          notice.put("version", version);
+          notice.put("ids", changes.upserted());
+          notice.put("removed", changes.removed());
+          broadcast("changed", notice);
+        }
         if (statusChanged) broadcast("status", Map.of("version", version, "status", json.readTree(nextStatus)));
-        if (summaryChanged) broadcast("summary", Map.of("version", version, "summary", summary));
+        if (summaryChanged) broadcast("summary", Map.of("version", version, "summary", patch(lastSummary, summary)));
         lastMessages = next;
         lastStatus = nextStatus;
-        lastSummary = nextSummary;
+        lastSummary = summary;
+        lastSummaryKey = nextSummaryKey;
       }
       // Proxies and browsers drop idle streams; a comment every 15 s keeps them open.
       if (++sinceHeartbeat >= 15) {
@@ -139,11 +175,71 @@ class InboxFeed {
     }
   }
 
-  private Map<String, Object> summary(List<Map<String, Object>> messages) {
-    return DeskSummary.of(json.valueToTree(messages), clock.instant());
+  private void adopt(InboxCache.Snapshot snapshot) {
+    lastInbox = snapshot;
+    expiries = DeskSummary.expiries(snapshot.tree());
   }
 
-  /** The summary without its timestamp, so an unchanged summary is not resent every second. */
+  private Map<String, Object> summary(InboxCache.Snapshot snapshot, long now) {
+    summaries++;
+    return DeskSummary.of(snapshot.tree(), java.time.Instant.ofEpochMilli(now));
+  }
+
+  /**
+   * The parts of {@code next} that differ from {@code previous}, two levels deep: each changed section
+   * (overview, shipments, score, desk) with only its changed entries, plus {@code computed_at}. A new
+   * message usually moves a few counters, so the globe's routes and the board's rounds are not resent
+   * with them. The desk merges a patch into the summary it holds.
+   */
+  @SuppressWarnings("unchecked")
+  static Map<String, Object> patch(Map<String, Object> previous, Map<String, Object> next,
+      java.util.function.Function<Object, String> write) {
+    var out = new LinkedHashMap<String, Object>();
+    for (var section : next.entrySet()) {
+      Object before = previous == null ? null : previous.get(section.getKey());
+      if (section.getKey().equals("computed_at")) out.put(section.getKey(), section.getValue());
+      else if (section.getValue() instanceof Map<?, ?> entries && before instanceof Map<?, ?> old) {
+        var changed = new LinkedHashMap<String, Object>();
+        for (var entry : ((Map<String, Object>) entries).entrySet())
+          if (!old.containsKey(entry.getKey()) || !write.apply(entry.getValue()).equals(write.apply(old.get(entry.getKey()))))
+            changed.put(entry.getKey(), rows(old.get(entry.getKey()), entry.getValue(), write));
+        if (!changed.isEmpty()) out.put(section.getKey(), changed);
+      } else if (before == null || !write.apply(section.getValue()).equals(write.apply(before)))
+        out.put(section.getKey(), section.getValue());
+    }
+    return out;
+  }
+
+  /**
+   * A changed list of rows with unique ids (the globe's routes, the board's rounds) as
+   * {@code {"$ids": [every id in order], "$rows": [new and changed rows]}}; any other value whole.
+   */
+  @SuppressWarnings("unchecked")
+  static Object rows(Object previous, Object next, java.util.function.Function<Object, String> write) {
+    if (!(previous instanceof List<?> before) || !(next instanceof List<?> after) || after.isEmpty()) return next;
+    var old = new java.util.HashMap<Object, String>();
+    for (var row : before) {
+      if (!(row instanceof Map<?, ?> m) || m.get("id") == null || old.put(m.get("id"), write.apply(row)) != null) return next;
+    }
+    var ids = new ArrayList<Object>();
+    var changed = new ArrayList<Object>();
+    var seen = new java.util.HashSet<Object>();
+    for (var row : after) {
+      if (!(row instanceof Map<?, ?> m) || m.get("id") == null || !seen.add(m.get("id"))) return next;
+      ids.add(m.get("id"));
+      if (!write.apply(row).equals(old.get(m.get("id")))) changed.add(row);
+    }
+    var out = new LinkedHashMap<String, Object>();
+    out.put("$ids", ids);
+    out.put("$rows", changed);
+    return write.apply(out).length() < write.apply(next).length() ? out : next;
+  }
+
+  private Map<String, Object> patch(Map<String, Object> previous, Map<String, Object> next) {
+    return patch(previous, next, this::write);
+  }
+
+  /** The summary without its timestamp, so an unchanged summary is not resent. */
   private String summaryKey(Map<String, Object> summary) {
     var copy = new LinkedHashMap<>(summary);
     copy.remove("computed_at");

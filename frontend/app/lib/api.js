@@ -55,30 +55,52 @@ export function shareMessages(prev, next) {
 }
 export const shareValue = (prev, next) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
 
-/** Replaces or inserts one message, keeping the inbox order (newest id first) and every other object. */
-function upsertMessage(messages, message) {
-  const i = messages.findIndex((m) => m.id === message.id);
-  if (i >= 0) {
-    if (JSON.stringify(messages[i]) === JSON.stringify(message)) return messages;
-    const next = messages.slice();
-    next[i] = message;
-    return next;
+const STREAM_FAILURES_BEFORE_POLLING = 3;
+
+/** Two summaries are the same figures when they differ only in when they were computed. */
+const sameSummary = (a, b) => {
+  if (!a || !b) return a === b;
+  const { computed_at: _a, ...x } = a;
+  const { computed_at: _b, ...y } = b;
+  return JSON.stringify(x) === JSON.stringify(y);
+};
+
+/**
+ * A changed row list sent as { $ids, $rows } (InboxFeed.rows): every id in order, plus only the new and
+ * changed rows. Unchanged rows keep their objects.
+ */
+function mergeRows(old, value) {
+  if (!value || !Array.isArray(value.$ids)) return value;
+  const byId = new Map((Array.isArray(old) ? old : []).map((r) => [r.id, r]));
+  for (const r of value.$rows) byId.set(r.id, r);
+  return value.$ids.map((id) => byId.get(id));
+}
+
+/** Applies a summary event: only changed sections and, within them, only changed entries. */
+function mergeSummary(old, patch) {
+  if (!old) return patch;
+  const next = { ...old };
+  for (const [k, v] of Object.entries(patch)) {
+    if (!(v && typeof v === "object" && !Array.isArray(v) && old[k] && typeof old[k] === "object")) {
+      next[k] = v;
+      continue;
+    }
+    next[k] = { ...old[k] };
+    for (const [e, value] of Object.entries(v)) next[k][e] = mergeRows(old[k][e], value);
   }
-  const at = messages.findIndex((m) => m.id < message.id);
-  const next = messages.slice();
-  next.splice(at < 0 ? next.length : at, 0, message);
   return next;
 }
 
-const STREAM_FAILURES_BEFORE_POLLING = 3;
-
 /**
- * Live desk data: status, messages and the carrier directory.
+ * Live desk data: status, the server summary (figures, attention badge and list, globe routes) and the
+ * carrier directory. It holds no messages: views fetch the rows they show (Queue and Shipments pages,
+ * the open case's thread) and refetch them when `version` moves. In mock mode it also holds the mock
+ * messages, from which those views compute locally.
  *
- * Connects to the backend's event stream (GET /events): one snapshot, then only the messages and status
- * that change. Unchanged messages keep their objects, so memoised rows don't re-render. If the stream
- * fails repeatedly (or in mock mode), it falls back to polling every 2 s. `refresh` re-reads everything
- * at once, e.g. right after an operator action.
+ * Connects to the backend's event stream (GET /events): one snapshot with status and summary, then
+ * compact notices: `changed` (ids of changed messages), `summary` (only the changed parts) and `status`. If the stream fails
+ * repeatedly (or in mock mode), it falls back to polling every 2 s. `refresh` re-reads everything at
+ * once and makes views refetch, e.g. right after an operator action.
  */
 export function useDispatchData() {
   const [data, setData] = useState(null);
@@ -88,32 +110,37 @@ export function useDispatchData() {
     if (!cache.current) cache.current = await api("/directory");
     return cache.current;
   }, []);
-  const refresh = useCallback(async () => {
+  // force: an operator action changed data, so views refetch even if the summary looks the same.
+  const load = useCallback(async (force) => {
     const [status, messages, dir, summary] = await Promise.all([
-      api("/status"), api("/messages"), directory(), MOCK ? Promise.resolve(null) : api("/summary").catch(() => null),
+      api("/status"), MOCK ? api("/messages") : Promise.resolve(undefined), directory(),
+      MOCK ? Promise.resolve(null) : api("/summary").catch(() => null),
     ]);
     setData((old) => {
       const next = {
         status: shareValue(old?.status, status),
-        messages: shareMessages(old?.messages, messages),
+        messages: MOCK ? shareMessages(old?.messages, messages) : undefined,
         directory: dir,
-        summary: shareValue(old?.summary, summary),
+        summary: old && sameSummary(old.summary, summary) ? old.summary : summary,
+        // The inbox's build stamp moves with any message change, even one the figures don't show.
+        stamp: summary?.inbox_stamp,
       };
-      if (old && next.status === old.status && next.messages === old.messages && next.directory === old.directory
-        && next.summary === old.summary) return old;
-      // version: bumps when messages or summaries change, so paged views know to refetch.
-      next.version = (old?.version ?? 0) + (old && next.messages === old.messages && next.summary === old.summary ? 0 : 1);
+      const moved = !old || force || next.messages !== old.messages || next.summary !== old.summary || next.stamp !== old.stamp;
+      if (!moved && next.status === old.status && next.directory === old.directory) return old;
+      // version: bumps when messages or summaries change, so paged views and the case know to refetch.
+      next.version = (old?.version ?? 0) + (moved ? 1 : 0);
       return next;
     });
     setError("");
   }, [directory]);
+  const refresh = useCallback(() => load(true), [load]);
 
   useEffect(() => {
     let active = true, timer, source;
 
     async function tick() {
       try {
-        if (active) await refresh();
+        if (active) await load(false);
       } catch (e) {
         if (active) setError(e.message);
       }
@@ -144,17 +171,19 @@ export function useDispatchData() {
       if (!active) return;
       setData((old) => ({
         status: shareValue(old?.status, s.status),
-        messages: shareMessages(old?.messages, s.messages),
         directory: dir,
         summary: s.summary ?? null,
         version: (old?.version ?? 0) + 1,
+        seen: s.version,
       }));
       setError("");
     });
-    on("message", ({ message }) => setData((old) => old && { ...old, messages: upsertMessage(old.messages, message), version: old.version + 1 }));
-    on("removed", ({ id }) => setData((old) => old && { ...old, messages: old.messages.filter((m) => m.id !== id), version: old.version + 1 }));
+    // Messages or figures changed: views refetch the rows they show. One server tick can send `changed`
+    // and `summary` with the same version; views then refetch once.
+    const moved = (old, v) => (v === old.seen ? old.version : old.version + 1);
+    on("changed", ({ version: v }) => setData((old) => old && { ...old, version: moved(old, v), seen: v }));
     on("status", ({ status }) => setData((old) => old && { ...old, status: shareValue(old.status, status) }));
-    on("summary", ({ summary }) => setData((old) => old && { ...old, summary, version: old.version + 1 }));
+    on("summary", ({ version: v, summary }) => setData((old) => old && { ...old, summary: mergeSummary(old.summary, summary), version: moved(old, v), seen: v }));
     source.onerror = () => {
       if (!active) return;
       // EventSource reconnects by itself and gets a fresh snapshot. Only give up after repeated failures.
@@ -170,7 +199,7 @@ export function useDispatchData() {
       source?.close();
       clearTimeout(timer);
     };
-  }, [refresh, directory]);
+  }, [load, directory]);
 
   return { data, error, refresh };
 }
