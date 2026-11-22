@@ -5,8 +5,8 @@ import { motion } from "motion/react";
 import Icon from "../ui/Icon";
 import { Chip, RouteBadge } from "../ui/primitives";
 import CargoGlobe from "../globe/CargoGlobe";
-import { globeState, waveSummary } from "../../lib/process";
-import { eur, needsAttention, statusOf } from "../../lib/format";
+import { waveSummary } from "../../lib/process";
+import { eur, statusOf } from "../../lib/format";
 import { crmModel } from "../../lib/crm";
 import { stagger } from "../../lib/motion";
 
@@ -33,27 +33,15 @@ function Meter({ value }) {
 
 const SOURCE_COLORS = { portal: "var(--blue)", tariff: "var(--accent)", "email bid": "var(--ok)" };
 
-/** Figures come from the server summary (GET /summary, live over /events); the local model is the fallback. */
-function Overview({ messages, summary, onOpen, active = true }) {
+/**
+ * Figures come from the server summary (GET /summary, live over /events); the local models are the
+ * fallback for mock mode. `desk` carries the globe routes and the attention list (summary.desk).
+ */
+function Overview({ messages, summary, desk, onOpen, active = true }) {
   const local = useMemo(() => (summary?.overview ? null : waveSummary(messages)), [messages, summary]);
   const s = summary?.overview ?? local;
-  const routes = useMemo(
-    () =>
-      messages
-        .filter((m) => m.kind === "request" && m.fields?.origin && m.fields?.destination)
-        .map((m) => ({
-          id: m.id,
-          origin: m.fields.origin,
-          destination: m.fields.destination,
-          state: globeState(m),
-          airline: m.proposal?.offer?.airline,
-          totalEur: m.proposal?.offer?.total_eur,
-          days: m.proposal?.offer?.days,
-          label: m.subject,
-        })),
-    [messages],
-  );
-  const attention = messages.filter(needsAttention).slice(0, 4);
+  const routes = desk.routes;
+  const attention = desk.attention_items;
   // Business figures only; the 5U challenge's scoring lives on the Scoreboard view.
   const localCrm = useMemo(() => (summary?.shipments ? null : crmModel(messages)), [messages, summary]);
   const kpis = summary?.shipments?.kpis ?? localCrm.kpis;
