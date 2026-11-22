@@ -18,7 +18,13 @@ public record Reading(
         String detectedType,
         Status status,
         List<Part> parts,
-        List<String> notes) {
+        List<String> notes,
+        boolean retryable) {
+
+    public Reading(String text, double confidence, String detectedType, Status status,
+                   List<Part> parts, List<String> notes) {
+        this(text, confidence, detectedType, status, parts, notes, false);
+    }
 
     public enum Status { OK, PARTIAL, UNREADABLE }
 

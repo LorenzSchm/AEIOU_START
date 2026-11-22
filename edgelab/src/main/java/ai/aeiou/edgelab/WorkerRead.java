@@ -8,7 +8,12 @@ import org.apache.pdfbox.Loader;
 /** File-based protocol for the isolated worker process. An empty output means hold. */
 public final class WorkerRead {
     public static void main(String[] args) throws Exception {
+        if (args.length == 1 && args[0].equals("--prepare-model")) {
+            ai.aeiou.edgelab.voice.WhisperModelCache.fromSettings().ensure();
+            return;
+        }
         if (args.length != 3) throw new IllegalArgumentException("Expected filename, input and output");
+        System.setProperty("edgelab.whisper.cacheOnly", "true");
         byte[] input = Files.readAllBytes(Path.of(args[1]));
         if (input.length == 0 || input.length > 2_000_000) return;
         Router router = Router.standard();
@@ -21,7 +26,9 @@ public final class WorkerRead {
             }
             return office.read(name, bytes, type);
         });
-        String text = acceptedText(new EdgeReader(router, 2_000_000).read(args[0], input));
+        Reading result = new EdgeReader(router, 2_000_000).read(args[0], input);
+        if (result.retryable()) System.exit(75);
+        String text = acceptedText(result);
         if (text != null) Files.writeString(Path.of(args[2]), text);
     }
 

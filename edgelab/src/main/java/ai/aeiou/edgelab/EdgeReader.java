@@ -74,7 +74,7 @@ public final class EdgeReader {
         FutureTask<Reading> task = new FutureTask<>(() -> {
             session.enter();
             try {
-                return route(filename, bytes, type);
+                return session.finish(route(filename, bytes, type));
             } finally {
                 session.exit();
             }
@@ -102,6 +102,7 @@ public final class EdgeReader {
             Reading reading = router.readerFor(type).read(filename, bytes, type);
             return reading != null ? reading : Reading.unreadable(type, "reader returned nothing");
         } catch (Exception | LinkageError e) {
+            if (e instanceof LinkageError) ReadSession.retryAfterServiceFailure();
             return failed(type, e);
         }
     }

@@ -162,14 +162,19 @@ public final class HttpGateway implements Gateway {
         try {
             resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         } catch (java.net.http.HttpTimeoutException e) {
+            ai.aeiou.edgelab.ReadSession.retryAfterServiceFailure();
             return Answer.failed(model, "gateway timed out after " + settings.timeout().toSeconds() + " s");
         } catch (InterruptedException e) {
+            ai.aeiou.edgelab.ReadSession.retryAfterServiceFailure();
             Thread.currentThread().interrupt();
             return Answer.failed(model, "gateway call interrupted");
         } catch (Exception e) {
+            ai.aeiou.edgelab.ReadSession.retryAfterServiceFailure();
             return Answer.failed(model, "gateway call failed: " + e.getClass().getSimpleName());
         }
         if (resp.statusCode() / 100 != 2) {
+            if (resp.statusCode() == 429 || resp.statusCode() >= 500)
+                ai.aeiou.edgelab.ReadSession.retryAfterServiceFailure();
             return Answer.failed(model, "gateway HTTP " + resp.statusCode() + errorDetail(resp.body()));
         }
         try {

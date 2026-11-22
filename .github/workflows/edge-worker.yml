@@ -25,4 +25,4 @@ jobs:
             x86_64) platform=macosx-x86_64 ;;
             *) exit 1 ;;
           esac
-          ./gradlew :edgelab:readerIntegrationTest :edgelab:packing-tools:test :app:test :app:edgeBundle -PtestEdgeBundle -PffmpegPlatforms="$platform"
+          ./gradlew :edgelab:test :edgelab:packing-tools:test :app:test :app:edgeBundle -PtestEdgeBundle -PffmpegPlatforms="$platform"

@@ -14,7 +14,7 @@ import java.util.function.Function;
  *
  * <pre>
  *   edgelab.gateway.url     / EDGELAB_GATEWAY_URL      default https://api.start-hack.5u.ai/v1/gateway
- *   edgelab.gateway.enabled / EDGELAB_GATEWAY_ENABLED  default true (the test task sets false)
+ *   edgelab.gateway.enabled / EDGELAB_GATEWAY_ENABLED  default false
  *   edgelab.gateway.timeout / EDGELAB_GATEWAY_TIMEOUT  seconds per call, default 15
  *   edgelab.audio.model     / EDGELAB_AUDIO_MODEL      default gpt-4o-mini-audio-preview
  *   edgelab.audio.method    / EDGELAB_AUDIO_METHOD     chat (input_audio) | transcriptions, default chat
@@ -65,7 +65,7 @@ public record GatewaySettings(
 
     /** Whether the gateway may be called at all ({@code edgelab.gateway.enabled}). */
     public static boolean enabled() {
-        return !"false".equalsIgnoreCase(setting(System::getenv, "edgelab.gateway.enabled", "EDGELAB_GATEWAY_ENABLED", "true"));
+        return Boolean.parseBoolean(setting(System::getenv, "edgelab.gateway.enabled", "EDGELAB_GATEWAY_ENABLED", "false"));
     }
 
     /** From system properties, the environment and (for the key only) a .env file. */

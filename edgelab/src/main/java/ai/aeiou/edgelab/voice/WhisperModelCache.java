@@ -57,6 +57,7 @@ public final class WhisperModelCache {
     /** The model file, downloading it first if it is not cached yet. */
     public synchronized Path ensure() throws IOException, InterruptedException {
         if (isCached()) return file();
+        if (Boolean.getBoolean("edgelab.whisper.cacheOnly")) throw new IOException("Whisper model not prepared");
         Files.createDirectories(dir);
         // Worker processes share this cache. Only one may publish the model at a time.
         try (var channel = java.nio.channels.FileChannel.open(dir.resolve(file().getFileName() + ".lock"),

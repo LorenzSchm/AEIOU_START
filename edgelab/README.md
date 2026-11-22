@@ -1,6 +1,6 @@
 # edgelab
 
-Add-ons for the live bot, kept apart from `backend/` (Lorenz's bot is never touched).
+Attachment readers for the dispatch worker.
 Standalone Java 21 Gradle project with its own wrapper. Package root `ai.aeiou.edgelab`.
 
 ## Commands
@@ -11,7 +11,7 @@ Run from this folder (`edgelab/`). Java 8 comes first on PATH on Thure's laptop,
 ```bash
 export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.13.10002-hotspot"
 
-# Tests (includes the backend guard)
+# Reader tests
 ./gradlew test
 
 # Read one file and print its Reading
@@ -46,104 +46,7 @@ limit the call returns what it has, status `PARTIAL`, note `timed out after 20 s
 
 ## Using it from the bot
 
-For Lorenz. Nothing in `backend/` has to be restructured; three small edits, all yours to make.
-
-**1. Dependency (composite build, no publishing).** Both builds use Gradle 9.3.1 and Java 21,
-and edgelab's coordinates are `ai.aeiou:edgelab` (group from `build.gradle`, name from
-`rootProject.name`). Add one line to `backend/settings.gradle` and one to `backend/app/build.gradle`:
-
-```groovy
-// backend/settings.gradle
-includeBuild '../edgelab'
-
-// backend/app/build.gradle, in dependencies { }
-implementation('ai.aeiou:edgelab') {
-    exclude group: 'org.slf4j', module: 'slf4j-nop'   // else it can swallow Spring's logback output
-}
-```
-
-Gradle swaps in the local `edgelab/` project automatically; `./gradlew bootJar` packs it in.
-(Alternative: `./gradlew publishToMavenLocal` would need the `maven-publish` plugin in edgelab,
-so the composite build is the simpler route.) Spring's BOM may lift shared libraries
-(Jackson, PostgreSQL, PDFBox via Tika); run your tests once after adding it.
-
-**2. The one call: `ShipmentDocuments.read(message)`**, where `PackingSafety.extract(filename,
-content)` runs today. Every attachment path goes through it: the quotation-request attachment
-(`withAttachedRequest`), trucker-offer attachments (`attachedOffer`, the "bid unreadable"
-path), and the packing / DG check (`inspect`, original and follow-ups). Trucker bid *mail
-bodies* (`Ledger.parseCarrierBid`) are plain text and need nothing. Safest form: keep your
-extractor, use edgelab only when it throws (today that adds `null`):
-
-```java
-private static final EdgeReader EDGE = new EdgeReader();   // reuse one; voice reads queue one at a time
-
-String name = Objects.toString(file.get("filename"), "");
-byte[] bytes = upstream.bytes(key.messageId(), key.attachmentId());
-String text;
-try {
-  text = PackingSafety.extract(name, bytes);
-} catch (IOException | XMLStreamException ex) {
-  Reading r = EDGE.read(name, bytes);                      // never throws, max 20 s
-  if (r.status() == Reading.Status.UNREADABLE || r.confidence() < 0.5)
-    throw new IOException("edgelab: " + String.join("; ", r.notes()));
-  text = r.text();
-}
-doc = new PackingSafety.Document(text);
-```
-
-Your `extracted` cache then also stops repeat calls. Note: photos, zips, msg etc. only reach
-`read()` where you don't filter by name; `hasRequestAttachment` (only `quotation-request.pdf/
-docx/txt`) and `attachedOffer` (`.txt|pdf|docx`) still filter them out until you widen those.
-edgelab's tables come out one row per line with cells joined by ` | ` (yours: spaces), so check
-your regexes if you ever let edgelab read xlsx first.
-
-**3. Settings** (env var, or the same name as system property, e.g. `-Dedgelab.vision.model=`):
-
-| Setting | Default | What |
-| --- | --- | --- |
-| `TEAM_API_KEY` | none (env, else nearest `.env` up to 3 folders up) | needed for photos, video frames, scanned PDF pages, voice fallback |
-| `EDGELAB_ENV_FILE` | search as above | explicit `.env` path |
-| `EDGELAB_GATEWAY_URL` | `https://api.start-hack.5u.ai/v1/gateway` | 5U gateway |
-| `EDGELAB_VISION_MODEL` | `gpt-4o-mini` (low detail) | photo text |
-| `EDGELAB_AUDIO_MODEL` | `gpt-4o-mini-audio-preview` | voice fallback only |
-| `EDGELAB_AUDIO_METHOD` | `chat` (or `transcriptions` with e.g. `gpt-4o-mini-transcribe`) | voice fallback only |
-| `EDGELAB_GATEWAY_TIMEOUT` | `15` s per call | |
-| `EDGELAB_GATEWAY_ENABLED` | `true` | `false` = no outside calls at all |
-| `EDGELAB_WHISPER_MODEL` | `base-q5_1` | local speech model |
-| `EDGELAB_WHISPER_DIR` | `~/.cache/edgelab/whisper` | model cache |
-| Gradle `ffmpegPlatforms` | `macosx-arm64,windows-x86_64` | Intel Mac: `ffmpegPlatforms=macosx-x86_64` in `~/.gradle/gradle.properties` (applies to the included build too) |
-
-**First run:** the Whisper model (~57 MB) downloads once from Hugging Face. It counts against
-the 20 s budget, so the first voice read can come back `PARTIAL`. Pre-load at startup with
-`WhisperModelCache.fromSettings().ensure();`.
-
-**Status and confidence.** `OK` = whole file read. `PARTIAL` = some text, something missing
-(scanned page, broken part inside a zip, cut audio, 20 s budget hit); `notes` say what.
-`UNREADABLE` = no usable text, `text` is `""`. Confidence 0..1: text files ~0.95, Whisper
-0.85 for normal speech, photos use the model's own rating (0.6 if none, capped at 0.95).
-**Suggested rule:** `OK` and ≥ 0.7 → use as is; `PARTIAL` or 0.5–0.7 → use, but send the mail
-to `review`; `UNREADABLE` or < 0.5 → treat like today's failure (`null`, "bid unreadable").
-
-**Cost.** Text, office, PDF with text, and voice (local Whisper): free. Photo: one gateway
-call, image shrunk to ≤ 1024 px at low detail, roughly 0.05 US cent at OpenAI list prices
-for `gpt-4o-mini` (not yet measured in gateway points). Video: up to 5 frame calls
-(duplicates and blanks skipped; a still video costs one). Scanned PDF: one call per scanned
-page, max 10. Voice fallback (only when Whisper hears nothing): one audio call, max 5 min.
-
-**Formats.** Text/CSV (UTF-8, Latin-1, Windows-1252), Word, Excel, PowerPoint (old and new),
-OpenOffice, RTF, HTML, markdown, PDF (text and scanned); photos jpg, png, gif, bmp, tiff, webp,
-heic; voice mp3, wav, m4a, ogg, opus, flac, aac; video mp4, mov, webm, avi, mkv; zip, tar, gz,
-7z, rar, eml, msg and files embedded in office files (3 levels, 20 files). Max 50 MB. Every
-`read` has a **20 s** budget for the whole file, including everything inside.
-
-**Known gaps / open manual checks.**
-- m4a voice files with the index at the end (typical phone voice notes) yield no audio yet;
-  a fix is in progress (ticket 02b). Videos are not affected.
-- Not yet run with the real gateway: which audio method it accepts (`RealGatewayTest`), photo
-  quality on the Danube Wings scans (small digits at low detail), a pptx with a photo, a video's
-  "What is shown" part.
-- Not yet tried: first run on an Apple-chip Mac (natives + model download), a real rotated
-  phone `.mov`, a real trucker-offer docx and round 68's `quotation-request.docx`.
+See the [worker bundle and gateway settings](../README.md#optional-edge-reader-bundle).
 
 ## Office reader (`ai.aeiou.edgelab.office`)
 
@@ -189,12 +92,6 @@ from explicitly headed packing lists in UTF-8, UTF-16 with BOM, and Windows-1252
 It shares the plain-text decoder with the main reader. Run `./gradlew :packing-tools:test`
 to test it independently. The module uses only Java 21 at runtime.
 
-## Backend guard
-
-`BackendGuardTest` compares `../backend/` with `origin/feat/bullshitBranch` (changed,
-deleted and new files) and fails on any difference. It skips with a message if git or
-the ref is not available. Run `git fetch` first if Lorenz's branch moved on.
-
 ## Voice reader
 
 `audio/*` (mp3, wav, m4a, ogg, opus, flac, aac, audio-only webm) is decoded to 16 kHz mono
@@ -220,40 +117,6 @@ Voice fixtures (`src/test/resources/voice/`) were made with Windows' built-in vo
 16 kHz mono wav); the mp3s come from those wavs via `MakeVoiceFixtures` (test sources).
 Voice tests skip with a message if the model cannot be downloaded.
 
-## Change alarm (Thure's laptop only)
-
-Watches the shared Postgres every 60 s and pops up a Windows tray message when something
-new shows up. It needs `DATABASE_URL=postgresql://user:password@host:port/db` in the
-repo-root `.env` (or in the environment). It never needs the team key and never calls the 5U API.
-
-```bash
-export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.13.10002-hotspot"
-./gradlew -q --console=plain alarm             # runs until Ctrl+C
-./gradlew -q alarm --args="--once"             # one poll, then exit
-./gradlew -q alarm --args="--replay"           # what today's history would raise (no pop-ups, memory untouched)
-```
-
-- **Strictly read-only.** The session starts with `default_transaction_read_only=on`, the
-  connection is marked read-only, and only SELECTs run. The alarm refuses to start if the
-  server does not confirm read-only. Proof against the real DB (skipped by default):
-  `EDGELAB_DB_TEST=1 ./gradlew test --tests '*ReadOnlyDatabaseTest'` (a write is rejected
-  with SQLState 25006).
-- **First run** (no `alarm-memory.json` yet) learns everything in history as normal and
-  sends no alerts. After that each new thing alerts exactly once, also across restarts.
-- **What alerts:** a new rejection reason or verdict, a new hold reason in `wave_case`, a
-  new attachment type (ending + content type), a mail in an "unreadable" stage with a new
-  type or a new sender, a request with no quote (or a mail in `review`) after 4 minutes, a
-  new mail kind or sender, a board result with an `adjustment` deduction, a `no answer`
-  round or an `expired` request.
-- **Output:** a one-line pop-up (at most 3 per poll, then "and N more"), and a full entry in
-  `alerts.log`: time, topic, round, example mail id and subject, and which edgelab reader
-  fits. `alerts.log` and `alarm-memory.json` are git-ignored. Delete the memory file to
-  learn a fresh baseline.
-- **Stopping:** Ctrl+C. Memory is written atomically after each poll, so stopping at any
-  moment loses nothing.
-- The pure part is `ChangeDetector.decide(snapshot, memory)`; it is tested on an anonymised
-  snapshot of the real DB from 2026-11-21 (no mail bodies) in `src/test/resources/alarm/`.
-
 ## Gateway client
 
 `ai.aeiou.edgelab.gateway.Gateway` is the only part of edgelab that calls out (besides the
@@ -277,7 +140,7 @@ The key comes from the environment, else from the nearest `.env` (working folder
 | `edgelab.audio.method` / `EDGELAB_AUDIO_METHOD` | `chat` (input_audio part) or `transcriptions` (`/audio/transcriptions`, e.g. with `gpt-4o-mini-transcribe`) |
 | `edgelab.vision.model` / `EDGELAB_VISION_MODEL` | `gpt-4o-mini` |
 | `edgelab.gateway.timeout` / `EDGELAB_GATEWAY_TIMEOUT` | `15` seconds |
-| `edgelab.gateway.enabled` / `EDGELAB_GATEWAY_ENABLED` | `true`; the test task sets `false` |
+| `edgelab.gateway.enabled` / `EDGELAB_GATEWAY_ENABLED` | `false`; opt in explicitly for standalone gateway reads |
 
 **Voice fallback:** when local Whisper fails, hears nothing, or hears almost nothing (fewer
 than 3 words for 3+ s of audio), the voice reader sends the decoded audio (16 kHz wav, max
@@ -333,7 +196,7 @@ error, broken sound) the other half is kept and the status is `partial`. A broke
 
 ```bash
 ./gradlew -q videoFixtures                                   # writes build/video-fixtures/*.mp4
-./gradlew -q read --args="build/video-fixtures/rfq-video.mp4"   # one frame call on the gateway
+EDGELAB_GATEWAY_ENABLED=true ./gradlew -q read --args="build/video-fixtures/rfq-video.mp4"   # paid vision read
 ```
 
 Test videos are generated in memory (`VideoFixtures`: the skewed RFQ photo plus the

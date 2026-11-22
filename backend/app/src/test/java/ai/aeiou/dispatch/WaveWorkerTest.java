@@ -2025,7 +2025,7 @@ class WaveWorkerTest {
     worker = new WaveWorker(ledger, catalog, upstream, clock,
         new RfqGateway(upstream, ledger, catalog, mapper, clock, "gpt-4o-mini"),
         new MailboxWebhook(ledger, catalog, clock, mapper, ""), true, START, 75, false,
-        Runnable::run, false, System.getProperty("test.edge.lib"));
+        Runnable::run, false, System.getProperty("test.edge.lib"), Runnable::run, false);
     String packing = "Packing List\nDestination airport: LAX\nTotal gross weight (kg): 100\n"
         + "Total volume (cbm): 0.2\nDangerous goods: None";
     receiveDocument(7, null, name, "Cheapest air freight from FRA to LAX. Please use the packing list.", packing);

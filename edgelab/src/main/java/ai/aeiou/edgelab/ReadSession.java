@@ -45,6 +45,19 @@ public final class ReadSession {
     private final List<String> notes = new ArrayList<>();
     private boolean incomplete;
     private boolean frozen;
+    private boolean serviceFailure;
+
+    public static void retryAfterServiceFailure() {
+        ReadSession session = CURRENT.get();
+        if (session != null) session.serviceFailure = true;
+    }
+
+    Reading finish(Reading reading) {
+        if (reading.status() == Reading.Status.OK || !(serviceFailure || expired() || Thread.currentThread().isInterrupted()))
+            return reading;
+        return new Reading(reading.text(), reading.confidence(), reading.detectedType(), reading.status(),
+                reading.parts(), reading.notes(), true);
+    }
 
     ReadSession(EdgeReader reader, Duration budget) {
         this.reader = reader;
@@ -194,7 +207,7 @@ public final class ReadSession {
         frozen = true;
         // At the limit the answer is "partial" even when nothing was read yet.
         return new Reading(r.text(), r.confidence(), r.detectedType(), Reading.Status.PARTIAL,
-                r.parts(), r.notes());
+                r.parts(), r.notes(), true);
     }
 
     private Reading build(int fromSection, int fromPart, String type, boolean partial, List<String> noteList) {

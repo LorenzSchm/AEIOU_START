@@ -1,7 +1,4 @@
 .gradle/
 build/
-alerts.log
-alarm-memory.json
 # Whisper models (normally cached in ~/.cache/edgelab/whisper, never committed)
 ggml-*.bin
-alarm-memory.json.tmp

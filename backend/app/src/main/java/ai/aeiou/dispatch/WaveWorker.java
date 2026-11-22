@@ -51,7 +51,7 @@ class WaveWorker {
       boolean automatic, Instant start, long waitSeconds, boolean counteroffers, Executor voiceExecutor,
       boolean packingTools) {
     this(ledger, catalog, upstream, clock, gateway, webhook, automatic, start, waitSeconds,
-        counteroffers, voiceExecutor, packingTools, "");
+        counteroffers, voiceExecutor, packingTools, "", voiceExecutor, false);
   }
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -68,7 +68,9 @@ class WaveWorker {
       @Value("${dispatch.counteroffers}") boolean counteroffers,
       @org.springframework.beans.factory.annotation.Qualifier("voiceExecutor") Executor voiceExecutor,
       @Value("${dispatch.packing-tools:false}") boolean packingTools,
-      @Value("${dispatch.edge-reader-lib:}") String edgeReaderLibrary) {
+      @Value("${dispatch.edge-reader-lib:}") String edgeReaderLibrary,
+      @org.springframework.beans.factory.annotation.Qualifier("edgeExecutor") Executor edgeExecutor,
+      @Value("${dispatch.edge-reader-gateway:false}") boolean edgeGateway) {
     this.ledger = ledger;
     this.catalog = catalog;
     this.upstream = upstream;
@@ -80,7 +82,7 @@ class WaveWorker {
     this.waitSeconds = waitSeconds;
     this.counteroffers = counteroffers;
     this.documents = new ShipmentDocuments(ledger, upstream, catalog, clock, voiceExecutor, packingTools,
-        EdgeAttachmentReader.fromLibrary(edgeReaderLibrary));
+        edgeExecutor, EdgeAttachmentReader.fromLibrary(edgeReaderLibrary, edgeGateway), edgeGateway);
     this.clarifications = new CustomerClarifications(ledger, catalog);
     this.carrierRestrictions = new CarrierRestrictions(ledger, upstream, clock);
   }

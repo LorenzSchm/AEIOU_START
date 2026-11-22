@@ -74,6 +74,7 @@ public final class VoiceReader implements FormatReader {
                     : almostNothing(text, audio.seconds()) ? "local Whisper returned almost nothing" : null;
         } catch (Exception | LinkageError e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            ReadSession.retryAfterServiceFailure();
             localProblem = "local Whisper failed: " + e.getClass().getSimpleName()
                     + (e.getMessage() != null ? ": " + e.getMessage() : "");
         }

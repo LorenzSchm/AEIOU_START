@@ -63,16 +63,9 @@ tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 // Tests never call the real gateway (it costs points). Opt in with
 //   ./gradlew test -PrealGateway      (runs the @Tag("real-gateway") tests too)
 tasks.withType(Test).configureEach {
-    systemProperty 'edgelab.gateway.enabled', project.hasProperty('realGateway') ? 'true' : 'false'
-}
-// The standalone lab's live-branch purity check stays in 'test'. An integration
-// build deliberately modifies the backend, so run its reader contract separately.
-tasks.register('readerIntegrationTest', Test) {
     testLogging.exceptionFormat = 'full'
     systemProperty 'edgelab.requireWhisper', project.hasProperty('testEdgeBundle')
-    testClassesDirs = sourceSets.test.output.classesDirs
-    classpath = sourceSets.test.runtimeClasspath
-    filter { excludeTestsMatching '*.BackendGuardTest.backendIsUntouchedComparedToLorenzBranch' }
+    systemProperty 'edgelab.gateway.enabled', project.hasProperty('realGateway') ? 'true' : 'false'
 }
 // --- end gateway ---------------------------------------------------------------
 
@@ -87,24 +80,6 @@ tasks.register('read', JavaExec) {
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'ai.aeiou.edgelab.ReadFile'
     workingDir = projectDir
-}
-
-// ---- Change alarm (ticket 08) ------------------------------------------------
-// Read-only Postgres access and JSON for the alarm's snapshot/memory.
-dependencies {
-    implementation 'org.postgresql:postgresql:42.7.7'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.2'
-    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.19.2'
-}
-
-// ./gradlew alarm   (Ctrl+C stops it). Reads DATABASE_URL from ../.env, read-only.
-tasks.register('alarm', JavaExec) {
-    group = 'edgelab'
-    description = 'Runs the change alarm: polls the shared DB every 60 s, pops up on new things.'
-    classpath = sourceSets.main.runtimeClasspath
-    mainClass = 'ai.aeiou.edgelab.alarm.AlarmMain'
-    workingDir = projectDir
-    standardInput = System.in
 }
 
 // ---- Photo reader (ticket 05) -------------------------------------------------

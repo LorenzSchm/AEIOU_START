@@ -79,13 +79,22 @@ To prepare the optional reader package on an Apple Silicon Mac, run
 contains the worker JAR and matching reader libraries. Unpack both when installing this
 variant. The normal worker JAR can still run by itself.
 
-The worker tries its existing attachment parser first. An unresolved attachment runs in
-a separate process with a 30-second deadline. At most two reads can run concurrently.
-The worker caches the outcome by message, attachment and reader version and applies its
-existing shipment and offer checks. Partial output and archives containing multiple
-documents go through the existing clarification path. The reader supports local Whisper
-(a cached model avoids a first-use download). Vision and the optional speech fallback
-use the team gateway when configured. Set `EDGELAB_GATEWAY_ENABLED=false` for local-only reads.
+Before enabling audio, run the following command from the unpacked bundle as the account
+that runs the worker. It prepares the Whisper model outside the request deadline.
+
+```sh
+java -cp "edge-reader/lib/*" ai.aeiou.edgelab.WorkerRead --prepare-model
+```
+
+The worker tries its existing parser first. Up to two unresolved attachments run on
+a dedicated executor, each in a separate process with a 30-second deadline. A transport
+failure or reader timeout defers that attachment for 15 seconds, including across restarts.
+The worker can retry while the RFQ is open. Complete readings go through the existing
+shipment and offer checks. Ambiguous archives and forwarded mail that combines a body
+with attached documents go through the existing clarification path.
+
+The attachment reader defaults to local processing. Set `DISPATCH_EDGE_READER_GATEWAY=true`
+to allow scored vision and speech calls. This setting applies only to the attachment reader.
 
 ### This Mac
 

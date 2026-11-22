@@ -19,6 +19,11 @@ import org.springframework.web.client.ResourceAccessException;
 class PackingToolTest {
   @TempDir Path temp;
   final FiveU upstream = mock(FiveU.class);
+  final Clock clock = mock(Clock.class);
+
+  @org.junit.jupiter.api.BeforeEach void setTime() {
+    when(clock.instant()).thenReturn(java.time.Instant.ofEpochSecond(1000));
+  }
   final String packing = """
       Packing List
       Destination airport: LAX
@@ -31,7 +36,7 @@ class PackingToolTest {
   ShipmentDocuments reader() throws Exception {
     var ledger = new Ledger(temp.resolve("packing.sqlite").toString(), new ObjectMapper());
     return new ShipmentDocuments(ledger, upstream, new DispatchApplication().catalog(),
-        Clock.systemUTC(), Runnable::run, true);
+        clock, Runnable::run, true);
   }
 
   Map<String, Object> message(long id, String filename) throws Exception {
@@ -57,18 +62,26 @@ class PackingToolTest {
 
   @Test void retriesFailedDownloadAndPreservesDangerousGoodsEvidence() throws Exception {
     when(upstream.bytes(7, 1)).thenThrow(new ResourceAccessException("offline"))
+        .thenThrow(new ResourceAccessException("still offline"))
         .thenReturn((packing + "UN 1950").getBytes(StandardCharsets.UTF_16));
     var r = reader();
     assertThrows(WaveWorker.RetryLater.class, () -> inspect(r, message(7, "packing.pdf")));
+    assertThrows(WaveWorker.RetryLater.class, () -> inspect(r, message(7, "packing.pdf")));
+    verify(upstream).bytes(7, 1);
+    when(clock.instant()).thenReturn(java.time.Instant.ofEpochSecond(1016));
+    assertThrows(WaveWorker.RetryLater.class, () -> inspect(r, message(7, "packing.pdf")));
+    when(clock.instant()).thenReturn(java.time.Instant.ofEpochSecond(1032));
     assertEquals("dg-docs", inspect(r, message(7, "packing.pdf")).action());
-    verify(upstream, times(2)).bytes(7, 1);
+    verify(upstream, times(3)).bytes(7, 1);
   }
 
-  @Test void pendingEdgeReadYieldsToOtherRequestsAndPreservesTheHoldOnFailure() throws Exception {
+  @Test void transientReaderFailureYieldsToOtherRequestsAndRetriesAfterRestart() throws Exception {
     var jobs = new ArrayDeque<Runnable>();
     var ledger = new Ledger(temp.resolve("worker.sqlite").toString(), new ObjectMapper());
-    var docs = new ShipmentDocuments(ledger, upstream, new DispatchApplication().catalog(), Clock.systemUTC(),
-        jobs::add, false, (name, bytes) -> { throw new java.io.IOException("reader unavailable"); });
+    var catalog = new DispatchApplication().catalog();
+    var docs = new ShipmentDocuments(ledger, upstream, catalog, clock,
+        unused -> fail("edge work reached voice pool"), false, jobs::add,
+        (name, bytes) -> { throw new java.net.SocketTimeoutException(); }, false);
     when(upstream.bytes(7, 1)).thenReturn(new byte[]{0, 1, 2});
     when(upstream.bytes(8, 1)).thenReturn(packing.getBytes(StandardCharsets.UTF_8));
     var broken = message(7, "unknown.zip");
@@ -77,8 +90,14 @@ class PackingToolTest {
     assertFalse(inspect(docs, message(8, "packing.txt")).holdsQuote());
     assertEquals(1, jobs.size());
     jobs.remove().run();
-    assertEquals("packing-copy", inspect(docs, broken).action());
+    assertThrows(WaveWorker.RetryLater.class, () -> inspect(docs, broken));
     verify(upstream, times(1)).bytes(7, 1);
+    when(clock.instant()).thenReturn(java.time.Instant.ofEpochSecond(1016));
+    var restarted = new ShipmentDocuments(ledger, upstream, catalog, clock, Runnable::run, false,
+        jobs::add, (name, bytes) -> packing, false);
+    assertThrows(WaveWorker.RetryLater.class, () -> inspect(restarted, broken));
+    jobs.remove().run();
+    assertFalse(inspect(restarted, broken).holdsQuote());
   }
 
   @Test void aCorrectedAttachmentDoesNotInheritThePreviousResult() throws Exception {

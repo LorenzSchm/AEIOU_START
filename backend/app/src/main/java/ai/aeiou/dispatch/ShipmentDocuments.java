@@ -70,6 +70,8 @@ final class ShipmentDocuments {
   private final Catalog catalog;
   private final Clock clock;
   private final Executor voiceExecutor;
+  private final Executor edgeExecutor;
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ShipmentDocuments.class);
   private final boolean packingTools;
   private final EdgeAttachmentReader edgeReader;
   private final Set<Attachment> pending = ConcurrentHashMap.newKeySet();
@@ -84,11 +86,11 @@ final class ShipmentDocuments {
 
   ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog, Clock clock, Executor voiceExecutor,
       boolean packingTools) {
-    this(ledger, upstream, catalog, clock, voiceExecutor, packingTools, null);
+    this(ledger, upstream, catalog, clock, voiceExecutor, packingTools, voiceExecutor, null, false);
   }
 
   ShipmentDocuments(Ledger ledger, FiveU upstream, Catalog catalog, Clock clock, Executor voiceExecutor,
-      boolean packingTools, EdgeAttachmentReader edgeReader) {
+      boolean packingTools, Executor edgeExecutor, EdgeAttachmentReader edgeReader, boolean edgeGateway) {
     this.ledger = ledger;
     this.upstream = upstream;
     this.catalog = catalog;
@@ -96,7 +98,8 @@ final class ShipmentDocuments {
     this.voiceExecutor = voiceExecutor;
     this.packingTools = packingTools;
     this.edgeReader = edgeReader;
-    this.readerVersion = edgeReader == null ? PACKING_READER_VERSION : 2;
+    this.edgeExecutor = edgeExecutor;
+    this.readerVersion = edgeReader == null ? PACKING_READER_VERSION : (edgeGateway ? 4 : 3);
     if (packingTools || edgeReader != null) ledger.jdbc().execute("""
         CREATE TABLE IF NOT EXISTS packing_tool_read (
           message_id INTEGER, attachment_id INTEGER, reader_version INTEGER, text TEXT,
@@ -116,13 +119,15 @@ final class ShipmentDocuments {
           extracted.put(key, readAttachment(key, filename));
         }
         documents.add(extracted.get(key));
-      } catch (ResourceAccessException offline) {
-        if (key.recoverPacking() && ledger.jdbc().update(
-            "INSERT OR IGNORE INTO retry(action,after_epoch) VALUES(?,0)",
-            "packing-download:" + key.messageId() + ":" + key.attachmentId()) == 1)
-          throw new WaveWorker.RetryLater("Retrying the packing attachment download.");
+      } catch (RestClientException ex) {
+        if (key.recoverPacking() && (ex instanceof ResourceAccessException
+            || ex instanceof org.springframework.web.client.RestClientResponseException response
+                && (response.getStatusCode().is5xxServerError() || response.getStatusCode().value() == 429))) {
+          defer(key, downloadAction(key), ex);
+          throw new WaveWorker.RetryLater("Retrying the attachment download.");
+        }
         documents.add(null);
-      } catch (IOException | XMLStreamException | RestClientException ex) {
+      } catch (IOException | XMLStreamException ex) {
         documents.add(null);
       }
     }
@@ -137,10 +142,15 @@ final class ShipmentDocuments {
           "SELECT text FROM packing_tool_read WHERE message_id=? AND attachment_id=? AND reader_version=?",
           String.class, key.messageId(), key.attachmentId(), readerVersion);
       if (!prior.isEmpty()) return prior.getFirst() == null ? null : new PackingSafety.Document(prior.getFirst());
+      var coolingDown = ledger.jdbc().queryForObject(
+          "SELECT count(*) FROM retry WHERE action IN (?,?) AND after_epoch>?", Integer.class,
+          downloadAction(key), edgeAction(key), clock.instant().getEpochSecond());
+      if (coolingDown > 0) throw new WaveWorker.RetryLater("Waiting to retry the attachment.");
     }
     // A download error is transient. Let read() retry it on the next pass.
     byte[] bytes = upstream.bytes(key.messageId(), key.attachmentId());
     if (!key.recoverPacking()) return new PackingSafety.Document(PackingSafety.extract(filename, bytes));
+    ledger.jdbc().update("DELETE FROM retry WHERE action=?", downloadAction(key));
     if (bytes == null || bytes.length == 0 || bytes.length > PackingSafety.MAX_BYTES) return null;
 
     boolean mislabeledPdf = !filename.toLowerCase(Locale.ROOT).endsWith(".pdf")
@@ -177,22 +187,36 @@ final class ShipmentDocuments {
         key.messageId(), key.attachmentId(), readerVersion, text);
   }
 
+  private String downloadAction(Attachment key) {
+    return "packing-download:" + key.messageId() + ":" + key.attachmentId();
+  }
+
+  private String edgeAction(Attachment key) {
+    return "edge-read:" + readerVersion + ":" + key.messageId() + ":" + key.attachmentId();
+  }
+
+  private void defer(Attachment key, String action, Exception failure) {
+    ledger.jdbc().update("INSERT INTO retry(action,after_epoch) VALUES(?,?) "
+        + "ON CONFLICT(action) DO UPDATE SET after_epoch=excluded.after_epoch",
+        action, clock.instant().getEpochSecond() + 15);
+    log.warn("Attachment {}/{} will retry after {} ({})", key.messageId(), key.attachmentId(),
+        action.startsWith("edge-read:") ? "reader failure" : "download failure", failure.getClass().getSimpleName());
+  }
+
   private void scheduleEdgeRead(Attachment key, String filename, byte[] bytes) {
     if (pending.size() >= 2) throw new WaveWorker.RetryLater("Waiting for an attachment reader.");
     pending.add(key);
     try {
-      voiceExecutor.execute(() -> {
+      edgeExecutor.execute(() -> {
         try {
-          String result = null;
-          try {
-            result = edgeReader.read(filename, bytes);
-          } catch (IOException | RuntimeException unreadable) {
-            // The existing document workflow will request a readable copy.
-          } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            return;
-          }
+          String result = edgeReader.read(filename, bytes);
           storeResult(key, result);
+          ledger.jdbc().update("DELETE FROM retry WHERE action=?", edgeAction(key));
+          if (result == null) log.info("Attachment {}/{} had no usable document.", key.messageId(), key.attachmentId());
+        } catch (IOException | RuntimeException ex) {
+          defer(key, edgeAction(key), ex);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
         } finally {
           pending.remove(key);
         }
