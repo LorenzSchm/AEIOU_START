@@ -35,7 +35,6 @@ const paths = {
   sort: <><path d="m7 15 5 5 5-5" /><path d="m7 9 5-5 5 5" /></>,
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
   lock: <><rect x="4.5" y="10.5" width="15" height="10" rx="2" /><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" /></>,
-  download: <><path d="M12 4v11M7 10.5l5 5 5-5M4.5 20h15" /></>,
 };
 
 export default function Icon({ name, size = 18, className, title }) {
