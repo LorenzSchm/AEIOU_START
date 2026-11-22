@@ -116,6 +116,26 @@ class WaveWorker {
   synchronized void recheckOpenExtractions() {
     if (automatic) {
       var receivedAfter = clock.instant().minusSeconds(355);
+      // A restart during a gateway call leaves its claim pending. Nothing is in flight now, so
+      // release the claim of every open RFQ and let it parse again instead of waiting for review.
+      for (long open : ledger.jdbc().queryForList("""
+          SELECT m.id FROM mail m JOIN wave_case w ON w.id=m.id JOIN rfq_parse p ON p.request_id=m.id
+          WHERE m.kind='request' AND w.operator=0 AND julianday(m.received)>julianday(?)
+            AND p.state IN ('pending','unconfirmed')
+            AND NOT EXISTS (SELECT 1 FROM deliveries WHERE action='quote:'||m.id)
+          """, Long.class, receivedAfter.toString())) {
+        ledger.transactions().executeWithoutResult(tx -> {
+          ledger.jdbc().update("DELETE FROM rfq_parse WHERE request_id=? AND state IN ('pending','unconfirmed')", open);
+          ledger.jdbc().update("""
+              UPDATE wave_case SET reason=NULL WHERE id=? AND (reason LIKE '% the RFQ parse%'
+                OR reason LIKE '%usable RFQ parse%' OR reason LIKE 'Gateway parse unconfirmed%')
+              """, open);
+          ledger.jdbc().update("""
+              UPDATE mail SET stage='new' WHERE id=? AND stage='review'
+                AND (SELECT reason FROM wave_case WHERE id=?) IS NULL
+              """, open, open);
+        });
+      }
       gateway.recheckOpenConflicts(receivedAfter);
       ledger.recheckOpenTruckBids(receivedAfter, catalog);
       for (var request : ledger.jdbc().queryForList("""
@@ -206,6 +226,8 @@ class WaveWorker {
                 """,
                 Long.class,
                 clock.instant().minusSeconds(360).toString())) {
+      var pause = recheckAfter.get(id);
+      if (pause != null && clock.instant().isBefore(pause)) continue;
       try {
         advance(id);
       } catch (RetryLater ex) {
@@ -217,6 +239,14 @@ class WaveWorker {
       } catch (ChangedTariff ex) {
         ledger.stage(id, "collecting", ex.getMessage());
       } catch (Conflict ex) {
+        // A rate that expired or could not be verified a moment ago can be compared again while the
+        // window is open; parking it for review would lose the request.
+        if (RATE_RECHECKS.contains(ex.getMessage()) && rateRechecks.merge(id, 1, Integer::sum) <= MAX_RATE_RECHECKS) {
+          log.info("RFQ {}: {} Comparing rates again shortly.", id, ex.getMessage());
+          recheckAfter.put(id, clock.instant().plusSeconds(RATE_RECHECK_SECONDS));
+          ledger.stage(id, "collecting", ex.getMessage());
+          continue;
+        }
         ledger.stage(id, "review", ex.getMessage());
       } catch (RuntimeException ex) {
         // An unexpected error is often transient (an upstream reply, a race): retry on the next
@@ -235,6 +265,17 @@ class WaveWorker {
   }
 
   private static final int UNEXPECTED_RETRIES = 3;
+  private static final int MAX_CLARIFICATIONS = 3;
+  private static final Set<String> RATE_RECHECKS = Set.of(
+      "Quote rate expired.",
+      "No current rate could be confirmed.",
+      "The pickup rate expired. Compare rates again.",
+      "The carrier's current rate could not be verified. Compare rates again.",
+      "The current rate no longer meets the requested arrival date. Compare rates again.");
+  private static final int MAX_RATE_RECHECKS = 3;
+  private static final long RATE_RECHECK_SECONDS = 5;
+  private final java.util.Map<Long, Integer> rateRechecks = new java.util.concurrent.ConcurrentHashMap<>();
+  private final java.util.Map<Long, Instant> recheckAfter = new java.util.concurrent.ConcurrentHashMap<>();
   private final java.util.Map<Long, Integer> unexpected = new java.util.concurrent.ConcurrentHashMap<>();
 
   static class Conflict extends RuntimeException {
@@ -373,11 +414,19 @@ class WaveWorker {
     String action = details.latestReply() == null ? prefix : prefix + ":" + details.latestReply();
     boolean alreadyClaimed = ledger.delivery(action) != null;
     if (alreadyClaimed && CustomerClarifications.WAITING.equals(mail.get("stage"))) return;
-    if (details.latestReply() != null && ledger.jdbc().queryForObject("""
+    // Never ask the same question a third time, and never more than three questions in all: a
+    // customer who answers "I need to check" would otherwise get the question again on every reply.
+    // The approved question is recorded per send, because the body is often in another language.
+    if (details.latestReply() != null && (ledger.jdbc().queryForObject("""
         SELECT count(*) FROM deliveries d LEFT JOIN follow_up_copy f ON f.action=d.action
+        LEFT JOIN clarification_ask c ON c.action=d.action
         WHERE (d.action=? OR d.action LIKE ?)
-          AND (f.required_question=? OR instr(json_extract(d.payload,'$.body'),?)>0)
-        """, Integer.class, prefix, prefix + ":%", question.text(), question.text()) >= 2) {
+          AND (f.required_question=? OR c.question=? OR instr(json_extract(d.payload,'$.body'),?)>0)
+        """, Integer.class, prefix, prefix + ":%", question.text(), question.text(), question.text()) >= 2
+        || ledger.jdbc().queryForObject("""
+            SELECT count(*) FROM deliveries WHERE action IN (?,?) OR action LIKE ? OR action LIKE ?
+            """, Integer.class, "rfq-info:" + id, "pickup-postcode:" + id, "rfq-info:" + id + ":%",
+            "pickup-postcode:" + id + ":%") >= MAX_CLARIFICATIONS)) {
       if (!CustomerClarifications.WAITING.equals(mail.get("stage")))
         ledger.stage(id, CustomerClarifications.WAITING, question.text());
       return;
@@ -385,6 +434,8 @@ class WaveWorker {
     ledger.stage(id, CustomerClarifications.WAITING, question.text());
     if (alreadyClaimed) return;
     try {
+      ledger.jdbc().update("INSERT OR IGNORE INTO clarification_ask(action,request_id,question) VALUES(?,?,?)",
+          action, id, question.text());
       String body = followUpBody(action, mail, details.language(), question, details.latestReply());
       send(action, Map.of(
           "to", mail.get("sender"), "in_reply_to", details.latestReply() == null ? id : details.latestReply(),
@@ -399,16 +450,63 @@ class WaveWorker {
 
   /** We quote air freight only: answer a sea, road or rail request once with a polite decline. */
   private void declineNonAir(long id, Map<String, Object> m, String mode) {
+    decline(id, m, "Not an air freight request (" + mode + "). Declined.",
+        "We specialise in air freight only, so we are unable to offer a quote for this " + mode + " shipment.",
+        "If you have an air freight shipment, we would be glad to quote it.");
+  }
+
+  /** True once anything of ours reached this customer in the request's thread: a quote, question or decline. */
+  private boolean customerContacted(long id, Map<String, Object> m) {
+    return ledger.jdbc().queryForObject("""
+        SELECT count(*) FROM deliveries WHERE json_extract(payload,'$.to')=?
+          AND (action LIKE '%:'||? OR action LIKE '%:'||?||':%')
+        """, Integer.class, m.get("sender"), id, id) > 0;
+  }
+
+  /**
+   * Tells a customer who heard nothing that we could not confirm a reliable price in time. Returns
+   * false to try again on a later tick (a rate limit) while the note is still timely.
+   */
+  private boolean sendWindowClosedNote(long id, Map<String, Object> m, Instant deadline) {
+    String action = "window-closed:" + id;
+    if (ledger.delivery(action) != null) return true;
+    var s = ledger.read(m.get("fields"), Shipment.class);
+    String route = s != null && s.origin() != null && s.destination() != null
+        ? " from " + s.origin() + " to " + s.destination() : "";
+    String approved = Greeting.at(m, clock.instant()) + "\n\n"
+        + "Thank you for your request. We were unable to confirm a reliable all-in rate for your shipment"
+        + route + " with our carriers in time, so we cannot send you a quote for it at the moment."
+        + " We apologise for the inconvenience and would be glad to quote your next shipment.\n\n"
+        + "Best regards,\nTeam AEIOU";
+    try {
+      send(action, Map.of("to", m.get("sender"), "in_reply_to", id, "subject", "Re: " + m.get("subject"),
+          "body", inCustomerLanguage(action, m, approved, List.of())));
+      return true;
+    } catch (RetryLater retry) {
+      return !clock.instant().isBefore(deadline.plusSeconds(60));
+    } catch (Conflict ex) {
+      log.info("RFQ {} window-closed note: {}", id, ex.getMessage());
+      return true;
+    }
+  }
+
+  /** We quote air exports from Germany: an import into a German airport gets one polite decline. */
+  private void declineImport(long id, Map<String, Object> m, String destination) {
+    decline(id, m, "Air import into " + destination + ". We quote air exports from Germany only. Declined.",
+        "We quote air freight exports from Germany only, so we are unable to offer a quote for this"
+            + " import shipment into " + destination + ".",
+        "If you have an export shipment from Germany, we would be glad to quote it.");
+  }
+
+  private void decline(long id, Map<String, Object> m, String reason, String explanation, String offer) {
     String action = "decline:" + id;
-    String reason = "Not an air freight request (" + mode + "). Declined.";
     if (ledger.delivery(action) != null) {
       if (!"declined".equals(m.get("stage"))) ledger.stage(id, "declined", reason);
       return;
     }
     String approved = Greeting.at(m, clock.instant()) + "\n\n"
-        + "Thank you for your request. We specialise in air freight only, so we are unable to offer a"
-        + " quote for this " + mode + " shipment.\n\n"
-        + "If you have an air freight shipment, we would be glad to quote it.\n\n"
+        + "Thank you for your request. " + explanation + "\n\n"
+        + offer + "\n\n"
         + "Best regards,\nTeam AEIOU";
     String body = inCustomerLanguage(action, m, approved, List.of());
     ledger.stage(id, "declined", reason);
@@ -466,6 +564,12 @@ class WaveWorker {
     }
     var deadline = ageLimit(m);
     if (!clock.instant().isBefore(deadline.minusSeconds(4))) {
+      // (Not after a long outage: a note hours late helps nobody.)
+      boolean silent = clock.instant().isBefore(deadline.plusSeconds(120)) && !customerContacted(id, m);
+      // A customer who heard nothing gets an honest note once the window has closed, so it can never
+      // be read as the first reply to the quote request.
+      if (silent && automatic && clock.instant().isBefore(deadline.plusSeconds(1))) return;
+      if (silent && automatic && !sendWindowClosedNote(id, m, deadline)) return;
       var reason = ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=?", String.class, id);
       ledger.stage(id, "expired", reason == null
           ? "Quote window closed before a verified quote was sent." : "Quote window closed. " + reason);
@@ -554,6 +658,10 @@ class WaveWorker {
     if (Set.of("new", "review").contains(m.get("stage")) && w.get("reason") != null)
       issue = w.get("reason").toString();
     if (CustomerClarifications.WAITING.equals(m.get("stage"))) issue = local.issue();
+    if (issue != null && issue.startsWith(RfqGateway.IMPORT_ISSUE)) {
+      declineImport(id, m, issue.substring(RfqGateway.IMPORT_ISSUE.length()).strip());
+      return;
+    }
     missingPostcode = clarifications.needsPostcode(details, s, issue);
     if (issue != null || missingPostcode) {
       var question = clarifications.question(s, issue, missingPostcode, details.language());

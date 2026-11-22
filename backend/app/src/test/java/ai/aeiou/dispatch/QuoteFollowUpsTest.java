@@ -207,6 +207,61 @@ class QuoteFollowUpsTest {
     verifyNoInteractions(upstream);
   }
 
+  @Test
+  void live53112DoesNotBookAnAcceptanceTheCustomerCancelsTwentySecondsLater() {
+    var quoted = quote(1, 120, NOW.plusSeconds(600), "accepted");
+    var live = new Offer(quoted.airline(), quoted.days(), quoted.totalEur(), quoted.billedKg(), "portal",
+        "R-LIVE", NOW.plusSeconds(600));
+    when(upstream.currentRate(any(), any(), any())).thenReturn(live);
+    when(upstream.post(eq("/v1/portal/bookings"), anyMap())).thenReturn(Map.of(
+        "rate_id", "R-LIVE", "team_reference", "AEIOU-1", "booking_reference", "BK-42O0OC0Z"));
+    ledger.ingest(Map.of("messages", List.of(Map.of("id", 201L, "from", customer(1), "subject", "Re: RFQ FRA to LAX",
+        "body", "Thank you for your offer. That works for us, please go ahead and book it.\n\n"
+            + "Mit freundlichen Gruessen / Kind regards\nJonas Kessler", "sent_at", NOW.minusSeconds(10).toString(),
+        "in_reply_to", 101L)), "next_since_id", 201L), catalog, NOW);
+    new PortalBookings(ledger, upstream, clock, true).bookAccepted();
+    verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
+
+    ledger.ingest(Map.of("messages", List.of(Map.of("id", 202L, "from", customer(1), "subject", "Re: RFQ FRA to LAX",
+        "body", "Our buyer has withdrawn the order, so we need to cancel the shipment. Please do not proceed with"
+            + " the booking. If you have already booked the shipment, please cancel the booking.",
+        "sent_at", NOW.plusSeconds(9).toString(), "in_reply_to", 101L)), "next_since_id", 202L), catalog, NOW);
+    new PortalBookings(ledger, upstream, Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC), true).bookAccepted();
+    verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
+    assertNull(ledger.mail(1).get("booking"));
+  }
+
+  @Test
+  void live43292ConfirmsACancellationBeforeAnyBookingOnce() {
+    quote(1, 120, NOW.plusSeconds(600), "accepted");
+    when(upstream.post(eq("/v1/mailbox/messages"), anyMap())).thenReturn(Map.of("id", FOLLOW_UP_ID));
+    reply(1, "Thank you for your offer. We accept it. Please go ahead and book the shipment now.", 101);
+    ledger.ingest(Map.of("messages", List.of(Map.of("id", 202L, "from", customer(1), "subject", "Re: RFQ FRA to LAX",
+        "body", "Dear Sir or Madam,\n\nOur buyer has withdrawn the order, so we need to cancel the shipment."
+            + " Please do not proceed with the booking. If you have already booked the shipment, please cancel"
+            + " the booking.\n\nI apologise for the inconvenience.\n\nMit freundlichen Gruessen / Kind regards\n"
+            + "Jonas Kessler", "sent_at", NOW.toString(), "in_reply_to", 101L)), "next_since_id", 202L), catalog, NOW);
+
+    followUps.acknowledgeCancellations();
+    followUps.acknowledgeCancellations();
+    new PortalBookings(ledger, upstream, Clock.fixed(NOW.plusSeconds(120), ZoneOffset.UTC), true).bookAccepted();
+
+    var send = ArgumentCaptor.<Map<String, Object>>captor();
+    verify(upstream).post(eq("/v1/mailbox/messages"), send.capture());
+    assertEquals(202L, send.getValue().get("in_reply_to"));
+    assertTrue(send.getValue().get("body").toString().contains("We have not booked the shipment"));
+    assertEquals("sent", ledger.delivery("cancel-ack:1"));
+    verify(upstream, never()).post(eq("/v1/portal/bookings"), anyMap());
+  }
+
+  @Test
+  void doesNotAcknowledgeAReplyThatKeepsTheBooking() {
+    quote(1, 120, NOW.plusSeconds(600), "accepted");
+    reply(1, "Please don't cancel the booking, we still need it.", 101);
+    followUps.acknowledgeCancellations();
+    verify(upstream, never()).post(eq("/v1/mailbox/messages"), anyMap());
+  }
+
   private Offer quote(long id, long age, Instant expiry, String verdict) {
     var sent = NOW.minusSeconds(age);
     var received = sent.minusSeconds(20 + id).toString();
@@ -229,7 +284,7 @@ class QuoteFollowUpsTest {
     long replyId = parent + 100;
     ledger.ingest(Map.of("messages", List.of(Map.of(
         "id", replyId, "from", customer(id), "subject", "Re: RFQ FRA to LAX",
-        "body", body, "sent_at", NOW.toString(), "in_reply_to", parent)),
+        "body", body, "sent_at", NOW.minusSeconds(PortalBookings.BOOKING_GRACE_SECONDS).toString(), "in_reply_to", parent)),
         "next_since_id", replyId), catalog, NOW);
   }
 

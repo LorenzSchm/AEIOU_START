@@ -147,6 +147,11 @@ class Ledger implements AutoCloseable {
     db.execute(
         "CREATE TABLE IF NOT EXISTS operator_portal_rate(request_id INTEGER NOT NULL,rate_id TEXT NOT NULL,"
             + "offer TEXT NOT NULL,entered_at TEXT NOT NULL,PRIMARY KEY(request_id,rate_id))");
+    // The question each clarification asked, in the words Java approved, so a repeat is recognised
+    // even after the reply was rendered into the customer's language.
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS clarification_ask(action TEXT PRIMARY KEY,request_id INTEGER NOT NULL,"
+            + "question TEXT NOT NULL)");
     ensureColumn("booking_attempt", "submitted", "INTEGER NOT NULL DEFAULT 1");
     ensureColumn("booking_attempt", "quote_id", "INTEGER");
     // One row per separately priced shipment, keyed by its tender leg: the shipment's portal

@@ -2783,7 +2783,34 @@ class WaveWorkerTest {
     worker.work();
     assertEquals("expired", ledger.mail(7).get("stage"));
     assertEquals("expired", ledger.mail(8).get("stage"));
-    assertEquals(1, outbound.size());
+    // The customer already has our question on #7; #8 heard nothing and gets one honest note.
+    assertNull(ledger.delivery("window-closed:7"));
+    assertEquals("sent", ledger.delivery("window-closed:8"));
+    assertEquals(2, outbound.size());
+    assertTrue(outbound.getLast().get("body").toString().contains("unable to confirm a reliable all-in rate"));
+    worker.work();
+    assertEquals(2, outbound.size());
+  }
+
+  @Test
+  void live36292TellsTheCustomerOnceTheWindowClosedWithoutAnyAirPrice() {
+    receive(7, "lindqvist@hackloop.mail", "Fastest air freight to LOS", "Hello,\n\nCould you please quote the"
+        + " fastest air freight option from FRA to LOS (Lagos, NG)? 1162 kg gross, 4.45 cbm, ready on 2026-11-27."
+        + " We will deliver it to FRA ourselves.\n\nSara\nLindqvist Medtech", null);
+    for (long second = 0; second <= 355; second += 5) {
+      clock.current = START.plusSeconds(second);
+      worker.work();
+    }
+    assertNull(ledger.delivery("window-closed:7"), "nothing goes to the customer inside the quote window");
+    assertNull(ledger.delivery("quote:7"));
+    clock.current = START.plusSeconds(361);
+    worker.work();
+    worker.work();
+    assertEquals("expired", ledger.mail(7).get("stage"));
+    assertEquals("sent", ledger.delivery("window-closed:7"));
+    var notes = outbound.stream().filter(mail -> "lindqvist@hackloop.mail".equals(mail.get("to"))).toList();
+    assertEquals(1, notes.size());
+    assertTrue(notes.getFirst().get("body").toString().contains("from FRA to LOS"), () -> String.valueOf(notes));
   }
 
   @Test
@@ -4471,30 +4498,66 @@ class WaveWorkerTest {
   }
 
   @Test
-  void missingGatewayAcknowledgmentHoldsQuoteAcrossRestart() throws Exception {
+  void gatewayTimeoutRetriesAnIncompleteJavaParseInsteadOfParkingTheRequest() throws Exception {
     receive(
         7,
         "buyer@hackloop.mail",
         "RFQ FRA to LAX",
         "Lowest cost for one tenth of a tonne and 0.2 cbm.",
         null);
-    when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("timeout"));
+    when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("timeout"))
+        .thenReturn(gatewayResponse("""
+            {"origin":"FRA","destination":"LAX","weight_kg":100,"volume_cbm":0.2,"preference":"cheapest",
+             "pickup_required":false,"pickup_zone":null,"needs_review":false}
+            """));
     worker.work();
-    assertEquals("review", ledger.mail(7).get("stage"));
+    assertNotEquals("review", ledger.mail(7).get("stage"));
     assertTrue(outbound.isEmpty());
-    restart();
-    var s =
-        new Shipment(
-            "FRA",
-            "LAX",
-            java.math.BigDecimal.valueOf(100),
-            java.math.BigDecimal.valueOf(0.2),
-            "cheapest",
-            null,
-            null,
-            0);
-    assertThrows(WaveWorker.Conflict.class, () -> worker.price(7, s, null));
+    worker.work();
     verify(upstream, times(1)).parseRfq(anyMap());
+    restart();
+    worker.recheckOpenExtractions();
+    clock.current = START.plusSeconds(11);
+    worker.work();
+    verify(upstream, times(2)).parseRfq(anyMap());
+    assertEquals("FRA", ledger.read(ledger.mail(7).get("fields"), Shipment.class).origin());
+    assertFalse(outbound.isEmpty(), "carrier invitations go out once the retried parse is done");
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+  }
+
+  @Test
+  void gatewayOutageStillQuotesAJavaCompleteRequestOnTheVerifiedRateInTheLastMinute() throws Exception {
+    restart(false, true);
+    request("");
+    when(upstream.parseRfq(anyMap())).thenThrow(new org.springframework.web.client.HttpServerErrorException(
+        HttpStatus.BAD_GATEWAY));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 2,
+        new BigDecimal("80.00"), new BigDecimal("100"), "portal", "R-outage0000000001", START.plusSeconds(900))), true));
+    for (long second = 0; second <= 290; second += 10) {
+      clock.current = START.plusSeconds(second);
+      worker.work();
+    }
+    assertNull(ledger.delivery("quote:7"), "the quote check is retried while the window allows");
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+    clock.current = START.plusSeconds(301);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 80.00 all in"), () -> String.valueOf(outbound.getLast()));
+    worker.work();
+    assertEquals(1, outbound.stream().filter(m -> m.get("to").equals("buyer@hackloop.mail")).count());
+  }
+
+  @Test
+  void restartDuringAGatewayCallReleasesItsPendingClaim() throws Exception {
+    request("");
+    ledger.jdbc().update("INSERT INTO rfq_parse(request_id,state,model) VALUES(7,'pending','gpt-4o-mini')");
+    ledger.stage(7, "review", "OpenAI did not confirm a usable RFQ parse. Check the attempt before retrying.");
+    restart();
+    worker.recheckOpenExtractions();
+    assertEquals("new", ledger.mail(7).get("stage"));
+    worker.work();
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+    assertFalse(outbound.isEmpty());
   }
 
   @Test
@@ -5148,5 +5211,171 @@ class WaveWorkerTest {
     assertEquals("BKK", sep.shipments().get(0).shipment().destination());
     assertEquals("SIN", sep.shipments().get(1).shipment().destination());
     assertEquals("85", sep.shipments().get(0).shipment().pickupZone());
+  }
+
+  /** Renders every approved reply as Korean prose around its protected tokens, as the live gateway did. */
+  private void koreanRendering(String extraction) {
+    when(upstream.directLlm()).thenReturn(true);
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      Map<String, Object> payload = call.getArgument(0);
+      String schema = mapper.valueToTree(payload.get("response_format")).path("json_schema").path("name").asText();
+      if ("quote_check".equals(schema)) return gatewayResponse("{\"contradiction\":false,\"reply_language\":\"ko\"}");
+      if (!"customer_reply".equals(schema)) return gatewayResponse(extraction);
+      List<Map<String, String>> messages = (List<Map<String, String>>) payload.get("messages");
+      var paragraphs = mapper.createArrayNode();
+      for (var paragraph : mapper.readTree(messages.get(1).get("content")).path("approved_reply")) {
+        var tokens = Pattern.compile("\\[T[0-9]+\\]").matcher(paragraph.asText())
+            .results().map(match -> match.group()).toList();
+        paragraphs.add("확인 부탁드립니다 " + String.join(" ", tokens) + " 감사합니다");
+      }
+      return gatewayResponse(mapper.createObjectNode().put("language", "ko").set("paragraphs", paragraphs).toString());
+    });
+  }
+
+  @Test
+  void live50482AsksAKoreanQuestionAtMostTwiceWhenTheCustomerOnlySaysTheyNeedToCheck() {
+    koreanRendering("""
+        {"origin":"CGN","destination":"SCL","weight_kg":null,"volume_cbm":3.62,"preference":"fastest",
+         "pickup_required":false,"pickup_zone":null,"needs_review":false,"reply_language":"ko"}
+        """);
+    String customer = "weidner-spielwaren@hackloop.mail";
+    String subject = "CGN → SCL 최단 소요시간 항공운임 견적 문의";
+    receive(7, customer, subject, """
+        안녕하세요,
+
+        잘 지내시죠? 인쇄 홍보물 항공 운송 건으로 견적 부탁드립니다. 화물은 2026-11-26에 출고 가능하고, Cologne 공항(CGN)까지는 저희가 직접 반입하겠습니다. 도착 공항은 SCL (Santiago, CL)입니다. 이번에는 가장 빠른 옵션으로 부탁드립니다.
+
+        화물은 카톤 4개, 합산 부피 3.62 cbm입니다.
+
+        Cheers,
+        Klaus Weidner
+        Weidner Spielwaren GmbH, Nuremberg
+        """, null);
+    worker.work();
+    assertEquals("sent", ledger.delivery("rfq-info:7"), () -> String.valueOf(outbound));
+    assertTrue(outbound.getLast().get("body").toString().startsWith("확인 부탁드립니다"));
+    for (int reply = 1; reply <= 5; reply++) {
+      // The live customer answered every question with the same line, 21 times in a row.
+      receive(2000 + reply, customer, "Re: " + subject, "Thanks for your message. I need to check that and will"
+          + " come back to you.\n\nCheers,\nKlaus Weidner\nWeidner Spielwaren GmbH, Nuremberg",
+          Ledger.id(outbound.getLast().get("id")));
+      clock.current = START.plusSeconds(10L * reply);
+      worker.work();
+    }
+    assertEquals(2, ledger.jdbc().queryForObject(
+        "SELECT count(*) FROM deliveries WHERE action LIKE 'rfq-info:7%'", Integer.class), () -> String.valueOf(outbound));
+    assertEquals(2, outbound.size());
+    assertEquals(CustomerClarifications.WAITING, ledger.mail(7).get("stage"));
+  }
+
+  @Test
+  void live47982DeclinesAnAirImportIntoGermanyInsteadOfAskingOrQuotingItBackwards() throws Exception {
+    restart(false, true);
+    recordedExtraction("""
+        {"origin":null,"destination":"HAM","weight_kg":1741,"volume_cbm":12.61,"preference":null,
+         "pickup_required":false,"pickup_zone":null,"needs_review":false,"reply_language":"en"}
+        """);
+    receive(7, "nordlicht-audio@hackloop.mail", "Air import quote: NRT to HAM", """
+        Hi,
+
+        Could you quote an all-in price in EUR for an airport-to-airport air import from Tokyo airport (NRT), JP, to Hamburg airport (HAM), Germany? Our supplier will hand over the goods at NRT, and we’re the receiver in Germany.
+
+        The furniture samples will be ready on 2026-11-26: 6 pieces, 1741 kg gross, 12.61 cbm.
+
+        Thanks!
+
+        Mira Petersen
+        Nordlicht Audio""", null);
+    worker.work();
+    worker.work();
+    assertEquals("sent", ledger.delivery("decline:7"), () -> String.valueOf(outbound));
+    assertEquals("declined", ledger.mail(7).get("stage"));
+    assertNull(ledger.delivery("rfq-info:7"));
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals(1, outbound.size(), () -> String.valueOf(outbound));
+    assertTrue(outbound.getFirst().get("body").toString().contains("exports from Germany only"));
+    assertTrue(outbound.getFirst().get("body").toString().contains("import shipment into HAM"));
+  }
+
+  @Test
+  void anExportForABuyersImportIsStillQuoted() {
+    recordedExtraction("""
+        {"origin":"MUC","destination":"LAX","weight_kg":350,"volume_cbm":3.33,"preference":"fastest",
+         "pickup_required":false,"pickup_zone":null,"needs_review":false,"reply_language":"en"}
+        """);
+    receive(7, "lindqvist@hackloop.mail", "MUC to LAX import quote", "Hi,\n\nI’m arranging air freight from"
+        + " Germany for our buyer’s import at LAX. We’ll deliver to MUC ourselves; the goods will be ready on"
+        + " 2026-11-29.\n\nThe import shipment is 12 pieces of electronic control units, 350 kg gross and 3.33 cbm."
+        + " Could you quote the fastest option with an all-in price in EUR?\n\nSara\nLindqvist Medtech", null);
+    worker.work();
+    assertNull(ledger.delivery("decline:7"));
+    assertNotEquals("declined", ledger.mail(7).get("stage"));
+  }
+
+  @Test
+  void comparesRatesAgainWhenThePortalCannotVerifyTheRateForAMoment() {
+    lagosRequest();
+    var offer = new Offer("Test Cargo", 2, new BigDecimal("80.00"), new BigDecimal("1162"), "portal",
+        "R-flaky00000000001", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true));
+    doThrow(new org.springframework.web.client.HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE))
+        .doReturn(offer).when(upstream).currentRate(any(), any(), any());
+    worker.work();
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals("collecting", ledger.mail(7).get("stage"));
+    clock.current = START.plusSeconds(78);
+    worker.work();
+    assertNull(ledger.delivery("quote:7"), "waits a few seconds before asking the portal again");
+    clock.current = START.plusSeconds(82);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 80.00 all in"));
+  }
+
+  @Test
+  void parksTheRequestWhenThePortalKeepsRefusingToVerifyTheRate() {
+    lagosRequest();
+    var offer = new Offer("Test Cargo", 2, new BigDecimal("80.00"), new BigDecimal("1162"), "portal",
+        "R-flaky00000000002", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true));
+    doThrow(new org.springframework.web.client.HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE))
+        .when(upstream).currentRate(any(), any(), any());
+    worker.work();
+    for (long second = 76; second < 140; second += 6) {
+      clock.current = START.plusSeconds(second);
+      worker.work();
+    }
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals("review", ledger.mail(7).get("stage"));
+  }
+
+  /** A route no rate sheet covers (live #36292), so only the portal can price it. */
+  private void lagosRequest() {
+    receive(7, "lindqvist@hackloop.mail", "Fastest air freight to LOS", "Hello,\n\nCould you please quote the"
+        + " fastest air freight option from FRA to LOS (Lagos, NG)? 1162 kg gross, 4.45 cbm, ready on 2026-11-27."
+        + " We will deliver it to FRA ourselves.\n\nSara\nLindqvist Medtech", null);
+  }
+
+  @Test
+  void gatewayOutageNeverQuotesAKoreanRequestOnJavaAlone() throws Exception {
+    restart(false, true);
+    when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("timeout"));
+    receive(7, "nordlicht-audio@hackloop.mail", "KUL행 항공 운송 견적 요청", """
+        안녕하세요,
+
+        화물은 FRA에서 KUL까지 가장 빠른 옵션으로 부탁드립니다. 총중량은 1271 kg, 부피는 4.26 cbm입니다.
+        FRA 공항까지는 저희가 직접 반입하겠습니다.
+
+        Mira Petersen
+        Nordlicht Audio""", null);
+    assertNull(MailParser.request("KUL행 항공 운송 견적 요청", ledger.mail(7).get("body").toString(), false, catalog).issue());
+    worker.work();
+    worker.work();
+    assertTrue(ledger.jdbc().queryForList("SELECT model FROM rfq_parse WHERE request_id=7", String.class).isEmpty(),
+        "the model's cross-check is retried, not replaced by Java");
+    assertTrue(outbound.isEmpty());
+    assertNotEquals("review", ledger.mail(7).get("stage"));
   }
 }

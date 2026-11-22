@@ -18,6 +18,7 @@ class PortalBookings {
       "The carrier rate changed, expired or could not be verified. Get customer approval for a new quote.";
   static final String RATE_CHANGE_ISSUE = "Booking needs attention: " + RATE_CHANGE;
   private static final Logger log = LoggerFactory.getLogger(PortalBookings.class);
+  static final long BOOKING_GRACE_SECONDS = 45;
   private static final Pattern APPROVAL =
       Pattern.compile(
           "(?iu)(?:(?:hi|hello|bonjour|bonsoir|guten (?:tag|morgen|abend)|dear team|good (?:morning|afternoon|evening)(?: team(?: aeiou)?)?)"
@@ -184,12 +185,13 @@ class PortalBookings {
           AND (x.root IN (r.id,json_extract(d.response,'$.id')) OR x.reply_to=json_extract(d.response,'$.id'))
           AND x.id>json_extract(d.response,'$.id'))
         WHERE r.kind='request' AND r.proposal IS NULL
+          AND (f.received IS NULL OR julianday(f.received)<=julianday(?))
           AND NOT EXISTS (SELECT 1 FROM deliveries u
             WHERE u.action='requote:'||r.id OR u.action LIKE 'requote:'||r.id||':%')
           AND EXISTS (SELECT 1 FROM shipment_leg l LEFT JOIN booking_attempt a ON a.request_id=l.leg_id
             WHERE l.request_id=r.id AND l.proposal IS NOT NULL AND l.booking IS NULL
               AND COALESCE(a.retry_at,0)<=?)
-        """, now);
+        """, settled(), now);
     for (var row : candidates) {
       long id = Ledger.id(row.get("id"));
       var legs = ledger.jdbc().queryForList("""
@@ -212,6 +214,15 @@ class PortalBookings {
         }
       }
     }
+  }
+
+  /**
+   * Replies received up to this instant may book. Live customers have cancelled about 20 seconds
+   * after accepting (#43292, #53112); a booking made in between cost a 20-point adjustment, so an
+   * approval only books once it has stood unchanged for a short while.
+   */
+  private String settled() {
+    return clock.instant().minusSeconds(BOOKING_GRACE_SECONDS).toString();
   }
 
   private String recordFailure(long attempt, RuntimeException e) {
@@ -313,6 +324,7 @@ class PortalBookings {
                       AND x.id>json_extract(revised.response,'$.id'))))
                 LEFT JOIN booking_attempt a ON a.request_id=r.id
                 WHERE r.kind='request' AND r.booking IS NULL
+                  AND (f.received IS NULL OR julianday(f.received)<=julianday(?))
                   AND (revised.action IS NULL OR f.reply_to IN (
                     json_extract(revised.response,'$.id'),json_extract(schedule.response,'$.id')))
                   AND json_extract(r.proposal,'$.offer.source')='portal'
@@ -321,7 +333,7 @@ class PortalBookings {
                   AND (COALESCE(a.retry_at,0)<=? OR (revised.state='sent' AND a.submitted=0
                     AND a.quote_id IS NOT json_extract(revised.response,'$.id')))
                 """.replace("{price_match}", PriceMatchReplies.sentAnswers("r.id")),
-                clock.instant().getEpochSecond());
+                settled(), clock.instant().getEpochSecond());
     for (var row : candidates) {
       long replyId = Ledger.id(row.get("reply_id"));
       if (!approval(replyId, row)) continue;
