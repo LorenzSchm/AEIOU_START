@@ -4232,4 +4232,29 @@ class WaveWorkerTest {
     assertTrue(outbound.stream().anyMatch(m -> String.valueOf(m.get("subject")).contains("pickup from postcode 40073")),
         () -> String.valueOf(outbound.stream().map(m -> m.get("subject")).toList()));
   }
+
+  @Test
+  void negatedPickupAndAirportDeliveryAreNotPickupRequests() {
+    assertFalse(MailParser.requestsPickup("Air freight quote request: HAM to BOG",
+        "We will deliver the shipment to HAM ourselves, so no pickup is needed."));
+    assertFalse(MailParser.requestsPickup("", "No warehouse collection is required."));
+    assertFalse(MailParser.requestsPickup("", "Pickup is not required, we bring it to FRA."));
+    assertFalse(MailParser.requestsPickup("", "We don't need a pickup."));
+    assertTrue(MailParser.requestsPickup("", "Please arrange pickup from our site in 20095 Hamburg."));
+    assertTrue(MailParser.selfDelivery(
+        "We will deliver the shipment directly to Hamburg Airport (HAM). No warehouse collection is required."));
+    assertFalse(MailParser.selfDelivery("Please deliver the shipment to Bogota airport."));
+  }
+
+  @Test
+  void live53112QuotesWithoutAskingAboutAPickupTheCustomerDeclined() throws Exception {
+    receive(7, "kessler@hackloop.mail", "Air freight quote request: HAM to BOG", "Dear Sir or Madam,\n\nCould you please quote an all-in price in EUR for the cheapest air freight option from HAM to BOG (Bogota, CO)? We will deliver the shipment to HAM ourselves, so no pickup is needed. The shipment will be ready on 2026-11-28.\n\nThe shipment consists of 3 pieces of laboratory glassware, with a total gross weight of 630 kg and a volume of 3.96 cbm.\n\nThank you in advance for your quote.\n\nMit freundlichen Gruessen / Kind regards\nJonas Kessler\nLogistics Coordinator\nKessler Feinmechanik GmbH, Ulm", null);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Riverbend Airlines Cargo", 4,
+        new BigDecimal("1732.65"), new BigDecimal("661.32"), "portal", "R-GbkKB1ycBhFzf5Wl", START.plusSeconds(900))), true));
+    worker.work();
+    assertNull(ledger.delivery("pickup-postcode:7"), () -> String.valueOf(outbound));
+    var s = ledger.read(ledger.mail(7).get("fields"), Shipment.class);
+    assertNull(s.pickupZone());
+    assertNotEquals("waiting for customer", ledger.mail(7).get("stage"));
+  }
 }

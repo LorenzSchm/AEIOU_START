@@ -100,6 +100,8 @@ public final class MailParser {
 
   public static boolean selfDelivery(String body) {
     return has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b|"
+        + "\\bwe(?: will|'ll|’ll) (?:deliver|bring|drop off|truck)[^.!?\\n]{0,80}\\b(?:directly )?to (?:the )?"
+        + "(?:[\\p{L}.'’ -]{0,40}\\b(?:airport|Flughafen)\\b|airport\\b)|"
         + "\\bnous (?:la |le |les )?(?:d[ée]poserons|livrerons|apporterons)[^.!?\\n]{0,100}\\bnous-mêmes\\b|"
         + "\\bwir (?:liefern|bringen)[^.!?\\n]{0,100}\\bselbst\\b|"
         + "\\b(?:biz|kendimiz)\\h+teslim\\h+edece[ğg]iz\\b|"
@@ -110,6 +112,12 @@ public final class MailParser {
   public static boolean requestsPickup(String subject, String body) {
     String text = (subject + "\n" + body).replaceAll(
         "(?iu)\\b(?:(?:no need to arrange|no need for) (?:a |the )?(?:truck )?(?:pick[ -]?up|collection)"
+            + "|no (?:warehouse |truck |site |door )?(?:pick[ -]?up|collection)(?: service)?"
+            + "(?: (?:is|will be) (?:needed|required|necessary))?"
+            + "|(?:pick[ -]?up|collection) (?:is|will be) not (?:needed|required|necessary)"
+            + "|(?:do|does|will) not (?:need|require) (?:a |any |the )?(?:truck |warehouse )?(?:pick[ -]?up|collection)"
+            + "|(?:don['’]t|doesn['’]t|won['’]t) (?:need|require) (?:a |any |the )?(?:truck |warehouse )?(?:pick[ -]?up|collection)"
+            + "|without (?:a |any )?(?:truck |warehouse )?(?:pick[ -]?up|collection)"
             + "|(?:pas besoin d['’]|aucun )enl[èe]vement|keine? (?:abholung|vorlauf))\\b", "");
     if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "");
     return has(text, "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from|arrange (?:the |a )?truck|door["
