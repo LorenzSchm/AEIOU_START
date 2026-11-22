@@ -4276,4 +4276,25 @@ class WaveWorkerTest {
     assertEquals(1, outbound.size(), () -> String.valueOf(outbound));
     assertTrue(outbound.getFirst().get("body").toString().contains("air freight only"));
   }
+
+  @Test
+  void live54851ConfirmingTheEarliestDepartureIsAKnownService() {
+    String body = """
+        Dear Sir or Madam,
+
+        Could you please quote the fastest air freight option from STR to SGN (Ho Chi Minh City, VN)? The shipment will be ready on 2026-11-25, and we will deliver it to Stuttgart Airport (STR) ourselves.
+
+        The shipment consists of 3 pieces of printed marketing material, with a gross weight of 497 kg and a total volume of 2.65 cbm.
+
+        Please include the all-in price in EUR and confirm the earliest available departure and expected transit time.
+
+        Kind regards
+        Anna Sonnberg""";
+    receive(7, "anna@hackloop.mail", "Air freight quote request: STR to SGN", body, null);
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(new Offer("Test Cargo", 3,
+        new BigDecimal("1500.00"), new BigDecimal("497"), "portal", "R-test000000000001", START.plusSeconds(900))), true));
+    worker.work();
+    assertNotEquals("review", ledger.mail(7).get("stage"),
+        () -> ledger.jdbc().queryForObject("SELECT reason FROM wave_case WHERE id=7", String.class));
+  }
 }

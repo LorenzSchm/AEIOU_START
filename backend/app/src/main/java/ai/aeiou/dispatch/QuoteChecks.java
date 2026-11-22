@@ -40,7 +40,7 @@ final class QuoteChecks {
       "\\b(?:please|also|must|should|need to|please also)\\h+include\\h+(?:the |an? |our |your )?"
           + "([^,;.!?\\r\\n]{2,100})");
   private static final Pattern QUOTE_OR_KNOWN_SERVICE = pattern(
-      "^(?:(?:all[ -]in |total |final )?(?:price|cost|rate|quote|quotation)\\b|"
+      "^(?:(?:confirm|provide|state|share|give|tell us) (?:us )?(?:the |an? |your )?)?(?:(?:all[ -]in |total |final )?(?:price|cost|rate|quote|quotation)\\b|"
           + "(?:arrange |arranging |arrangement of |organizing )?(?:the |a )?(?:truck(?:ing)?|pickup|collection|"
           + "air freight|(?:cargo |freight |transport )?insurance|policy fee)\\b|"
           + "(?:delivery|transport) to (?:the |our |your )?(?:departure )?airport\\b|"
