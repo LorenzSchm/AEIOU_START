@@ -56,8 +56,17 @@ export default function BoardScore({ result }) {
           </div>
         </div>
         <div className="board-total" title="Total points">
-          <b>{total != null ? formatPoints(total) : "—"}</b>
-          <small>{result.cost_pending ? "pts · cost pending" : "points"}</small>
+          {total != null || !(result.cost_pending || tone === "ok" || tone === "muted") ? (
+            <>
+              <b>{formatPoints(total ?? 0)}</b>
+              <small>{result.cost_pending ? "pts · cost pending" : "points"}</small>
+            </>
+          ) : (
+            <>
+              <b className="board-pending">Pending</b>
+              <small>{result.cost_pending ? "cost not scored yet" : "not scored yet"}</small>
+            </>
+          )}
         </div>
       </div>
       {points.length > 0 && (
