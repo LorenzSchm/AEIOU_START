@@ -974,7 +974,12 @@ public final class MailParser {
       pattern("\\b(?:(?:cannot|can[’']t|unable to) confirm\\h+(?:(?:a|an|the|our)\\h+)?"
           + "(?:(?:separate\\h+)?estimate\\h+(?:for\\h+)?)?"
           + "(?:exact |estimated )?" + TRUCK_TIMING_DESCRIPTION
-          + "|" + TRUCK_TIMING_DESCRIPTION + "\\h+(?:is (?:unavailable|unconfirmed)|cannot be confirmed))"
+          + "|" + TRUCK_TIMING_DESCRIPTION + "\\h+(?:is (?:unavailable|unconfirmed)|cannot be confirmed)"
+          // "Estimated time to pickup: 21 hours. This does not include transit from pickup to airport
+          // delivery, which we can't confirm at this stage." Only the road timing is open.
+          + "|(?:this|that|it)\\h+does\\h+not\\h+include\\h+(?:the\\h+)?" + TRUCK_TIMING_DESCRIPTION
+          + ",?\\h+which\\h+we\\h+(?:cannot|can[’']t|are\\h+unable\\h+to)\\h+confirm"
+          + "(?:\\h+(?:at\\h+this\\h+stage|yet|at\\h+the\\h+moment|right\\h+now))?)"
           + "(?=\\h*(?:[.!?;\\r\\n]|$))");
 
   private static Double truckTransit(String text) {

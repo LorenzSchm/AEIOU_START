@@ -35,4 +35,29 @@ class CarrierBidParsingTest {
     assertEquals(new BigDecimal("355.16"), bid.euros());
     assertEquals(17 / 24.0, bid.days());
   }
+
+  @Test
+  void round185ReadsAFirmPickupPriceWhoseRoadTransitIsStillOpen() {
+    // Schwabenbote Transporte, request #55685 shipment 1, verbatim.
+    String reply = """
+        Hi Team AEIOU,
+
+        Our all-in rate for collection and delivery to DUS is 228.37 EUR, valid through 22 Nov 2026 09:54 UTC.
+
+        Estimated time to pickup: 21 hours. This does not include transit from pickup to airport delivery, which we can’t confirm at this stage.
+
+        Offer reference: TRK-17754. No booking is needed for pickup.
+
+        Best regards,
+        Schwabenbote Transporte""";
+
+    var bid = MailParser.bid(reply, true).orElseThrow();
+    assertEquals(new BigDecimal("228.37"), bid.euros());
+    assertNull(bid.days());
+    assertTrue(MailParser.quotesAmbiguousPickupTiming(reply));
+    assertTrue(MailParser.bid(reply.replace("This does not include transit",
+        "The price does not include fuel or transit"), true).isEmpty());
+    assertTrue(MailParser.bid(reply.replace("Estimated time", "We can’t confirm the price yet. Estimated time"),
+        true).isEmpty());
+  }
 }
