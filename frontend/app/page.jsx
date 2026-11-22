@@ -233,10 +233,19 @@ export default function Page() {
           )}
         </AnimatePresence>
 
-        {nav.view === "rates" ? <RateSheets /> : !data ? (
-          <div className="skeleton-grid" aria-busy="true" aria-label="Loading">
-            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton glass" />)}
-          </div>
+        {/* Rate sheets loads its own data, so it is kept mounted like the other views. Rendering it
+            in place of them used to unmount every view (and the globe) and rebuild them on the way back. */}
+        {seen.current.has("rates") && (
+          <KeptView name="rates" active={nav.view === "rates"}>
+            <RateSheets />
+          </KeptView>
+        )}
+        {!data ? (
+          nav.view !== "rates" && (
+            <div className="skeleton-grid" aria-busy="true" aria-label="Loading">
+              {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton glass" />)}
+            </div>
+          )
         ) : (
           <>
             {seen.current.has("overview") && (

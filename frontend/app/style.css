@@ -447,6 +447,8 @@ fieldset:disabled { opacity: 0.6; }
    inert and out of the flow. */
 .content { position: relative; }
 .view[data-hidden] { position: absolute; left: 0; right: 0; top: 0; visibility: hidden; pointer-events: none; overflow: hidden; height: 100%; contain: layout paint; }
+/* Rate sheets is never needed while hidden, so skip its rendering entirely. */
+.view[data-hidden][data-view="rates"] { content-visibility: hidden; }
 
 /* Rendering budget: skip layout/paint for queue rows outside the viewport, and for the hidden
    queue view entirely (the hidden overview must stay laid out so its globe can pre-build). */
