@@ -1,5 +1,8 @@
 /* ---------- 5U challenge scoreboard. Builds on .tile / .card / .eyebrow from style.css. ---------- */
-.score { display: grid; gap: var(--s-4); container-type: inline-size; container-name: score; }
+/* One column pinned to the view's width, so the rounds strip scrolls inside its card instead of
+   widening the whole page as more rounds come in. */
+.score { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-4); min-width: 0; container-type: inline-size; container-name: score; }
+.score > * { min-width: 0; }
 .sc-note { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
 .sc-note svg { flex: none; }
 @container score (max-width: 760px) { .score .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -44,16 +47,21 @@
 /* Rounds strip */
 .sc-legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .sc-legend i { width: 9px; height: 9px; border-radius: 3px; margin-left: 6px; }
-.sc-legend i.ok, .sc-bar.ok { background: var(--ok); fill: var(--ok); }
-.sc-legend i.bad, .sc-bar.bad { background: var(--bad); fill: var(--bad); }
-.sc-legend i.muted, .sc-bar.muted { background: rgba(15, 23, 42, 0.3); fill: rgba(15, 23, 42, 0.3); }
-.sc-rounds-scroll { overflow-x: auto; padding-bottom: 4px; }
-.sc-rounds { display: block; min-width: 100%; }
-.sc-base { stroke: var(--hairline); }
-.sc-bar { cursor: pointer; transition: opacity var(--dur-1); }
+.sc-legend i.ok { background: var(--ok); }
+.sc-legend i.bad { background: var(--bad); }
+.sc-legend i.muted { background: rgba(15, 23, 42, 0.3); }
+/* Bars flex to share the width: each is at most 8px wide and at least 2px, with gaps shrinking too. */
+.sc-rounds { display: flex; align-items: flex-end; gap: clamp(1px, 0.3vw, 3px); height: 124px; padding-bottom: 1px;
+  border-bottom: 1px solid var(--hairline); }
+.sc-bar { flex: 1 1 0; min-width: 2px; max-width: 8px; height: var(--h); padding: 0; border: 0; border-radius: 2px 2px 1px 1px;
+  cursor: pointer; transition: opacity var(--dur-1), transform var(--dur-1); transform-origin: bottom; }
+.sc-bar.ok { background: var(--ok); }
+.sc-bar.bad { background: var(--bad); }
+.sc-bar.muted { background: rgba(15, 23, 42, 0.3); }
 .sc-rounds:hover .sc-bar { opacity: 0.55; }
-.sc-rounds .sc-bar:hover, .sc-bar:focus-visible { opacity: 1; outline: none; }
-.sc-bar:focus-visible { stroke: var(--blue); stroke-width: 2; }
+.sc-rounds .sc-bar:hover, .sc-bar:focus-visible { opacity: 1; }
+.sc-bar:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .sc-bar:hover { transform: scaleY(1.03); } }
 .sc-rounds-axis { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .view[data-hidden][data-view="score"] { content-visibility: hidden; }

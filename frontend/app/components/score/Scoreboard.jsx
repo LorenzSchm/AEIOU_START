@@ -80,29 +80,22 @@ function Losses({ losses, total, onOpen }) {
   );
 }
 
-/** One bar per round, height = points. Rejected and unanswered rounds sit on the baseline. */
+/** One bar per round, height = points. Bars share the card's width, so the strip never scrolls.
+ *  Rejected and unanswered rounds sit on the baseline. */
 function Rounds({ rounds, maxTotal, onOpen }) {
-  const W = 8, GAP = 3, H = 120;
-  const width = Math.max(rounds.length * (W + GAP) - GAP, 1);
   return (
-    <div className="sc-rounds-scroll">
-      <svg className="sc-rounds" width={width} height={H + 4} viewBox={`0 0 ${width} ${H + 4}`} role="img"
-           aria-label={`Points for each of ${rounds.length} rounds`}>
-        <line x1="0" x2={width} y1={H + 0.5} y2={H + 0.5} className="sc-base" />
-        {rounds.map((r, i) => {
-          const v = String(r.result.verdict || "").toLowerCase();
-          const h = v === "accepted" && r.total != null ? Math.max(3, (r.total / maxTotal) * (H - 6)) : 4;
-          const tone = v === "accepted" ? "ok" : v === "rejected" ? "bad" : "muted";
-          const label = `Round ${r.result.round_no ?? i + 1} · ${clock(r.received)} · ${v === "accepted" ? formatPoints(r.total ?? 0) + " pts" : r.result.verdict}`;
-          return (
-            <rect key={r.id} className={"sc-bar " + tone} x={i * (W + GAP)} y={H - h} width={W} height={h} rx="2"
-                  tabIndex={0} role="button" aria-label={label} onClick={() => onOpen(r.id)}
-                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(r.id))}>
-              <title>{label}</title>
-            </rect>
-          );
-        })}
-      </svg>
+    <div className="sc-rounds" role="list" aria-label={`Points for each of ${rounds.length} rounds`}>
+      {rounds.map((r, i) => {
+        const v = String(r.result.verdict || "").toLowerCase();
+        const accepted = v === "accepted" && r.total != null;
+        const tone = v === "accepted" ? "ok" : v === "rejected" ? "bad" : "muted";
+        const label = `Round ${r.result.round_no ?? i + 1} · ${clock(r.received)} · ${accepted ? formatPoints(r.total) + " pts" : r.result.verdict}`;
+        return (
+          <button key={r.id} type="button" role="listitem" className={"sc-bar " + tone} title={label} aria-label={label}
+                  style={{ "--h": accepted ? Math.max(3, (r.total / maxTotal) * 100) + "%" : "4px" }}
+                  onClick={() => onOpen(r.id)} />
+        );
+      })}
     </div>
   );
 }
