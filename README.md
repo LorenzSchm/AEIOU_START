@@ -58,6 +58,8 @@ npm start -- --hostname 127.0.0.1 --port 3000
 
 | Configuration | Default |
 | --- | --- |
+| `DISPATCH_PACKING_TOOLS` | `false`. Set to `true` to recover packing lists with a wrong file extension or a legacy text encoding. The worker accepts only complete text and reuses the existing PDF, cargo and shipment checks. Tool results are cached locally by message and attachment ID. |
+| `DISPATCH_EDGE_READER_LIB` | Empty by default. Set to the absolute path of the unpacked `edge-reader/lib` directory to enable the attachment fallback, including the lightweight packing tools. Clear it and restart to disable the full reader. |
 | `AUTO_SEND` | `true`. Use `false` to disable the automatic worker. |
 | `DISPATCH_COUNTEROFFERS` | `false`. Use `true` to enable the optional counteroffer round. |
 | `DISPATCH_START_AT` | `2026-11-21T15:00:00Z` (16:00 Berlin). The worker handles RFQs arriving from this instant onward. |
@@ -68,6 +70,31 @@ npm start -- --hostname 127.0.0.1 --port 3000
 | `DISPATCH_API_URL` | `http://127.0.0.1:8000`. Set before building Next.js to point the desk to another backend. |
 | `DATABASE_URL` | Unset. A `postgresql://user:password@host:port/db` URL. The backend mirrors every SQLite table to this Postgres database every 5 seconds. It upserts by primary key, deletes rows removed from SQLite and adds missing tables and columns. SQLite stays the worker's source of truth, and a failed sync never blocks the wave. Keep it in the Git-ignored root `.env`. |
 | `DISPATCH_READ_ONLY` | `false`. Use `true` for a desk that only displays the data. It reads the writer's Postgres data every 5 seconds into its own `dispatch.replica.sqlite3`, never calls the 5U API, runs no worker jobs and answers every non-GET API request with 403. Attachment downloads need the 5U API and are unavailable there. With `DATABASE_URL` set, writers also share a Postgres advisory lock: only the worker that holds it polls the mailbox, runs the wave, accepts operator actions and mirrors to Postgres. A second writer stays idle until the lock is free. |
+
+### Optional edge-reader bundle
+
+To prepare the optional reader package on an Apple Silicon Mac, run
+`./gradlew :app:edgeBundle -PffmpegPlatforms=macosx-arm64` from `backend/`
+(use `macosx-x86_64` on Intel). The resulting `app/build/distributions/dispatch-with-edge-tools.zip`
+contains the worker JAR and matching reader libraries. Unpack both when installing this
+variant. The normal worker JAR can still run by itself.
+
+Before enabling audio, run the following command from the unpacked bundle as the account
+that runs the worker. It prepares the Whisper model outside the request deadline.
+
+```sh
+java -cp "edge-reader/lib/*" ai.aeiou.edgelab.WorkerRead --prepare-model
+```
+
+The worker tries its existing parser first. Up to two unresolved attachments run on
+a dedicated executor, each in a separate process with a 30-second deadline. A transport
+failure or reader timeout defers that attachment for 15 seconds, including across restarts.
+The worker can retry while the RFQ is open. Complete readings go through the existing
+shipment and offer checks. Ambiguous archives and forwarded mail that combines a body
+with attached documents go through the existing clarification path.
+
+The attachment reader defaults to local processing. Set `DISPATCH_EDGE_READER_GATEWAY=true`
+to allow scored vision and speech calls. This setting applies only to the attachment reader.
 
 ### This Mac
 

@@ -1,0 +1,108 @@
+plugins {
+    id 'java-library'
+    id 'application'
+}
+
+group = 'ai.aeiou'
+version = '0.1.0'
+
+repositories { mavenCentral() }
+
+// Java 8 is first on PATH on Thure's laptop. The toolchain makes Gradle compile
+// and test with Java 21 regardless; run gradlew itself with JAVA_HOME pointing at 21.
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+
+dependencies {
+    implementation project(':packing-tools')
+    // Content-based type detection (magic bytes). Text extraction for office
+    // formats (tika-parsers) arrives with the office reader ticket.
+    api 'org.apache.tika:tika-core:3.2.3'
+    // Tika logs through SLF4J; the CLI and tests don't need its log output.
+    runtimeOnly 'org.slf4j:slf4j-nop:2.0.17'
+
+    // --- Voice reader (ticket 02) -------------------------------------------
+    // Audio decoding through bundled ffmpeg (JavaCV) and local Whisper
+    // (whisper-jni ships its own native engine). Nothing to install.
+    implementation('org.bytedeco:javacv:1.5.12') {
+        // JavaCV drags in every bytedeco preset; the voice reader needs only ffmpeg.
+        ['opencv', 'openblas', 'flycapture', 'libdc1394', 'libfreenect', 'libfreenect2',
+         'librealsense', 'librealsense2', 'videoinput', 'artoolkitplus', 'flandmark',
+         'leptonica', 'tesseract'].each { exclude group: 'org.bytedeco', module: it }
+    }
+    implementation 'org.bytedeco:ffmpeg:7.1.1-1.5.12'
+    // ffmpeg natives only for the platforms we run on. Intel Mac:
+    //   ./gradlew test -PffmpegPlatforms=macosx-x86_64
+    (findProperty('ffmpegPlatforms') ?: 'macosx-arm64,windows-x86_64').toString().split(',').each { platform ->
+        runtimeOnly "org.bytedeco:javacpp:1.5.12:${platform.trim()}"
+        runtimeOnly "org.bytedeco:ffmpeg:7.1.1-1.5.12:${platform.trim()}"
+    }
+    implementation 'io.github.givimad:whisper-jni:1.7.1'
+    // --- end voice reader ------------------------------------------------------
+    // --- ticket 04: office reader (Tika catch-all) ---
+    // All of Tika's parsers: Word, Excel, PowerPoint, OpenOffice, RTF, HTML, CSV,
+    // PDF (PDFBox), mail (eml, msg). Same version as tika-core above. It also brings
+    // Apache POI and PDFBox, which the tests use to build their fixtures.
+    implementation 'org.apache.tika:tika-parsers-standard-package:3.2.3'
+    // POI logs through Log4j; send that to SLF4J (silenced by slf4j-nop). Matches log4j-api.
+    runtimeOnly 'org.apache.logging.log4j:log4j-to-slf4j:2.24.3'
+    // --- end ticket 04 ---
+
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach { options.compilerArgs.add('-parameters') }
+
+tasks.withType(Test).configureEach { useJUnitPlatform() }
+
+// ticket 04: sources and test fixtures contain umlauts; Windows would compile them as cp1252.
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+// --- Gateway (ticket 03) -----------------------------------------------------
+// Tests never call the real gateway (it costs points). Opt in with
+//   ./gradlew test -PrealGateway      (runs the @Tag("real-gateway") tests too)
+tasks.withType(Test).configureEach {
+    testLogging.exceptionFormat = 'full'
+    systemProperty 'edgelab.requireWhisper', project.hasProperty('testEdgeBundle')
+    systemProperty 'edgelab.gateway.enabled', project.hasProperty('realGateway') ? 'true' : 'false'
+}
+// --- end gateway ---------------------------------------------------------------
+
+application {
+    mainClass = 'ai.aeiou.edgelab.ReadFile'
+}
+
+// ./gradlew read --args="../start-kit/yellowtail-air-freight-tariff-2026-11.txt"
+tasks.register('read', JavaExec) {
+    group = 'edgelab'
+    description = 'Reads one file and prints the Reading.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ai.aeiou.edgelab.ReadFile'
+    workingDir = projectDir
+}
+
+// ---- Photo reader (ticket 05) -------------------------------------------------
+// Pure-Java image decoders for ImageIO: WebP, TIFF variants, CMYK/odd JPEGs.
+// EXIF (metadata-extractor) and PDF rendering (PDFBox) already come with Tika.
+// HEIC is decoded with the bundled ffmpeg (JavaCV, voice reader block above).
+dependencies {
+    implementation 'com.twelvemonkeys.imageio:imageio-webp:3.12.0'
+    implementation 'com.twelvemonkeys.imageio:imageio-tiff:3.12.0'
+    implementation 'com.twelvemonkeys.imageio:imageio-jpeg:3.12.0'
+    implementation 'com.drewnoakes:metadata-extractor:2.19.0'
+}
+// ---- end photo reader -----------------------------------------------------------
+
+// ---- Video reader (ticket 06) ---------------------------------------------------
+// Frames and sound through the bundled ffmpeg (JavaCV, voice block above); nothing new.
+// ./gradlew videoFixtures   writes the test videos to build/video-fixtures/ for the demo.
+tasks.register('videoFixtures', JavaExec) {
+    group = 'edgelab'
+    description = 'Writes the generated test videos (RFQ photo + spoken RFQ, and a silent one).'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'ai.aeiou.edgelab.video.VideoFixtures'
+    args = ['build/video-fixtures']
+    workingDir = projectDir
+}
+// ---- end video reader -------------------------------------------------------------

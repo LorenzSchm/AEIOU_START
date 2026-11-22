@@ -31,6 +31,12 @@ public class DispatchApplication {
         Thread.ofPlatform().daemon().name("voice-transcription-", 0).factory());
   }
 
+  @Bean(destroyMethod = "shutdown")
+  ExecutorService edgeExecutor() {
+    return new ThreadPoolExecutor(0, 2, 30, TimeUnit.SECONDS, new java.util.concurrent.SynchronousQueue<>(),
+        Thread.ofPlatform().daemon().name("attachment-reader-", 0).factory());
+  }
+
   @Bean
   Catalog catalog() {
     return new Catalog(

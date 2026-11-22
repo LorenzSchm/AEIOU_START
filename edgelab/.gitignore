@@ -1,0 +1,4 @@
+.gradle/
+build/
+# Whisper models (normally cached in ~/.cache/edgelab/whisper, never committed)
+ggml-*.bin

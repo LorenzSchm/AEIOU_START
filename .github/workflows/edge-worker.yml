@@ -1,0 +1,28 @@
+name: Edge worker on macOS
+on:
+  pull_request:
+    branches: ['feat/bullshitBranch']
+    paths: ['backend/**', 'edgelab/**', '.github/workflows/edge-worker.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      EDGELAB_GATEWAY_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify native readers, worker and release bundle
+        working-directory: backend
+        run: |
+          case "$(uname -m)" in
+            arm64) platform=macosx-arm64 ;;
+            x86_64) platform=macosx-x86_64 ;;
+            *) exit 1 ;;
+          esac
+          ./gradlew :edgelab:test :edgelab:packing-tools:test :app:test :app:edgeBundle -PtestEdgeBundle -PffmpegPlatforms="$platform"
