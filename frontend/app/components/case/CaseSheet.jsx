@@ -47,7 +47,7 @@ export default function CaseSheet(props) {
   );
 }
 
-function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyChange }) {
+function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyChange, showBoard }) {
   // The open case ticks only while its quote window is running.
   const now = useNow(inWindow(m));
   const [fields, setFields] = useState(m.fields || {});
@@ -172,7 +172,8 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
       )}
 
       <div className="sheet-body">
-        <BoardScore result={m.board_result} />
+        {/* The 5U verdict is challenge evaluation: shown only when the case is opened from the Scoreboard. */}
+        {showBoard && <BoardScore result={m.board_result} />}
         {request && proposal?.offer && (
           <div className="hero-quote">
             <div>

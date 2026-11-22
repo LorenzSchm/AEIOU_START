@@ -4,7 +4,6 @@ import { memo, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import Icon from "../ui/Icon";
 import { Chip, RouteBadge, Segmented } from "../ui/primitives";
-import { BoardChip } from "../case/BoardScore";
 import { crmModel, initials } from "../../lib/crm";
 import { eur, transitLabel } from "../../lib/format";
 import { fadeUp, stagger } from "../../lib/motion";
@@ -368,7 +367,7 @@ function Crm({ messages, onOpen }) {
     { key: "price", label: "Quoted", align: "end", value: (d) => (d.quoted ? d.allIn : null),
       render: (d) => <span className="mono">{d.quoted ? eur(d.allIn) : "—"}</span> },
     { key: "reason", label: "Reason", value: (d) => d.result.label,
-      render: (d) => <span className="row-chips"><Chip tone={d.result.tone} icon={d.result.group === "lost"}>{d.result.label}</Chip><BoardChip result={d.board} /></span> },
+      render: (d) => <span className="row-chips"><Chip tone={d.result.tone} icon={d.result.group === "lost"}>{d.result.label}</Chip></span> },
     { key: "received", label: "Received", align: "end", value: (d) => d.received,
       render: (d) => <span className="cell-stack end"><span className="mono">{hm(d.received)}</span><small>{ago(d.received, now)}</small></span> },
   ], [now]);

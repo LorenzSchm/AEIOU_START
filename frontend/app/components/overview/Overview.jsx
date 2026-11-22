@@ -7,7 +7,7 @@ import { Chip, RouteBadge } from "../ui/primitives";
 import CargoGlobe from "../globe/CargoGlobe";
 import { globeState, waveSummary } from "../../lib/process";
 import { eur, needsAttention, statusOf } from "../../lib/format";
-import { boardTotal, formatPoints, verdictTone } from "../case/BoardScore";
+import { crmModel } from "../../lib/crm";
 import { stagger } from "../../lib/motion";
 
 function Tile({ i, icon, label, value, sub, tone, wide, children }) {
@@ -52,9 +52,8 @@ function Overview({ messages, onOpen, active = true }) {
     [messages],
   );
   const attention = messages.filter(needsAttention).slice(0, 4);
-  const boards = messages.map((m) => m.board_result).filter(Boolean);
-  const boardPoints = boards.reduce((sum, b) => sum + (boardTotal(b) ?? 0), 0);
-  const boardWins = boards.filter((b) => verdictTone(b.verdict) === "ok").length;
+  // Business figures only; the 5U challenge's scoring lives on the Scoreboard view.
+  const crm = useMemo(() => crmModel(messages), [messages]);
   const sources = Object.entries(s.bySource || {}).filter(([, n]) => n > 0);
   const sourceTotal = sources.reduce((a, [, n]) => a + n, 0) || 1;
   const topDest = (s.byDestination || []).slice(0, 5);
@@ -63,9 +62,11 @@ function Overview({ messages, onOpen, active = true }) {
   return (
     <div className="overview">
       <div className="tiles">
-        <Tile i={0} wide icon="bars" label="5U board points" value={boards.length ? formatPoints(boardPoints) : "—"}
-              tone={boards.length ? "ok" : undefined}
-              sub={boards.length ? boardWins + " of " + boards.length + " accepted" : "no verdicts yet"} />
+        <Tile i={0} wide icon="euro" label="Booked value" value={crm.bookings.length ? eur(crm.kpis.bookedValue) : "—"}
+              tone={crm.bookings.length ? "ok" : undefined}
+              sub={crm.bookings.length
+                ? eur(crm.kpis.quotedValue) + " quoted · " + Math.round((crm.kpis.conversion ?? 0) * 100) + "% of requests booked"
+                : "no bookings yet"} />
         <Tile i={1} icon="mail" label="Requests" value={s.requests ?? 0} sub={(s.inProgress ?? 0) + " in progress"} />
         <Tile i={2} icon="send" label="Quoted" value={s.quoted ?? 0}
               sub={s.onTimeRate != null ? Math.round(s.onTimeRate * 100) + "% inside 6 min" : "—"}>

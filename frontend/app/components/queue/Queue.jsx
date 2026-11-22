@@ -4,7 +4,6 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../ui/Icon";
 import { Chip, CountdownRing, RouteBadge, Segmented } from "../ui/primitives";
 import ProcessStrip from "../case/ProcessStrip";
-import { BoardChip } from "../case/BoardScore";
 import { deriveProcess } from "../../lib/process";
 import { clock, kindLabel, needsAttention, statusOf } from "../../lib/format";
 import { inWindow, useNow } from "../../lib/clock";
@@ -140,7 +139,6 @@ const Row = memo(function Row({ m, thread, active, onSelect }) {
           )}
           <span className="row-chips">
             {voice && request && <span className="row-voice"><Icon name="mic" size={12} title="Voice request" /></span>}
-            <BoardChip result={m.board_result} />
             <Chip tone={status.tone}>{status.label}</Chip>
           </span>
         </span>

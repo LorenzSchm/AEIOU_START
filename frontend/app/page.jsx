@@ -270,7 +270,7 @@ export default function Page() {
       <AnimatePresence>
         {current && (
           <CaseSheet key="case-sheet" m={current} messages={messages} directory={data.directory}
-                     refresh={refresh} onClose={closeCase} onDirtyChange={onDirtyChange} />
+                     refresh={refresh} onClose={closeCase} onDirtyChange={onDirtyChange} showBoard={nav.view === "score"} />
         )}
       </AnimatePresence>
       <ConfirmDialog
