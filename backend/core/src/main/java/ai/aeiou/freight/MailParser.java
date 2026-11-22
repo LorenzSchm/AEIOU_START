@@ -74,6 +74,16 @@ public final class MailParser {
     return candidates.size() == 1 ? Optional.of(candidates.getFirst()) : Optional.empty();
   }
 
+  /** Every distinct five-digit pickup postcode written in the text, in order. */
+  public static List<String> pickupPostcodes(String text) {
+    return STREET_POSTCODE
+        .matcher(text)
+        .results()
+        .map(m -> m.group(1) != null ? m.group(1) : m.group(2) != null ? m.group(2) : m.group(3))
+        .distinct()
+        .toList();
+  }
+
   public static String authoredText(String body) {
     return body.split(
         "(?im)^\\h*(?:>|On .+ wrote:|Am .+ schrieb|Le .+ a [ée]crit\\h*:|"

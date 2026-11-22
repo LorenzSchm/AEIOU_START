@@ -1097,6 +1097,16 @@ class RfqGateway {
       var postcode = MailParser.pickupPostcode(source, known.pickupZone());
       if (postcode.isPresent() && postcode.get().endsWith(zone)) zone = known.pickupZone();
     }
+    if (pickup) {
+      // The pickup zone is the first two digits of the postcode. When the customer wrote exactly
+      // one postcode, derive the zone from it rather than trusting the model, which has read
+      // 40073 as zone 73 before.
+      var postcodes = MailParser.pickupPostcodes(MailParser.authoredText(body));
+      if (postcodes.size() == 1) {
+        String derived = postcodes.getFirst().substring(0, 2);
+        if (catalog.zones.containsKey(derived)) zone = derived;
+      }
+    }
     String preference = text(response, "preference");
     if (preference == null) preference = known.preference();
     if (preference != null && known.preference() != null) {
@@ -1148,8 +1158,22 @@ class RfqGateway {
       MailParser.Parsed local, boolean truncated) {
     var checked = validate(response, mail, truncated);
     if (checked.issue() != null) return new MailParser.Parsed(local.shipment(), checked.issue());
-    return standardDatesAgree(response, Ledger.str(mail, "body")) ? local
-        : new MailParser.Parsed(local.shipment(), UNVERIFIED_STANDARD_DATES);
+    if (!standardDatesAgree(response, Ledger.str(mail, "body")))
+      return new MailParser.Parsed(local.shipment(), UNVERIFIED_STANDARD_DATES);
+    // Java's own parse stays authoritative. When it could not complete the shipment, or missed a
+    // pickup the model found (for example a request written in a language its patterns miss), use
+    // the cross-checked extraction: never quote without the requested pickup, and never ask the
+    // customer for details they already gave.
+    boolean missedPickup = local.shipment() != null && local.shipment().pickupZone() == null
+        && checked.shipment() != null && checked.shipment().pickupZone() != null;
+    return local.issue() != null || missedPickup ? checked : local;
+  }
+
+  /** The one ISO date written in the text, or null when there is none or more than one. */
+  static String onlyIsoDate(String text) {
+    var dates = Pattern.compile("(?<!\\d)\\d{4}-\\d{2}-\\d{2}(?!\\d)").matcher(text).results()
+        .map(java.util.regex.MatchResult::group).distinct().toList();
+    return dates.size() == 1 ? dates.getFirst() : null;
   }
 
   private static boolean standardDatesAgree(JsonNode response, String body) {
@@ -1158,7 +1182,8 @@ class RfqGateway {
     String proposedReady = text(response, "ready_date");
     String proposedDeadline = text(response, "arrive_by");
     boolean deadlineRequested = flag(response, "arrival_deadline_requested");
-    if (proposedReady != null && !proposedReady.equals(Objects.toString(ready, null))) return false;
+    if (proposedReady != null && !proposedReady.equals(Objects.toString(ready, null))
+        && !(ready == null && proposedReady.equals(onlyIsoDate(MailParser.authoredText(body))))) return false;
     if (deadlineRequested || proposedDeadline != null) {
       return arrival != null && arrival.complete()
           && (proposedDeadline == null || proposedDeadline.equals(arrival.arriveBy().toString()));
