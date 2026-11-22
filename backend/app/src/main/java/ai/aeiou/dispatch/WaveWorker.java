@@ -17,6 +17,8 @@ import org.springframework.web.client.*;
 class WaveWorker {
   private static final Logger log = LoggerFactory.getLogger(WaveWorker.class);
   private static final long PORTAL_COMPARISON_SECONDS = 95;
+  /** With only the town known and no usable truck bid by then, the pickup is estimated from recent bids. */
+  static final long PICKUP_ESTIMATE_SECONDS = 240;
   private static final java.util.regex.Pattern DEPARTURE_TIMING = java.util.regex.Pattern.compile(
       "(?iu)\\b(?:earliest (?:available )?departure|departure and arrival (?:times?|dates?)|"
           + "departure (?:time|date))\\b");
@@ -618,6 +620,15 @@ class WaveWorker {
     }
     var calculation = calculate(id, s, null, true);
     var draft = calculation.draft();
+    if (draft.offer() == null && !draft.notes().contains(QuoteChecks.PICKUP_REVIEW)
+        && s.pickupZone() != null && draft.pickupEur() == null && details.area() != null
+        && !clock.instant().isBefore(received.plusSeconds(PICKUP_ESTIMATE_SECONDS))) {
+      var estimated = estimatedPickup(id, m, s, details);
+      if (estimated != null) {
+        calculation = estimated;
+        draft = estimated.draft();
+      }
+    }
     if (draft.offer() == null) {
       String reason = String.join(" ", draft.notes());
       if (draft.notes().contains(QuoteChecks.PICKUP_REVIEW)) {
@@ -660,6 +671,28 @@ class WaveWorker {
     }
     save(id, s, calculation.draft(), false);
     sendQuote(id, calculation.draft().revision(), true);
+  }
+
+  /**
+   * Prices the air leg with a collection estimated from recent firm truck bids for the confirmed town, once
+   * the truckers have not quoted citywide in time. The draft keeps the town so the quote says the price is
+   * an estimate to confirm with the exact address; the stored shipment keeps no pickup price, so a real
+   * trucker bid still replaces the estimate on any later calculation.
+   */
+  private Calculation estimatedPickup(long id, Map<String, Object> mail, Shipment s,
+      CustomerClarifications.Details details) {
+    var excluded = carrierRestrictions.forRequest(id, mail);
+    var estimate = PickupEstimate.estimate(ledger, catalog, s, details.area(), id, clock.instant(),
+        carrier -> carrierRestrictions.excludes(excluded, carrier)).orElse(null);
+    if (estimate == null) return null;
+    var priced = s.withPickup(estimate.eur(), estimate.days());
+    var draft = calculate(id, priced, null, true).draft();
+    if (draft.offer() == null) return null;
+    String body = quoteBody(details, priced, draft.offer(), draft.pickupDays(), draft.pickupWaitingDisclosure(),
+        draft.insurance(), details.area());
+    log.info("RFQ {}: pickup from {} estimated at EUR {} and {} h with {} ({})", id, details.area(),
+        estimate.eur().toPlainString(), Math.round(estimate.days() * 24), estimate.carrier(), estimate.basis());
+    return new Calculation(draft.withPickupEstimate(details.area(), body));
   }
 
   private void requestRateDesk(long id, Shipment shipment, Instant deadline) {
@@ -1134,11 +1167,25 @@ class WaveWorker {
       Instant pickupValidUntil,
       String pickupWaitingDisclosure,
       CargoInsurance insurance,
-      BigDecimal airEur) {
+      BigDecimal airEur,
+      String pickupEstimate) {
     Draft(String revision, Offer offer, List<Offer> alternatives, List<String> notes, String body,
         String trucker, BigDecimal pickupEur, Double pickupDays, Instant pickupValidUntil) {
       this(revision, offer, alternatives, notes, body, trucker, pickupEur, pickupDays,
           pickupValidUntil, null, null, null);
+    }
+
+    Draft(String revision, Offer offer, List<Offer> alternatives, List<String> notes, String body,
+        String trucker, BigDecimal pickupEur, Double pickupDays, Instant pickupValidUntil,
+        String pickupWaitingDisclosure, CargoInsurance insurance, BigDecimal airEur) {
+      this(revision, offer, alternatives, notes, body, trucker, pickupEur, pickupDays,
+          pickupValidUntil, pickupWaitingDisclosure, insurance, airEur, null);
+    }
+
+    /** The pickup price was estimated from recent truck bids for this city, not quoted by a trucker. */
+    Draft withPickupEstimate(String area, String quote) {
+      return new Draft(revision, offer, alternatives, notes, quote, trucker, pickupEur, pickupDays,
+          pickupValidUntil, pickupWaitingDisclosure, insurance, airEur, area);
     }
 
     Offer allIn(Shipment shipment, Offer air) {
@@ -1153,7 +1200,8 @@ class WaveWorker {
 
     Draft withOffer(Offer current, List<Offer> options, String quote, BigDecimal currentAirEur) {
       return new Draft(revision, current, List.copyOf(options), notes, quote, trucker,
-          pickupEur, pickupDays, pickupValidUntil, pickupWaitingDisclosure, insurance, currentAirEur);
+          pickupEur, pickupDays, pickupValidUntil, pickupWaitingDisclosure, insurance, currentAirEur,
+          pickupEstimate);
     }
 
     boolean matchesQuotedTerms(Offer current) {
@@ -1328,7 +1376,7 @@ class WaveWorker {
       options = options.stream().map(insurance::addTo).toList();
     }
     var pickupDays = plan.pickupDays();
-    String body = best == null ? "" : quoteBody(details, s, best, pickupDays, null, insurance);
+    String body = best == null ? "" : quoteBody(details, s, best, pickupDays, null, insurance, null);
     var notes = new ArrayList<>(plan.notes());
     if (conditionalPickup && s.pickupZone() != null && plan.pickupEur() == null)
       notes.add(QuoteChecks.PICKUP_REVIEW);
@@ -1433,10 +1481,10 @@ class WaveWorker {
 
   private String quoteBody(
       CustomerClarifications.Details details, Shipment s, Offer offer, Double pickupDays,
-      String pickupWaitingDisclosure, CargoInsurance insurance) {
+      String pickupWaitingDisclosure, CargoInsurance insurance, String pickupEstimate) {
     var language = details.language();
     return Greeting.at(details.message(), clock.instant(), language)
-        + "\n\n" + quoteTerms(details, s, offer, pickupDays, pickupWaitingDisclosure)
+        + "\n\n" + quoteTerms(details, s, offer, pickupDays, pickupWaitingDisclosure, pickupEstimate)
         + (insurance == null ? "" : "\n\n" + insurance.disclosure(language))
         + "\n\n" + language.text("Would you like us to book it for you?",
             "Souhaitez-vous que nous réservions ce transport ?",
@@ -1447,7 +1495,7 @@ class WaveWorker {
 
   private String quoteTerms(
       CustomerClarifications.Details details, Shipment s, Offer offer, Double pickupDays,
-      String pickupWaitingDisclosure) {
+      String pickupWaitingDisclosure, String pickupEstimate) {
     var language = details.language();
     var arrival = arrivalWindow(details);
     String weight = Shipment.displayKg(s.weightKg());
@@ -1466,7 +1514,8 @@ class WaveWorker {
         "您这票 %2$s 公斤、从 %3$s 运往 %4$s 的货物，%1$s由 %5$s 承运，全包价为 %6$s。",
         "%3$s–%4$s arasında %2$s kg yükünüz için %1$s %5$s ile tüm masraflar dahil %6$s tutarındadır.")
         .formatted(priority, weight, s.origin(), s.destination(), offer.airline(), price);
-    return offerLine + "\n\n" + quoteService(details, s, offer, pickupDays, pickupWaitingDisclosure);
+    return offerLine + "\n\n" + quoteService(details, s, offer, pickupDays, pickupWaitingDisclosure,
+        pickupEstimate);
   }
 
   private String separateQuoteTerms(int number, CustomerClarifications.Details details, Shipment s, Draft draft) {
@@ -1481,12 +1530,13 @@ class WaveWorker {
     return heading + "\n"
         + "%s kg · %s m³ · %s".formatted(Shipment.displayKg(s.weightKg()),
             Shipment.displayCbm(s.volumeCbm()), offer.airline())
-        + "\n" + quoteService(details, s, offer, draft.pickupDays(), draft.pickupWaitingDisclosure())
+        + "\n" + quoteService(details, s, offer, draft.pickupDays(), draft.pickupWaitingDisclosure(),
+            draft.pickupEstimate())
         + (draft.insurance() == null ? "" : "\n" + draft.insurance().disclosure(language));
   }
 
   private String quoteService(CustomerClarifications.Details details, Shipment s, Offer offer, Double pickupDays,
-      String pickupWaitingDisclosure) {
+      String pickupWaitingDisclosure, String pickupEstimate) {
     var language = details.language();
     var arrival = arrivalWindow(details);
     boolean scheduleRequested = QuoteChecks.scheduleInformation(details.message());
@@ -1510,7 +1560,15 @@ class WaveWorker {
               "Comptez environ %s entre l’enlèvement et l’arrivée.",
               "Die Laufzeit von der Abholung bis zur Ankunft beträgt etwa %s.",
               "从提货到货物抵达约需 %s。");
-      service = pickup.formatted(location) + timing.formatted(transit);
+      String estimate = pickupEstimate == null ? "" : language.text(
+          "The collection price is based on recent %s rates; we will confirm it with the exact pickup address. ",
+          "Le prix de l’enlèvement repose sur les tarifs récents pour %s ; nous le confirmerons avec l’adresse"
+              + " exacte d’enlèvement. ",
+          "Der Abholpreis beruht auf aktuellen Tarifen für %s; wir bestätigen ihn mit der genauen Abholadresse. ",
+          "提货费按 %s 近期运价估算，我们将根据确切的提货地址予以确认。",
+          "Toplama ücreti %s için güncel tarifelere dayanmaktadır; kesin toplama adresiyle teyit edeceğiz. ")
+          .formatted(pickupEstimate);
+      service = pickup.formatted(location) + estimate + timing.formatted(transit);
     }
     if (arrival != null && arrival.complete()) {
       var estimated = arrival.estimatedArrival(quoteDay(), offer.days());
@@ -1909,7 +1967,8 @@ class WaveWorker {
     String body = details.language() == CustomerLanguage.ENGLISH && arrival == null
         && MailParser.cargoReadyDate(Ledger.str(details.message(), "body")) == null
         ? Greeting.refresh(d.body(), details.message(), clock.instant())
-        : quoteBody(details, shipment, d.offer(), d.pickupDays(), d.pickupWaitingDisclosure(), d.insurance());
+        : quoteBody(details, shipment, d.offer(), d.pickupDays(), d.pickupWaitingDisclosure(), d.insurance(),
+            d.pickupEstimate());
     boolean greetingChanged = !body.equals(d.body());
     if (greetingChanged) d = d.withOffer(d.offer(), d.alternatives(), body);
     try {
@@ -2003,7 +2062,7 @@ class WaveWorker {
               .subtract(draft.pickupEur() == null ? BigDecimal.ZERO : draft.pickupEur())
               .subtract(draft.insurance() == null ? BigDecimal.ZERO : draft.insurance().premiumEur());
         return draft.withOffer(candidate, options, quoteBody(details, shipment, candidate,
-            draft.pickupDays(), draft.pickupWaitingDisclosure(), draft.insurance()), airEur);
+            draft.pickupDays(), draft.pickupWaitingDisclosure(), draft.insurance(), draft.pickupEstimate()), airEur);
       } else {
         options.removeFirst();
       }

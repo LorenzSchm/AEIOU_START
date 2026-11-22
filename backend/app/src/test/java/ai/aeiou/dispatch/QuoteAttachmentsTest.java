@@ -32,6 +32,10 @@ class QuoteAttachmentsTest {
         """).isEmpty());
     assertEquals(EnumSet.of(QuoteAttachments.Format.XLS), QuoteAttachments.requested("RFQ",
         "Please send your offer as an Excel (.xls) file."));
+    // Live #56801 was rejected with no_pdf_offer: the customer asked for the price, not the offer.
+    assertEquals(EnumSet.of(QuoteAttachments.Format.PDF), QuoteAttachments.requested("Air freight quote to LIM",
+        "Please send your all-in price in EUR as a PDF attached to your reply so our purchasing department can"
+            + " file it."));
     assertEquals(EnumSet.of(QuoteAttachments.Format.PDF, QuoteAttachments.Format.DOCX),
         QuoteAttachments.requested("RFQ", "Please attach your offer as a PDF and Word document."));
     assertEquals(EnumSet.of(QuoteAttachments.Format.XLSX), QuoteAttachments.requested("RFQ",
