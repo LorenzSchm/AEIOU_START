@@ -8,6 +8,7 @@ const MOCK = process.env.NEXT_PUBLIC_MOCK === "1";
 export async function api(path, data) {
   if (MOCK) {
     if (data !== undefined) throw Error("Mock mode is read-only. Start the backend to run actions.");
+    if (path === "/tariff-sheets") return { can_decide: false, sheets: [] };
     const { mockData } = await import("./mock");
     const d = mockData();
     return path === "/status" ? d.status : path === "/messages" ? d.messages : d.directory;

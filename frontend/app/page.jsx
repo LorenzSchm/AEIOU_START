@@ -9,6 +9,7 @@ import Crm from "./components/crm/Crm";
 import Scoreboard from "./components/score/Scoreboard";
 import CaseSheet from "./components/case/CaseSheet";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
+import RateSheets from "./components/rates/RateSheets";
 import { useDispatchData } from "./lib/api";
 import { clock, needsAttention } from "./lib/format";
 import { spring } from "./lib/motion";
@@ -17,17 +18,17 @@ const NAV = [
   { id: "overview", label: "Overview", icon: "overview" },
   { id: "queue", label: "Queue", icon: "queue" },
   { id: "crm", label: "Shipments", icon: "box" },
+  { id: "rates", label: "Rate sheets", icon: "euro" },
   // The challenge's own evaluation, kept apart from the product views.
   { id: "score", label: "Scoreboard", icon: "target", group: "5U challenge" },
 ];
-const TITLES = { overview: "Overview", queue: "Queue", crm: "Shipments", score: "Scoreboard" };
 const EYEBROWS = { score: "5U challenge · Evaluation" };
 
 function readUrl() {
   if (typeof window === "undefined") return { view: "overview", caseId: null, scope: "attention" };
   const p = new URLSearchParams(window.location.search);
   return {
-    view: ["queue", "crm", "score"].includes(p.get("view")) ? p.get("view") : "overview",
+    view: NAV.some(({ id }) => id === p.get("view")) ? p.get("view") : "overview",
     caseId: p.get("case") ? Number(p.get("case")) : null,
     scope: ["attention", "requests", "all"].includes(p.get("scope")) ? p.get("scope") : "attention",
   };
@@ -179,7 +180,9 @@ export default function Page() {
   // Stable callbacks so memoised views (Queue, Overview, rows) don't re-render on every parent render.
   const openCase = useCallback((id, opts) => guardedGo({ caseId: id }, opts), [guardedGo]);
   const setScope = useCallback((scope) => go({ scope }), [go]);
-  const setView = useCallback((view) => go({ view }), [go]);
+  const setView = useCallback((view) => (
+    view === "rates" ? guardedGo({ view, caseId: null }) : go({ view })
+  ), [go, guardedGo]);
 
   return (
     <div className="app">
@@ -217,7 +220,7 @@ export default function Page() {
         <header className="page-head">
           <div>
             <div className="eyebrow">{EYEBROWS[nav.view] || "Air export · Live wave"}</div>
-            <h1>{TITLES[nav.view] || "Overview"}</h1>
+            <h1>{NAV.find(({ id }) => id === nav.view)?.label || "Overview"}</h1>
           </div>
         </header>
 
@@ -230,7 +233,7 @@ export default function Page() {
           )}
         </AnimatePresence>
 
-        {!data ? (
+        {nav.view === "rates" ? <RateSheets /> : !data ? (
           <div className="skeleton-grid" aria-busy="true" aria-label="Loading">
             {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton glass" />)}
           </div>

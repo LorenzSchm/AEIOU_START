@@ -14,13 +14,15 @@ class DispatchController {
   private final Catalog catalog;
   private final FiveU upstream;
   private final PortalBookings bookings;
+  private final CarrierTariffs tariffs;
   private final WriterLease lease;
   private final PostgresReplica replica;
   private final com.fasterxml.jackson.databind.ObjectMapper json;
 
   DispatchController(
       Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings,
-      WriterLease lease, PostgresReplica replica, com.fasterxml.jackson.databind.ObjectMapper json) {
+      CarrierTariffs tariffs, WriterLease lease, PostgresReplica replica,
+      com.fasterxml.jackson.databind.ObjectMapper json) {
     this.bookings = bookings;
     this.lease = lease;
     this.replica = replica;
@@ -29,6 +31,7 @@ class DispatchController {
     this.wave = wave;
     this.catalog = catalog;
     this.upstream = upstream;
+    this.tariffs = tariffs;
   }
 
   /** Worker status. A read-only desk adds when its replica last synced from the writer's Postgres. */
@@ -60,6 +63,18 @@ class DispatchController {
   record Invite(Shipment shipment, String email) {}
 
   record Reply(String body) {}
+
+  record TariffDecision(String decision) {}
+
+  @GetMapping("/tariff-sheets")
+  CarrierTariffs.Queue tariffSheets() {
+    return tariffs.queue();
+  }
+
+  @PostMapping(path = "/tariff-sheets/{id}/decision", consumes = MediaType.APPLICATION_JSON_VALUE)
+  Map<String, String> tariffDecision(@PathVariable long id, @RequestBody TariffDecision input) {
+    return Map.of("state", tariffs.decide(id, input.decision()));
+  }
 
   @PostMapping("/messages/{id}/price")
   WaveWorker.Draft price(@PathVariable long id, @RequestBody Price input) {

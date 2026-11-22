@@ -3,11 +3,13 @@ package ai.aeiou.dispatch;
 import ai.aeiou.freight.Catalog;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -33,9 +35,10 @@ public class DispatchApplication {
   }
 
   @Bean
-  Catalog catalog() {
+  Catalog catalog(@Value("${dispatch.tariff-dir}") Path tariffDirectory) {
     return new Catalog(
-        file("tariffs-2026-11.csv"), file("carrier-list.csv"), file("pickup_zones.csv"));
+        file("tariffs-2026-11.csv"), file("carrier-list.csv"), file("pickup_zones.csv"),
+        tariffDirectory);
   }
 
   private Reader file(String name) {

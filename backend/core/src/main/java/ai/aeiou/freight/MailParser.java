@@ -8,10 +8,42 @@ import java.util.regex.*;
 
 public final class MailParser {
   private static final String NUM = "(?<![\\w.,-])(\\d+(?:[.,]\\d+)*)(?![.,]\\d)";
+  private static final String UNIT_END = "(?![\\p{L}\\p{N}_])";
+  private static final String METRIC_WEIGHT = "kgs?|kilograms?";
+  private static final String IMPERIAL_WEIGHT = "lbs?\\.?|pounds?";
+  private static final String METRIC_VOLUME = "cbm|m³|m3|cubic met(?:er|re)s?";
+  private static final String IMPERIAL_VOLUME = "cubic (?:feet|foot)|cu\\.?\\h+ft\\.?|ft(?:³|\\^?3)";
+  private static final Pattern WEIGHT_QUANTITY = quantityPattern(METRIC_WEIGHT, IMPERIAL_WEIGHT);
+  private static final Pattern VOLUME_QUANTITY = quantityPattern(METRIC_VOLUME, IMPERIAL_VOLUME);
+  private static final BigDecimal KG_PER_POUND = new BigDecimal("0.45359237");
+  private static final BigDecimal CBM_PER_CUBIC_FOOT = new BigDecimal("0.028316846592");
+  public static final String ARRIVAL_DATES_ISSUE = "Confirm the cargo ready date and latest arrival date.";
+  private static final String ISO_DATE = "\\d{4}-\\d{2}-\\d{2}(?![\\p{L}\\d])";
+  private static final Pattern READY_DATE = pattern(
+      "\\b(?:ready(?:\\h+for\\h+(?:pickup|collection|drop[ -]?off))?|available)\\h+(?:(?:on|from)\\h+)?("
+          + ISO_DATE + ")");
+  private static final Pattern READY_AT_LOCATION_DATE = pattern(
+      "\\bready for (?:pickup|collection) at\\h+[^.!?;\\r\\n]{1,120}?\\bon\\h+(" + ISO_DATE + ")");
+  private static final Pattern REQUOTE_REQUEST = pattern(
+      "\\b(?:update|revise|reprice) (?:your |the |our |this )?(?:offer|quote)\\b"
+          + "|\\b(?:send|provide|issue) (?:us |me )?(?:an? )?(?:updated|revised|new) (?:offer|quote)\\b");
+  private static final Pattern OTHER_REVISION = pattern(
+      "\\b(?:new|different|changed|updated|revised|corrected) (?:destination|origin|airport|postcode|address|"
+          + "delivery date|ready date|pickup date|deadline|departure|route|service|cargo type)\\b"
+          + "|\\b(?:arrange|cancel|change|switch) (?:the |our |to )?(?:pickup|collection|destination|service)\\b"
+          + "|\\b(?:dangerous goods|hazardous|lithium|dry ice|refrigerated|temperature.controlled)\\b");
+  private static final Pattern ARRIVAL_DEADLINE = pattern(
+      "\\b(?:arriv(?:e|es|al)|reach|delivered|delivery)\\b[^.!?;\\r\\n]{0,65}?\\b"
+          + "(?:no later than|on or before|by(?=\\h+(?:\\d|today\\b|tomorrow\\b|next\\b|"
+          + "(?:mon|tue|wed|thu|fri|sat|sun|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\p{L}*\\b)))"
+          + "\\h+(" + ISO_DATE + ")?");
+  private static final Pattern DEADLINE_TIME =
+      pattern("^\\h+(?:at\\h+)?\\d{1,2}(?::\\d{2}|\\h*(?:am|pm)\\b)");
 
   private static final Pattern STREET_POSTCODE =
       Pattern.compile(
-          "(?iu:\\b(?:PLZ|post\\s*code|postal code|zip(?: code)?)\\s*(?:is\\s+|ist\\s+|[:#-]\\s*)?)([0-9]{5})\\b"
+          "(?iu:(?:\\b(?:PLZ|post\\s*code|postal code|zip(?: code)?)|邮编|郵編|郵遞區號)\\s*"
+              + "(?:is\\s+|ist\\s+|[:：#-]\\s*)?)([0-9]{5})(?![0-9])"
               + "|(?<![\\p{L}\\d.,])(?:D-)?([0-9]{5})\\h+\\(?(?=\\p{Lu}\\p{Ll})");
 
   public static Optional<String> pickupPostcode(String text, String zone) {
@@ -28,7 +60,9 @@ public final class MailParser {
 
   public static String authoredText(String body) {
     return body.split(
-        "(?im)^\\h*(?:>|On .+ wrote:|Am .+ schrieb|[- ]{2,}(?:Original|Forwarded) Message[- ]{2,})",
+        "(?im)^\\h*(?:>|On .+ wrote:|Am .+ schrieb|Le .+ a [ée]crit\\h*:|"
+            + "[- ]{2,}(?:(?:Original|Forwarded) Message|Message (?:d['’]origine|transf[ée]r[ée])|"
+            + "Urspr[üu]ngliche Nachricht)[- ]{2,})",
         2)[0].strip();
   }
 
@@ -38,17 +72,20 @@ public final class MailParser {
     return subject;
   }
 
-  private static boolean selfDelivery(String body) {
-    return has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b");
+  public static boolean selfDelivery(String body) {
+    return has(body, "\\bwe(?: will|'ll|’ll) deliver[^.!?\\n]{0,100}\\bourselves\\b|"
+        + "\\bnous (?:la |le |les )?(?:d[ée]poserons|livrerons|apporterons)[^.!?\\n]{0,100}\\bnous-mêmes\\b|"
+        + "\\bwir (?:liefern|bringen)[^.!?\\n]{0,100}\\bselbst\\b");
   }
 
   public static boolean requestsPickup(String subject, String body) {
     String text = (subject + "\n" + body).replaceAll(
-        "(?iu)\\b(?:no need to arrange|no need for) (?:a |the )?(?:truck )?(?:pick[ -]?up|collection)\\b",
-        "");
+        "(?iu)\\b(?:(?:no need to arrange|no need for) (?:a |the )?(?:truck )?(?:pick[ -]?up|collection)"
+            + "|(?:pas besoin d['’]|aucun )enl[èe]vement|keine? (?:abholung|vorlauf))\\b", "");
     if (selfDelivery(body)) text = text.replaceAll("(?iu)\\bready for pick[ -]?up\\b", "");
     return has(text, "pick[ -]?up|collect(?:ion)?\\b|truck(?:ing| pickup)? from|arrange (?:the |a )?truck|door["
-        + " -]to|abhol|vorlauf|ex[ -]?works|\\bEXW\\b");
+        + " -]to|abhol|vorlauf|enl[èe]vement|collecte|上门提货|上門提貨|安排提货|安排提貨|"
+        + "ex[ -]?works|\\bEXW\\b");
   }
 
   private static Pattern pattern(String s) {
@@ -80,9 +117,25 @@ public final class MailParser {
     return unique.size() == 1 ? unique.iterator().next() : null;
   }
 
-  private static BigDecimal quantity(String text, String unit) {
-    var values = captures(text, NUM + "\\s*(?:" + unit + ")\\b");
-    return values.size() == 1 ? number(values.getFirst()) : null;
+  private static Pattern quantityPattern(String metric, String imperial) {
+    return pattern(NUM + "\\s*(?:(?:" + metric + ")|(" + imperial + "))" + UNIT_END);
+  }
+
+  private static BigDecimal quantity(String text, Pattern pattern, BigDecimal imperialFactor) {
+    var values = pattern.matcher(text).results().map(match -> {
+      var value = number(match.group(1));
+      return value == null || match.group(2) == null ? value : value.multiply(imperialFactor).stripTrailingZeros();
+    }).toList();
+    if (values.isEmpty() || values.getFirst() == null) return null;
+    BigDecimal first = values.getFirst();
+    return values.stream().allMatch(value -> value != null && first.compareTo(value) == 0) ? first : null;
+  }
+
+  private static boolean perPieceQuantity(String text, String units) {
+    String unit = "(?:" + units + ")" + UNIT_END;
+    return has(text, "\\b\\d+\\s*[x×]\\s*" + NUM + "\\s*" + unit
+        + "|" + NUM + "\\s*" + unit + "\\s*(?:each|per (?:piece|pallet|crate))\\b"
+        + "|\\b(?:each|per piece)\\s*[:=]?\\s*" + NUM + "\\s*" + unit);
   }
 
   private static BigDecimal dimensions(String text) {
@@ -187,12 +240,130 @@ public final class MailParser {
           packed.group(4).equalsIgnoreCase("each") ? cbm.multiply(count) : cbm);
     }
     if (has(line, "\\b(?:each|per|net)\\b")) return null;
-    var kg = quantity(line, "kg|kgs|kilograms?");
-    var cbm = quantity(line, "cbm|m³|m3|cubic met(?:er|re)s?");
+    var kg = quantity(line, WEIGHT_QUANTITY, KG_PER_POUND);
+    var cbm = quantity(line, VOLUME_QUANTITY, CBM_PER_CUBIC_FOOT);
     return kg == null || cbm == null ? null : new LotTotals(kg, cbm);
   }
 
   public record Parsed(Shipment shipment, String issue) {}
+
+  public record ArrivalWindow(LocalDate readyOn, LocalDate arriveBy) {
+    public boolean complete() {
+      return readyOn != null && arriveBy != null && !arriveBy.isBefore(readyOn);
+    }
+
+    public LocalDate estimatedArrival(LocalDate today, double transitDays) {
+      return (readyOn.isBefore(today) ? today : readyOn).plusDays((long) Math.ceil(transitDays));
+    }
+
+    public boolean allows(LocalDate today, double transitDays) {
+      return complete() && !estimatedArrival(today, transitDays).isAfter(arriveBy);
+    }
+  }
+
+  public static ArrivalWindow arrivalWindow(String body) {
+    String text = authoredText(body);
+    var deadlines = ARRIVAL_DEADLINE.matcher(text).results().toList();
+    if (deadlines.isEmpty()) return null;
+    // Published transit is in days. Time-of-day deadlines require a confirmed schedule.
+    var latest = deadlines.stream().map(match ->
+        DEADLINE_TIME.matcher(text.substring(match.end())).find() ? null : match.group(1)).toList();
+    return new ArrivalWindow(cargoReadyDate(text), onlyDate(latest));
+  }
+
+  public static LocalDate cargoReadyDate(String body) {
+    String text = authoredText(body);
+    return onlyDate(java.util.stream.Stream.concat(READY_DATE.matcher(text).results(),
+        READY_AT_LOCATION_DATE.matcher(text).results()).map(match -> match.group(1)).toList());
+  }
+
+  public static boolean requestsRequote(String body) {
+    return REQUOTE_REQUEST.matcher(authoredText(body)).find();
+  }
+
+  public record ShipmentRevision(Shipment shipment, Integer pieces) {}
+
+  public static Optional<ShipmentRevision> shipmentRevision(Shipment prior, String body) {
+    if (!requestsRequote(body) || prior == null) return Optional.empty();
+    String text = authoredText(body);
+    if (OTHER_REVISION.matcher(text).find() || arrivalWindow(text) != null || cargoReadyDate(text) != null
+        || perPieceQuantity(text, METRIC_WEIGHT + "|" + IMPERIAL_WEIGHT)
+        || perPieceQuantity(text, METRIC_VOLUME + "|" + IMPERIAL_VOLUME)) return Optional.empty();
+    boolean hasWeight = WEIGHT_QUANTITY.matcher(text).find();
+    boolean hasVolume = VOLUME_QUANTITY.matcher(text).find();
+    if (!hasWeight && !hasVolume) return Optional.empty();
+    var weight = hasWeight ? quantity(text, WEIGHT_QUANTITY, KG_PER_POUND) : prior.weightKg();
+    var volume = hasVolume ? quantity(text, VOLUME_QUANTITY, CBM_PER_CUBIC_FOOT) : prior.volumeCbm();
+    if (weight == null || volume == null) return Optional.empty();
+    String pieces = only(captures(text, "\\b([1-9]\\d{0,5})\\h+(?:pieces|pcs|cartons|boxes|pallets)\\b"));
+    return Optional.of(new ShipmentRevision(new Shipment(prior.origin(), prior.destination(), weight,
+        volume, prior.preference(), prior.pickupZone(), null, 0), pieces == null ? null : Integer.valueOf(pieces)));
+  }
+
+  private static LocalDate onlyDate(List<String> dates) {
+    String date = only(dates);
+    try {
+      return date == null ? null : LocalDate.parse(date);
+    } catch (DateTimeParseException ex) {
+      return null;
+    }
+  }
+
+  private static final Pattern SEPARATE_SHIPMENTS = pattern(
+      "\\b(?:both|two|three|multiple|several|separate|each of (?:these|the)) (?:\\w+ )?shipments\\b"
+          + "|\\bboth quotes\\b[^.!?\\n]{0,110}\\b(?:same|one|single) (?:email|reply|message)\\b"
+          + "|\\bseparate (?:all[ -]in )?(?:prices?|quotes?)\\b[^.!?\\n]{0,90}\\b(?:each shipment|both shipments)\\b");
+  private static final Pattern SHIPMENT_COUNT = pattern("\\b(both|two|three) (?:\\w+ )?shipments\\b");
+  private static final Pattern SHIPMENT_ROW =
+      Pattern.compile("(?m)^\\h*(\\d{1,2})[.)]\\h+([^\\r\\n]+)");
+  private static final Pattern ROUTE_AT_START = Pattern.compile(
+      "^(?:(?i:to)\\h+|(?i:destination(?:\\h+airport)?)\\h*[:–—-]?\\h*)?([A-Z]{3})\\b");
+  private static final Pattern PIECES = pattern("\\b(\\d{1,7})\\h+(?:pieces?|pcs)\\b");
+
+  public record QuoteShipment(Shipment shipment, String text, Integer pieces) {}
+  public record SeparateShipments(List<QuoteShipment> shipments, String issue, String sharedText) {
+    SeparateShipments(List<QuoteShipment> shipments, String issue) {
+      this(shipments, issue, "");
+    }
+  }
+
+  public static SeparateShipments separateShipments(String subject, String body, boolean attachments,
+      Catalog catalog) {
+    subject = currentSubject(subject, body);
+    body = authoredText(body);
+    var rows = SHIPMENT_ROW.matcher(body).results().toList();
+    String request = subject + "\n" + body;
+    boolean requested = SEPARATE_SHIPMENTS.matcher(request).find();
+    if (!requested && rows.stream().filter(row -> {
+      var route = ROUTE_AT_START.matcher(row.group(2));
+      return route.find() && catalog.destinations.contains(route.group(1));
+    }).count() < 2) return null;
+    if (attachments)
+      return new SeparateShipments(List.of(), "Review the packing documents for each shipment.");
+    if (rows.size() < 2 || rows.size() > 8 || SHIPMENT_COUNT.matcher(request).results().anyMatch(
+        count -> rows.size() != ("three".equalsIgnoreCase(count.group(1)) ? 3 : 2)))
+      return new SeparateShipments(List.of(), "Confirm every separately priced shipment and its cargo details.");
+
+    String shared = body.substring(0, rows.getFirst().start()) + "\n" + body.substring(rows.getLast().end());
+    var shipments = new ArrayList<QuoteShipment>();
+    for (var row : rows) {
+      int index = shipments.size();
+      var route = ROUTE_AT_START.matcher(row.group(2));
+      if (Integer.parseInt(row.group(1)) != index + 1 || !route.find()
+          || !catalog.destinations.contains(route.group(1)))
+        return new SeparateShipments(List.of(), "Confirm the destination of each separately priced shipment.");
+      if (index > 0 && !body.substring(rows.get(index - 1).end(), row.start()).isBlank())
+        return new SeparateShipments(List.of(), "Review the additional instructions for each shipment.");
+      String destination = route.group(1);
+      String text = shared + "\n" + row.group(2);
+      var parsed = request("Air freight quote to " + destination, text, false, catalog);
+      if (parsed.issue() != null)
+        return new SeparateShipments(List.of(), destination + ". " + parsed.issue());
+      var pieces = PIECES.matcher(row.group(2));
+      shipments.add(new QuoteShipment(parsed.shipment(), text, pieces.find() ? Integer.valueOf(pieces.group(1)) : null));
+    }
+    return new SeparateShipments(List.copyOf(shipments), null, shared);
+  }
 
   public static Parsed request(String subject, String body, boolean attachments, Catalog catalog) {
     return request(subject, body, attachments, catalog, null);
@@ -221,22 +392,38 @@ public final class MailParser {
                 text,
                 "\\b(?:zone|PLZ|postal code|post ?code|zip(?:"
                     + " code)?)\\s*[:#-]?\\s*(\\d{2})(?:\\d{3})?\\b"));
-    if (pickup) zones.addAll(captures(text, "\\b(\\d{2})\\d{3}\\b"));
+    if (pickup) {
+      var postcode = pickupPostcode(text, "");
+      if (postcode.isPresent()) zones.add(postcode.get().substring(0, 2));
+      else if (zones.isEmpty()) zones.addAll(captures(text, "\\b(\\d{2})\\d{3}\\b"));
+    }
     String zone = confirmedPickupZone == null ? only(zones) : confirmedPickupZone;
     String origin = origins.isEmpty() ? catalog.zones.get(zone) : only(origins);
     if (customerDeliveryAirport != null) {
       origin = customerDeliveryAirport;
       zone = null;
     }
-    boolean fast = has(text, "fastest|quickest|shortest|schnellst|prioriti[sz]e speed");
+    String priority = text.replaceAll(
+        "(?iu)(?:\\b(?:rather than|instead of|au lieu de|plut[oô]t que|statt|anstelle)\\h+[^.!?\\r\\n]+"
+            + "|而不是[^。！？\\r\\n]+)", "");
+    boolean fast = has(priority, "fastest|quickest|shortest|schnellst|prioriti[sz]e speed|"
+        + "\\b(?:le|la|les) plus rapides?\\b|最快|时效最短|時效最短");
     boolean cheap =
         has(
-            text,
+            priority,
             "cheapest|lowest|economical|günstig|preiswert|best price|most economical|prioriti[sz]e"
-                + " (?:price|cost)");
-    var volume = quantity(body, "cbm|m³|m3|cubic met(?:er|re)s?");
-    if (volume == null && !has(body, "\\b(?:cbm|m³|m3)\\b")) volume = dimensions(body);
-    var weight = quantity(body, "kg|kgs|kilograms?");
+                + " (?:price|cost)|\\b(?:le|la|les) moins ch[èe]r(?:e|s|es)?\\b|"
+                + "\\b(?:le|la|les) plus [ée]conomiques?\\b|最便宜|最低价|最低價|最经济|最經濟");
+    var arrival = arrivalWindow(body);
+    if (arrival != null && has(priority,
+        "\\b(?:(?:price|cost) (?:will determine (?:our|the) choice|(?:is|will be) (?:the )?"
+            + "(?:deciding|determining) factor)|(?:decide|decision|choice) based on "
+            + "(?:the )?(?:(?:all[ -]in|total) )?(?:price|cost))\\b"))
+      cheap = true;
+    var volume = quantity(body, VOLUME_QUANTITY, CBM_PER_CUBIC_FOOT);
+    if (volume == null && !VOLUME_QUANTITY.matcher(body).find() && !has(body, "\\b(?:cbm|m³|m3)\\b"))
+      volume = dimensions(body);
+    var weight = quantity(body, WEIGHT_QUANTITY, KG_PER_POUND);
     var lotLines = pattern("(?m)^\\h*Lot \\d+:[^\\r\\n]*").matcher(body);
     var lots = lotLines.results().map(m -> m.group()).toList();
     boolean incompleteLots = false;
@@ -246,7 +433,8 @@ public final class MailParser {
       incompleteLots = true;
       var outside = lotLines.reset().replaceAll("");
       if (has(body, "together as (?:one|a single) consignment|under (?:one|a single) air waybill")
-          && !has(outside, "\\b(?:kg|kgs|kilograms?|cbm|m3|m³)")) {
+          && !has(outside, "\\b(?:" + METRIC_WEIGHT + "|" + METRIC_VOLUME + ")")
+          && !WEIGHT_QUANTITY.matcher(outside).find() && !VOLUME_QUANTITY.matcher(outside).find()) {
         BigDecimal kg = BigDecimal.ZERO, cbm = BigDecimal.ZERO;
         for (String line : lots) {
           var lot = lotTotals(line);
@@ -264,6 +452,7 @@ public final class MailParser {
         }
       }
     }
+    if (lots.size() < 2 && perPieceQuantity(body, IMPERIAL_VOLUME)) volume = null;
     var shipment =
         new Shipment(
             origin,
@@ -285,19 +474,17 @@ public final class MailParser {
     else if (customerDeliveryAirport == null && (pickup || !zones.isEmpty()) && zone == null)
       issue = "Pickup requested. Confirm the pickup postcode or zone.";
     else if (incompleteLots) issue = "Confirm gross weight and volume for every lot.";
-    else if (lots.size() < 2
-        && has(
-            body,
-            "(?:\\d+\\s*[x×]\\s*\\d+(?:[.,]\\d+)?\\s*kg)|(?:kg|kgs)\\s*(?:each|per"
-                + " (?:piece|pallet|crate))|(?:each|per piece)\\s*[:=]?\\s*\\d+[.,\\d]*\\s*kg"))
+    else if (lots.size() < 2 && perPieceQuantity(body, METRIC_WEIGHT + "|" + IMPERIAL_WEIGHT))
       issue = "Confirm total gross weight. The request gives a per-piece weight.";
+    else if (arrival != null && !arrival.complete()) issue = ARRIVAL_DATES_ISSUE;
     else if (!has(text, FREIGHT_TERMS))
       issue = "Confirm that this message requests a freight quote.";
     return new Parsed(shipment, issue);
   }
 
   private static final String FREIGHT_TERMS =
-      "\\b(?:rfq|quot(?:e|ation)|rat(?:e|es)|pric(?:e|ing)|angebot|anfrage|freight|airfreight|versand)\\b";
+      "\\b(?:rfq|quot(?:e|ation)|rat(?:e|es)|pric(?:e|ing)|angebot|anfrage|luftfracht(?:anfrage)?|"
+          + "freight|airfreight|versand|devis|fret a[ée]rien)\\b|空运|空運";
   private static final String CARGO_TERMS =
       "\\b(?:kgs?|kilograms?|cbm|m3|m³|pallets?|paletten|pieces|pcs|crates?|kisten|cartons?|colli|awb"
           + "|air ?waybill|consignment|shipment|sendung|cargo)\\b";
@@ -388,6 +575,12 @@ public final class MailParser {
       "(?m)^\\h*Not\\s+part\\s+of\\s+this\\s+offer:\\s+waiting\\s+time\\s+at\\s+the\\s+pickup"
           + "\\s+address\\s+after\\s+the\\s+first\\s+([1-9]\\d{0,2})\\s+minutes,\\s+"
           + "([0-9]+[.,][0-9]{2})\\s+EUR\\s+for\\s+each\\s+hour\\.\\h*$");
+
+  private static final String ROAD_QUOTE_AIRPORT =
+      "\\b(?:pickup address to|road delivery (?:to|at)|delivery at)\\h+((?-i:[A-Z]{3}))\\b";
+  private static final Pattern EXCLUDES_ONWARD_AIR_TRANSIT = pattern(
+      "(?:^|(?<=[.!?])\\h+|\\R)\\h*onward (?:air )?transit to ((?-i:[A-Z]{3})) is not included"
+          + "(?=[.!?]|\\h*(?:\\R|$))");
 
   public static String withoutPickupWaitingCharge(String body) {
     return PICKUP_WAITING_CHARGE.matcher(body).replaceAll("");
@@ -518,6 +711,11 @@ public final class MailParser {
       priceTerms = UNCONFIRMED_TRUCK_TIMING.matcher(priceTerms).replaceAll("");
       priceTerms = EXCLUDES_COLLECTION_WAIT.matcher(priceTerms).replaceAll("");
       priceTerms = PICKUP_BOOKING_NOT_REQUIRED.matcher(priceTerms).replaceAll("");
+      String roadAirport = only(captures(text, ROAD_QUOTE_AIRPORT));
+      if (roadAirport != null) {
+        priceTerms = EXCLUDES_ONWARD_AIR_TRANSIT.matcher(priceTerms)
+            .replaceAll(match -> roadAirport.equals(match.group(1)) ? match.group() : "");
+      }
     }
     if (has(
         priceTerms,

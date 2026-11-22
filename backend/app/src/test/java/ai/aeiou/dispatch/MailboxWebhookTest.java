@@ -24,7 +24,7 @@ class MailboxWebhookTest {
   void verifiesAndDeduplicatesPushesWithoutSkippingOlderPollMail() throws Exception {
     var json = new ObjectMapper();
     var ledger = new Ledger(temp.resolve("webhook.sqlite").toString(), json);
-    var webhook = new MailboxWebhook(ledger, new DispatchApplication().catalog(),
+    var webhook = new MailboxWebhook(ledger, new DispatchApplication().catalog(null),
         Clock.fixed(NOW, ZoneOffset.UTC), json, SECRET);
     var http = MockMvcBuilders.standaloneSetup(webhook).build();
     String body = """
