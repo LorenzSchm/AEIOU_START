@@ -575,7 +575,9 @@ public final class MailParser {
   private static final Pattern SHIPMENT_ROW =
       Pattern.compile("(?m)^\\h*(\\d{1,2})[.)]\\h+([^\\r\\n]+)");
   private static final Pattern ROUTE_AT_START = Pattern.compile(
-      "^(?:(?i:(?:shipment\\h+)?to)\\h+|(?i:destination(?:\\h+airport)?)\\h*[:–—-]?\\h*)?([A-Z]{3})\\b");
+      "^(?:(?i:(?:shipment\\h+(?:\\d{1,2}\\h+)?)?(?:is\\h+|will\\h+be\\h+|goes\\h+)?"
+          + "(?:bound\\h+for|going\\h+to|headed\\h+(?:to|for)|destined\\h+for|for|to))\\h+"
+          + "|(?i:destination(?:\\h+airport)?)\\h*[:–—-]?\\h*)?([A-Z]{3})\\b");
   private static final Pattern PIECES = pattern("\\b(\\d{1,7})\\h+(?:pieces?|pcs)\\b");
 
   public record QuoteShipment(Shipment shipment, String text, Integer pieces) {}

@@ -5138,4 +5138,15 @@ class WaveWorkerTest {
     assertEquals(new BigDecimal("2740.62"), draft.offer().totalEur());
     assertFalse(outbound.getLast().get("body").toString().contains("recent Cologne rates"));
   }
+
+  @Test
+  void live58757ShipmentIsBoundForIsADestination() {
+    String body = "Dear Sir or Madam,\n\nCould you please quote the cheapest air freight option for each of the two shipments below? Both will be ready for pickup at our site in 85122 (Ingolstadt), Germany, on 2026-11-27. Please arrange trucking from our site to the departure airport.\n\n1. Shipment 1 is bound for BKK (Bangkok, TH) and consists of 11 pieces of electronic control units, with a gross weight of 1190 kg and a volume of 2.92 cbm.\n\n2. Shipment 2 is bound for SIN (Singapore, SG) and consists of 11 pieces of machine parts, with a gross weight of 145 kg and a volume of 1.14 cbm.\n\nPlease provide a separate all-in price in EUR for each shipment, including pickup and trucking to the airport, and list both prices in the same reply rather than giving a combined price.\n\nThank you for your assistance.\n\nMit freundlichen Gruessen / Kind regards\nJonas Kessler\nLogistics Coordinator\nKessler Feinmechanik GmbH, Ulm";
+    var sep = MailParser.separateShipments("Air freight quote request – BKK and SIN", body, false, catalog);
+    assertNull(sep.issue(), () -> String.valueOf(sep));
+    assertEquals(2, sep.shipments().size());
+    assertEquals("BKK", sep.shipments().get(0).shipment().destination());
+    assertEquals("SIN", sep.shipments().get(1).shipment().destination());
+    assertEquals("85", sep.shipments().get(0).shipment().pickupZone());
+  }
 }
