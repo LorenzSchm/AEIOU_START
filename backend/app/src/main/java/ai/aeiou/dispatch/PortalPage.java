@@ -16,7 +16,9 @@ import java.time.Instant;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import jakarta.annotation.PreDestroy;
 import javax.xml.parsers.DocumentBuilderFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Element;
@@ -48,14 +50,32 @@ class PortalPage {
   private final boolean readOnly;
   private final HttpClient http =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).build();
+  private final PortalBrowser browser;
   private volatile boolean challengeFirst;
   private volatile Instant retryAt = Instant.EPOCH;
 
+  PortalPage(String url, String key, boolean readOnly) {
+    this(url, key, readOnly, "", "", "", true);
+  }
+
+  /** With a {@code cf_clearance}, requests go through a browser to pass Cloudflare. */
+  @Autowired
   PortalPage(@Value("${dispatch.portal-page}") String url, @Value("${dispatch.key}") String key,
-      @Value("${dispatch.read-only}") boolean readOnly) {
+      @Value("${dispatch.read-only}") boolean readOnly,
+      @Value("${dispatch.portal-clearance}") String clearance,
+      @Value("${dispatch.portal-user-agent}") String userAgent,
+      @Value("${dispatch.portal-browser}") String channel,
+      @Value("${dispatch.portal-headless}") boolean headless) {
     this.url = url;
     this.key = key;
     this.readOnly = readOnly;
+    this.browser = clearance.isBlank() ? null
+        : new PortalBrowser(url, clearance.strip(), userAgent.strip(), channel.strip(), headless);
+  }
+
+  @PreDestroy
+  void close() {
+    if (browser != null) browser.close();
   }
 
   /** One rate in the API's shape. Throws {@link Down} or IllegalArgumentException. */
@@ -98,16 +118,12 @@ class PortalPage {
     values.putAll(form);
     values.forEach((name, value) -> body.add(URLEncoder.encode(name, StandardCharsets.UTF_8) + "="
         + URLEncoder.encode(value, StandardCharsets.UTF_8)));
-    var response = send(HttpRequest.newBuilder(URI.create(url))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .POST(HttpRequest.BodyPublishers.ofString(body.toString())), now);
+    var response = send(Map.of("Content-Type", "application/x-www-form-urlencoded"), body.toString(), now);
     return result(response);
   }
 
   private Map<String, String> challenge(Map<String, String> form, Instant now) throws IOException {
-    var load = send(HttpRequest.newBuilder(URI.create(url))
-        .header("X-Portal-Step", "load")
-        .POST(HttpRequest.BodyPublishers.noBody()), now);
+    var load = send(Map.of("X-Portal-Step", "load"), "", now);
     JsonNode challenge;
     try {
       challenge = JSON.readTree(load.body());
@@ -146,34 +162,43 @@ class PortalPage {
         .append("\r\nContent-Disposition: form-data; name=\"").append(name).append("\"\r\n\r\n")
         .append(value).append("\r\n"));
     body.append("--").append(boundary).append("--\r\n");
-    var response = send(HttpRequest.newBuilder(URI.create(url))
-        .header("X-Portal-Challenge", id)
-        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-        .POST(HttpRequest.BodyPublishers.ofString(body.toString())), now);
+    var response = send(Map.of("X-Portal-Challenge", id,
+        "Content-Type", "multipart/form-data; boundary=" + boundary), body.toString(), now);
     return result(response);
   }
 
-  private HttpResponse<String> send(HttpRequest.Builder request, Instant now) throws IOException {
+  private PortalBrowser.Reply send(Map<String, String> headers, String body, Instant now) throws IOException {
+    PortalBrowser.Reply response = browser != null ? browser.post(headers, body) : direct(headers, body);
+    if (response.challenged())
+      throw new Down("Cloudflare challenged the portal page; refresh FIVEU_CF_CLEARANCE");
+    if (response.status() == 429) {
+      String seconds = response.retryAfter();
+      retryAt = now.plusSeconds(seconds.matches("[0-9]{1,9}") ? Math.max(1, Long.parseLong(seconds)) : 60);
+      throw new Limited();
+    }
+    if (response.status() >= 500) throw new Down("Portal page returned " + response.status());
+    return response;
+  }
+
+  private PortalBrowser.Reply direct(Map<String, String> headers, String body) throws IOException {
+    var request = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(8))
+        .header("User-Agent", "Mozilla/5.0 (compatible; aeiou-dispatch)")
+        .POST(body.isEmpty() ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body));
+    headers.forEach(request::header);
     HttpResponse<String> response;
     try {
-      response = http.send(request.timeout(Duration.ofSeconds(8))
-              .header("User-Agent", "Mozilla/5.0 (compatible; aeiou-dispatch)").build(),
-          HttpResponse.BodyHandlers.ofString());
+      response = http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
       throw new Down("Interrupted");
     }
-    if (response.statusCode() == 429) {
-      String seconds = response.headers().firstValue("Retry-After").orElse("");
-      retryAt = now.plusSeconds(seconds.matches("[0-9]{1,9}") ? Math.max(1, Long.parseLong(seconds)) : 60);
-      throw new Limited();
-    }
-    if (response.statusCode() >= 500) throw new Down("Portal page returned " + response.statusCode());
-    return response;
+    return new PortalBrowser.Reply(response.statusCode(), response.body(),
+        response.headers().firstValue("Retry-After").orElse(""),
+        "challenge".equals(response.headers().firstValue("cf-mitigated").orElse("")));
   }
 
   /** Visible fields of a result, from HTML or from a JSON reply that carries the fields or HTML. */
-  private static Map<String, String> result(HttpResponse<String> response) throws IOException {
+  private static Map<String, String> result(PortalBrowser.Reply response) throws IOException {
     String body = response.body() == null ? "" : response.body();
     if (body.stripLeading().startsWith("{")) {
       JsonNode json;
@@ -197,7 +222,7 @@ class PortalPage {
     var page = Visible.read(body);
     if (page.fields().containsKey("rate_id")) return page.fields();
     if (!page.error().isBlank()) throw new IllegalArgumentException("Portal page: " + page.error());
-    throw new Down("Portal page reply without a rate (HTTP " + response.statusCode() + ")");
+    throw new Down("Portal page reply without a rate (HTTP " + response.status() + ")");
   }
 
   private static String html(JsonNode node) {
