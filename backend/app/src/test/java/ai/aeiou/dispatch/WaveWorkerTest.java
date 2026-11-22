@@ -224,7 +224,8 @@ class WaveWorkerTest {
     worker.work();
     var trucks =
         outbound.stream().filter(m -> m.get("subject").toString().contains("pickup")).toList();
-    assertEquals(2, trucks.size());
+    // FRA-JFK has a kit sheet price, so all five zone-61 truckers are asked.
+    assertEquals(5, trucks.size());
     for (var truck : trucks) {
       assertTrue(truck.get("subject").toString().contains("postcode 61018"));
       assertTrue(truck.get("body").toString().contains("postcode 61018"));
@@ -385,7 +386,8 @@ class WaveWorkerTest {
     assertEquals("MUC", shipment.origin());
     var trucks = outbound.stream()
         .filter(m -> m.get("subject").toString().contains("pickup from Augsburg to MUC")).toList();
-    assertEquals(2, trucks.size());
+    // All three zone-86 truckers are asked before any airline.
+    assertEquals(3, trucks.size());
     assertTrue(trucks.getFirst().get("body").toString().contains("Valid for all of Augsburg"));
     assertEquals(1, outbound.stream().filter(m -> "buyer@example.invalid".equals(m.get("to"))).count());
     long replyId = 2002;
@@ -1110,14 +1112,21 @@ class WaveWorkerTest {
     assertEquals("R-FQ-BOM", second.offer().rateId());
     // Each shipment's comparison is kept and reused; an incomplete one is retried once.
     verify(upstream, times(portalCompleteAtFirst ? 2 : 4)).rates(any(), any());
-    String other = ledger.jdbc().queryForObject("""
+    // All four zone-40 truckers are asked for each shipment; the three besides Hansekogge send
+    // Schwabenbote's replies.
+    var others = ledger.jdbc().queryForList("""
         SELECT email FROM tender WHERE request_id=? AND leg='trucker' AND email<>'hansekogge-trucking@hackloop.mail'
         """, String.class, Ledger.shipmentQuoteLeg(7, 1));
-    assertEquals(catalog.contact(other).orElseThrow().name(), second.trucker());
-    // The firm shipment-1 price without road transit is kept, and the transit is asked for.
-    assertEquals(new BigDecimal("228.37"), new BigDecimal(ledger.jdbc().queryForObject(
-        "SELECT euros FROM tender WHERE request_id=? AND email=?", String.class, Ledger.shipmentQuoteLeg(7, 1), other)));
-    assertNotNull(ledger.delivery("bid:7:" + other + ":shipment-1:transit"));
+    assertEquals(3, others.size());
+    assertTrue(others.stream().map(email -> catalog.contact(email).orElseThrow().name()).toList()
+        .contains(second.trucker()), second.trucker());
+    for (String other : others) {
+      // The firm shipment-1 price without road transit is kept, and the transit is asked for.
+      assertEquals(new BigDecimal("228.37"), new BigDecimal(ledger.jdbc().queryForObject(
+          "SELECT euros FROM tender WHERE request_id=? AND email=?", String.class, Ledger.shipmentQuoteLeg(7, 1),
+          other)));
+      assertNotNull(ledger.delivery("bid:7:" + other + ":shipment-1:transit"));
+    }
   }
 
   @Test
@@ -1360,7 +1369,9 @@ class WaveWorkerTest {
     replyWithTruckBid(8, "rheinufer-spedition@hackloop.mail", "119.57", 28);
     replyWithTruckBid(9, "hansekogge-trucking@hackloop.mail", "148.93", 24);
     replyWithTruckBid(10, "schwabenbote-transporte@hackloop.mail", "143.93", 21);
-    long replyId = 11;
+    // The fourth zone-40 trucker is asked too; its bid is the least balanced.
+    replyWithTruckBid(11, "domblick-kurierdienst@hackloop.mail", "160.00", 30);
+    long replyId = 12;
     for (var invite : List.copyOf(outbound)) {
       String address = invite.get("to").toString();
       if (!catalog.contact(address).orElseThrow().truck()) {
@@ -2063,11 +2074,14 @@ class WaveWorkerTest {
   @Test
   void triesOtherTruckersWhenTheFirstBidsOnlyGiveCollectionWindows() throws Exception {
     receive(7, "buyer@example.invalid", "RFQ CGN to DFW",
-        "Please quote the fastest service for 100 kg and 0.2 cbm. Pickup from postcode 51804.", null);
+        "Please quote the fastest service for 100 kg and 0.2 cbm. Pickup from postcode 51804."
+            + " Please exclude Quetzal Air Freight.", null);
     worker.work();
+    // Quetzal's kit sheet is the only price for CGN-DFW; excluding it leaves the lane unpriced, so two
+    // airlines keep their slots and one of the four zone-51 truckers is left for a replacement.
     var invitations = outbound.stream()
         .filter(m -> m.get("subject").toString().contains("pickup from postcode 51804")).toList();
-    assertEquals(2, invitations.size());
+    assertEquals(3, invitations.size());
     long message = 2000;
     for (var invitation : invitations) {
       receive(message++, invitation.get("to").toString(), "Truck reply",
@@ -2076,7 +2090,7 @@ class WaveWorkerTest {
     }
     clock.current = START.plusSeconds(80);
     worker.work();
-    assertEquals(2, outbound.stream().filter(m -> m.containsKey("in_reply_to")).count());
+    assertEquals(3, outbound.stream().filter(m -> m.containsKey("in_reply_to")).count());
     restart();
     clock.current = START.plusSeconds(116);
     worker.work();
@@ -2098,10 +2112,11 @@ class WaveWorkerTest {
     worker.work();
     var initialTrucks = outbound.stream()
         .filter(m -> m.get("subject").toString().contains("pickup from")).toList();
-    assertEquals(List.of("taunusfracht@hackloop.mail", "isarwelle-spedition@hackloop.mail"),
-        initialTrucks.stream().map(m -> m.get("to")).toList());
+    // FRA-LAX is priced by the kit sheet, so all three eligible zone-60 truckers are asked at once.
+    assertEquals(List.of("taunusfracht@hackloop.mail", "isarwelle-spedition@hackloop.mail",
+        "bodenseefracht@hackloop.mail"), initialTrucks.stream().map(m -> m.get("to")).toList());
     long reply = 31;
-    for (var invite : initialTrucks) {
+    for (var invite : initialTrucks.subList(0, 2)) {
       receive(reply++, invite.get("to").toString(), "Re: Rate request AEIOU-7",
           "Unfortunately we cannot quote this shipment.", Ledger.id(invite.get("id")));
     }
@@ -2302,7 +2317,8 @@ class WaveWorkerTest {
   void doorToPortRecoversAcrossRestartAndSendsOnce() throws Exception {
     receive(2, "aurelia-air-cargo@hackloop.mail", "Prior carrier response",
         "We fly FRA-LAX.", null);
-    request("Pickup from postcode 60311.");
+    // Without the kit-sheet airlines the lane has no known air price, so Aurelia keeps its slot.
+    request("Pickup from postcode 60311. Please exclude Helix Air Freight and Wayzata Air Cargo.");
     worker.work();
     assertEquals(5, outbound.size());
     var invitations = List.copyOf(outbound);
@@ -2478,7 +2494,8 @@ class WaveWorkerTest {
     worker.work();
 
     assertEquals(5, ledger.tenders(20).size());
-    assertEquals(List.of(sternmeile, ruhrpott), outbound.stream()
+    // Every zone-53 trucker is asked, still in order of observed transit.
+    assertEquals(List.of(sternmeile, ruhrpott, spessart), outbound.stream()
         .filter(message -> message.get("subject").toString().contains("pickup from postcode 53305 to CGN"))
         .map(message -> message.get("to")).toList());
     assertNull(ledger.delivery("quote:20"));
@@ -2512,23 +2529,21 @@ class WaveWorkerTest {
     when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(aurelia), true));
     worker.work();
 
+    // Quetzal and Yellowtail are priced by the kit sheet for FRA-LIM, so the lane has an air price
+    // whether or not Aurelia's portal rate is usable: every zone-61 trucker gets a slot instead.
     assertEquals(5, ledger.tenders(7).size());
     var recipients = outbound.stream().map(message -> message.get("to")).toList();
-    assertEquals(!covered, recipients.contains(aureliaEmail));
-    assertTrue(recipients.containsAll(List.of(quetzalEmail, yellowtailEmail)));
-    assertEquals(covered, recipients.contains("spessart-spedition@hackloop.mail"));
+    assertFalse(recipients.contains(aureliaEmail));
+    assertFalse(recipients.contains(quetzalEmail) || recipients.contains(yellowtailEmail));
+    assertTrue(recipients.stream().allMatch(email -> catalog.contact(email.toString()).orElseThrow().truck()));
+    assertTrue(recipients.contains("spessart-spedition@hackloop.mail"));
     if (!covered) return;
 
     long replyId = 10;
     for (var invitation : List.copyOf(outbound)) {
       String email = invitation.get("to").toString();
       if (email.equals("spessart-spedition@hackloop.mail")) continue;
-      if (catalog.contact(email).orElseThrow().truck()) {
-        replyWithTruckBid(replyId++, email, "103.90", 23);
-      } else {
-        receive(replyId++, email, "Re: " + invitation.get("subject"), "All-in EUR 773.28. Transit: 5 days.",
-            Ledger.id(invitation.get("id")));
-      }
+      replyWithTruckBid(replyId++, email, "103.90", 23);
     }
     worker.work();
     assertNull(ledger.delivery("quote:7"));
@@ -2583,6 +2598,109 @@ class WaveWorkerTest {
 
     assertEquals(5, invited.size());
     assertEquals(2, invited.stream().filter(carrier -> !carrier.truck()).count());
+  }
+
+  private static final String LIVE_57095 = """
+      Dear Sir or Madam,
+
+      Our buyer in Bogota, CO, is importing printed marketing material from us in Germany, and we are arranging the flight for their import. Could you please quote the cheapest air freight option to BOG for this import shipment?
+
+      The shipment consists of 8 pieces, with a gross weight of 801 kg and a total volume of 4.99 cbm. It will be ready for pickup on 2026-11-28 at our site in 20290 Hamburg, Germany.
+
+      Please arrange trucking from our site to the departure airport and include it in your all-in price in EUR.
+
+      Thank you for your assistance.
+
+      Mit freundlichen Gruessen / Kind regards
+      Jonas Kessler
+      Logistics Coordinator
+      Kessler Feinmechanik GmbH, Ulm
+
+
+      -----Original Message-----
+      Sent: 2026-10-09
+      Subject: ZURICH AIRPORT - SGN / 126 CTN 312 KGS
+
+      Dear team,
+
+      pls quote air freight ex ZURICH AIRPORT to SGN:
+      126 CTN / 312 KGS / 15 CBM, sports equipment
+      FCA, cargo ready next week.
+
+      Thanks""";
+
+  @Test
+  void live57095InvitesEveryZoneTruckerAndNoAirlineWhoseLanePriceIsKnown() {
+    // Round 190: the board's reference used Sternmeile, which was left out to ask Cobalt, whose
+    // email bid (2366.65) only repeated its approved HAM-BOG sheet (2366.66).
+    recordedExtraction("""
+        {"origin":"HAM","destination":"BOG","weight_kg":801,"volume_cbm":4.99,"preference":"cheapest",\
+        "pickup_required":true,"pickup_zone":"20","needs_review":false,"reply_language":"en"}""");
+    ledger.jdbc().update("""
+        INSERT INTO tariff_sheet(id,message_id,attachment_id,carrier,filename,received,state,valid_from,valid_to,rates)
+        VALUES(1,11,11,'Cobalt Skylift','cobalt-skylift-tariff.pdf','2026-11-21T09:00:00Z','active',
+          '2026-11-21','2026-12-31',?)
+        """, """
+        [{"airline":"Cobalt Skylift","origin":"HAM","destination":"BOG","days":3,"minimum":65.45,"fuel":1.04,\
+        "security":0.25,"breaks":{"0":3.94,"45":3.35,"100":2.58,"300":2.03,"500":1.55,"1000":1.33,"2000":1.04}}]""");
+    var valid = START.plusSeconds(900);
+    var chargeable = new BigDecimal("833.33");
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(
+        new Offer("Riverbend Airlines Cargo", 4, new BigDecimal("2183.33"), chargeable, "portal",
+            "R-egT8hIAE5x_50wD5", valid),
+        new Offer("Solace Air Cargo", 3, new BigDecimal("3199.99"), chargeable, "portal", "R-WnSCqOspvgwO-WwP", valid),
+        new Offer("Riverbend Airlines Cargo", 4, new BigDecimal("2130.00"), new BigDecimal("1000"), "portal",
+            "R-ul_ZuBqVyV7AX8Yq", valid),
+        new Offer("Solace Air Cargo", 3, new BigDecimal("3200.00"), new BigDecimal("1000"), "portal",
+            "R-WHKKCaPUztenly1c", valid)), true));
+    receive(57095, "kessler-feinmechanik@hackloop.mail", "RE: FW: ZURICH AIRPORT - SGN / 126 CTN 312 KGS",
+        LIVE_57095, null);
+    worker.work();
+
+    var shipment = ledger.read(ledger.mail(57095).get("fields"), Shipment.class);
+    assertEquals("20", shipment.pickupZone());
+    assertEquals(Set.of("rheinufer-spedition@hackloop.mail", "hansekogge-trucking@hackloop.mail",
+            "elbkante-logistik@hackloop.mail", "nordlicht-haulage@hackloop.mail", "sternmeile-logistik@hackloop.mail"),
+        Set.copyOf(outbound.stream().map(m -> m.get("to").toString()).toList()));
+    assertEquals(5, ledger.tenders(57095).size());
+    assertNull(ledger.delivery("bid:57095:cobalt-skylift@hackloop.mail"));
+  }
+
+  @Test
+  void pickupInvitationsAskEveryZoneTruckerUnlessTheLaneHasNoKnownAirPrice() {
+    var shipment = new Shipment("HAM", "BOG", new BigDecimal("801"), new BigDecimal("4.99"),
+        "cheapest", "20", null, 0);
+    var zoneTruckers = catalog.carriers.stream().filter(c -> c.truck() && c.serves("20")).toList();
+    assertEquals(5, zoneTruckers.size());
+
+    // A portal or sheet price for the lane: the airline slots go to truckers, priced airlines are skipped.
+    var priced = catalog.invitations(shipment, Map.of(), Map.of(), Set.of("cobalt skylift"), c -> true);
+    assertEquals(zoneTruckers, priced);
+
+    // No air price at all: airlines are still asked, even at the cost of truckers.
+    var unpriced = catalog.invitations(shipment, Map.of(), Map.of(), Set.of(), c -> true);
+    assertEquals(2, unpriced.stream().filter(c -> !c.truck()).count());
+    assertEquals(3, unpriced.stream().filter(Catalog.Carrier::truck).count());
+    var exactLane = catalog.invitations(shipment, Map.of("cobalt-skylift@hackloop.mail", Set.of("HAM-BOG")),
+        Map.of(), Set.of(), c -> true);
+    assertEquals("cobalt-skylift@hackloop.mail", exactLane.getFirst().email());
+    assertEquals(1, exactLane.stream().filter(c -> !c.truck()).count());
+    assertEquals(4, exactLane.stream().filter(Catalog.Carrier::truck).count());
+
+    // The truckers left out are the least balanced by their earlier bids; unknown ones keep their slot.
+    var history = Map.of(
+        "rheinufer-spedition@hackloop.mail", truckBid("rheinufer-spedition@hackloop.mail", "105.00", 1.17),
+        "hansekogge-trucking@hackloop.mail", truckBid("hansekogge-trucking@hackloop.mail", "123.33", 1.29),
+        "nordlicht-haulage@hackloop.mail", truckBid("nordlicht-haulage@hackloop.mail", "245.67", 2));
+    var trimmed = catalog.invitations(shipment, Map.of(), Map.of(), history, Set.of(), c -> true);
+    var trucks = trimmed.stream().filter(Catalog.Carrier::truck).map(Catalog.Carrier::email).toList();
+    assertEquals(3, trucks.size());
+    assertFalse(trucks.contains("nordlicht-haulage@hackloop.mail"), trucks::toString);
+    assertTrue(trucks.containsAll(List.of("elbkante-logistik@hackloop.mail", "sternmeile-logistik@hackloop.mail")));
+  }
+
+  private static Offer truckBid(String email, String euros, double days) {
+    return new Offer(email, days, new BigDecimal(euros), BigDecimal.ZERO, "history", null, null);
   }
 
   @Test
@@ -2734,14 +2852,12 @@ class WaveWorkerTest {
             + " Please arrange pickup from postcode 63198.", null);
     worker.work();
     assertEquals(5, outbound.size());
-    assertEquals("helix-air-freight@hackloop.mail", outbound.get(0).get("to"));
-    assertEquals("nova-atlas-cargo@hackloop.mail", outbound.get(1).get("to"));
+    // Helix declared FRA-PVG, but its kit sheet already prices the lane, so its slot goes elsewhere.
+    assertEquals("nova-atlas-cargo@hackloop.mail", outbound.get(0).get("to"));
     assertTrue(outbound.stream().noneMatch(m -> Set.of("elbflug-air-freight@hackloop.mail",
-        "lumen-air-cargo@hackloop.mail").contains(m.get("to"))));
-    receive(10, "helix-air-freight@hackloop.mail", "Re: Rate request AEIOU-7",
-        "All-in EUR 3981.25. Transit: 2 days.", Ledger.id(outbound.get(0).get("id")));
+        "lumen-air-cargo@hackloop.mail", "helix-air-freight@hackloop.mail").contains(m.get("to"))));
     receive(11, "nova-atlas-cargo@hackloop.mail", "Re: Rate request AEIOU-7",
-        "All-in EUR 3500. Transit: 2 days.", Ledger.id(outbound.get(1).get("id")));
+        "All-in EUR 3500. Transit: 2 days.", Ledger.id(outbound.get(0).get("id")));
     var truck = outbound.stream().filter(m -> "westfalenroute@hackloop.mail".equals(m.get("to")))
         .findFirst().orElseThrow();
     receive(12, truck.get("to").toString(), "Re: Rate request AEIOU-7",

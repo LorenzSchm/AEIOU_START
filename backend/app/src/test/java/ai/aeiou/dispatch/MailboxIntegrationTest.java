@@ -38,7 +38,10 @@ class MailboxIntegrationTest {
             "buyer@hackloop.mail",
             "body",
             "Cheapest all-in freight option for one hundred kilograms, 0.2 cbm, pickup from"
-                + " postcode 60311.",
+                + " postcode 60311."
+                // Without the FRA-LAX kit-sheet airlines the lane has no known air price, so airlines
+                // are still invited and their EUR 70 bids price the quote.
+                + " Please exclude Helix Air Freight and Wayzata Air Cargo.",
             "sent_at",
             Instant.now().toString()));
     fixture = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
