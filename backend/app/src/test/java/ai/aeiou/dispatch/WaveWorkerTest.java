@@ -4838,4 +4838,59 @@ class WaveWorkerTest {
   void freeTextPreferencesNormaliseToTheServiceEnum(String extracted, String expected) {
     assertEquals(expected, RfqGateway.preference(extracted));
   }
+
+  /** Renders every approved reply as Korean prose around its protected tokens, as the live gateway did. */
+  private void koreanRendering(String extraction) {
+    when(upstream.directLlm()).thenReturn(true);
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      Map<String, Object> payload = call.getArgument(0);
+      String schema = mapper.valueToTree(payload.get("response_format")).path("json_schema").path("name").asText();
+      if ("quote_check".equals(schema)) return gatewayResponse("{\"contradiction\":false,\"reply_language\":\"ko\"}");
+      if (!"customer_reply".equals(schema)) return gatewayResponse(extraction);
+      List<Map<String, String>> messages = (List<Map<String, String>>) payload.get("messages");
+      var paragraphs = mapper.createArrayNode();
+      for (var paragraph : mapper.readTree(messages.get(1).get("content")).path("approved_reply")) {
+        var tokens = Pattern.compile("\\[T[0-9]+\\]").matcher(paragraph.asText())
+            .results().map(match -> match.group()).toList();
+        paragraphs.add("확인 부탁드립니다 " + String.join(" ", tokens) + " 감사합니다");
+      }
+      return gatewayResponse(mapper.createObjectNode().put("language", "ko").set("paragraphs", paragraphs).toString());
+    });
+  }
+
+  @Test
+  void live50482AsksAKoreanQuestionAtMostTwiceWhenTheCustomerOnlySaysTheyNeedToCheck() {
+    koreanRendering("""
+        {"origin":"CGN","destination":"SCL","weight_kg":null,"volume_cbm":3.62,"preference":"fastest",
+         "pickup_required":false,"pickup_zone":null,"needs_review":false,"reply_language":"ko"}
+        """);
+    String customer = "weidner-spielwaren@hackloop.mail";
+    String subject = "CGN → SCL 최단 소요시간 항공운임 견적 문의";
+    receive(7, customer, subject, """
+        안녕하세요,
+
+        잘 지내시죠? 인쇄 홍보물 항공 운송 건으로 견적 부탁드립니다. 화물은 2026-11-26에 출고 가능하고, Cologne 공항(CGN)까지는 저희가 직접 반입하겠습니다. 도착 공항은 SCL (Santiago, CL)입니다. 이번에는 가장 빠른 옵션으로 부탁드립니다.
+
+        화물은 카톤 4개, 합산 부피 3.62 cbm입니다.
+
+        Cheers,
+        Klaus Weidner
+        Weidner Spielwaren GmbH, Nuremberg
+        """, null);
+    worker.work();
+    assertEquals("sent", ledger.delivery("rfq-info:7"), () -> String.valueOf(outbound));
+    assertTrue(outbound.getLast().get("body").toString().startsWith("확인 부탁드립니다"));
+    for (int reply = 1; reply <= 5; reply++) {
+      // The live customer answered every question with the same line, 21 times in a row.
+      receive(2000 + reply, customer, "Re: " + subject, "Thanks for your message. I need to check that and will"
+          + " come back to you.\n\nCheers,\nKlaus Weidner\nWeidner Spielwaren GmbH, Nuremberg",
+          Ledger.id(outbound.getLast().get("id")));
+      clock.current = START.plusSeconds(10L * reply);
+      worker.work();
+    }
+    assertEquals(2, ledger.jdbc().queryForObject(
+        "SELECT count(*) FROM deliveries WHERE action LIKE 'rfq-info:7%'", Integer.class), () -> String.valueOf(outbound));
+    assertEquals(2, outbound.size());
+    assertEquals(CustomerClarifications.WAITING, ledger.mail(7).get("stage"));
+  }
 }

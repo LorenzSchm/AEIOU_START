@@ -233,6 +233,7 @@ class WaveWorker {
   }
 
   private static final int UNEXPECTED_RETRIES = 3;
+  private static final int MAX_CLARIFICATIONS = 3;
   private final java.util.Map<Long, Integer> unexpected = new java.util.concurrent.ConcurrentHashMap<>();
 
   static class Conflict extends RuntimeException {
@@ -371,11 +372,19 @@ class WaveWorker {
     String action = details.latestReply() == null ? prefix : prefix + ":" + details.latestReply();
     boolean alreadyClaimed = ledger.delivery(action) != null;
     if (alreadyClaimed && CustomerClarifications.WAITING.equals(mail.get("stage"))) return;
-    if (details.latestReply() != null && ledger.jdbc().queryForObject("""
+    // Never ask the same question a third time, and never more than three questions in all: a
+    // customer who answers "I need to check" would otherwise get the question again on every reply.
+    // The approved question is recorded per send, because the body is often in another language.
+    if (details.latestReply() != null && (ledger.jdbc().queryForObject("""
         SELECT count(*) FROM deliveries d LEFT JOIN follow_up_copy f ON f.action=d.action
+        LEFT JOIN clarification_ask c ON c.action=d.action
         WHERE (d.action=? OR d.action LIKE ?)
-          AND (f.required_question=? OR instr(json_extract(d.payload,'$.body'),?)>0)
-        """, Integer.class, prefix, prefix + ":%", question.text(), question.text()) >= 2) {
+          AND (f.required_question=? OR c.question=? OR instr(json_extract(d.payload,'$.body'),?)>0)
+        """, Integer.class, prefix, prefix + ":%", question.text(), question.text(), question.text()) >= 2
+        || ledger.jdbc().queryForObject("""
+            SELECT count(*) FROM deliveries WHERE action IN (?,?) OR action LIKE ? OR action LIKE ?
+            """, Integer.class, "rfq-info:" + id, "pickup-postcode:" + id, "rfq-info:" + id + ":%",
+            "pickup-postcode:" + id + ":%") >= MAX_CLARIFICATIONS)) {
       if (!CustomerClarifications.WAITING.equals(mail.get("stage")))
         ledger.stage(id, CustomerClarifications.WAITING, question.text());
       return;
@@ -383,6 +392,8 @@ class WaveWorker {
     ledger.stage(id, CustomerClarifications.WAITING, question.text());
     if (alreadyClaimed) return;
     try {
+      ledger.jdbc().update("INSERT OR IGNORE INTO clarification_ask(action,request_id,question) VALUES(?,?,?)",
+          action, id, question.text());
       String body = followUpBody(action, mail, details.language(), question, details.latestReply());
       send(action, Map.of(
           "to", mail.get("sender"), "in_reply_to", details.latestReply() == null ? id : details.latestReply(),
