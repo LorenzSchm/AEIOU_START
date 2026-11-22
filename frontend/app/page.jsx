@@ -20,7 +20,7 @@ const NAV = [
   { id: "overview", label: "Overview", icon: "overview" },
   { id: "queue", label: "Queue", icon: "queue" },
   { id: "crm", label: "Shipments", icon: "box" },
-  { id: "rates", label: "Rate sheets", icon: "euro" },
+  { id: "rates", label: "Rate sheets", icon: "sheet" },
   // The challenge's own evaluation, kept apart from the product views.
   { id: "score", label: "Scoreboard", icon: "target", group: "5U challenge" },
 ];
