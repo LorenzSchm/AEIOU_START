@@ -14,19 +14,33 @@ class DispatchController {
   private final Catalog catalog;
   private final FiveU upstream;
   private final PortalBookings bookings;
+  private final WriterLease lease;
+  private final PostgresReplica replica;
+  private final com.fasterxml.jackson.databind.ObjectMapper json;
 
   DispatchController(
-      Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings) {
+      Ledger ledger, WaveWorker wave, Catalog catalog, FiveU upstream, PortalBookings bookings,
+      WriterLease lease, PostgresReplica replica, com.fasterxml.jackson.databind.ObjectMapper json) {
     this.bookings = bookings;
+    this.lease = lease;
+    this.replica = replica;
+    this.json = json;
     this.ledger = ledger;
     this.wave = wave;
     this.catalog = catalog;
     this.upstream = upstream;
   }
 
+  /** Worker status. A read-only desk adds when its replica last synced from the writer's Postgres. */
   @GetMapping("/status")
-  WaveWorker.Status status() {
-    return wave.status();
+  Map<String, Object> status() {
+    Map<String, Object> status = json.convertValue(wave.status(), new com.fasterxml.jackson.core.type.TypeReference<>() {});
+    status.put("read_only", lease.readOnly());
+    if (lease.readOnly()) {
+      status.put("replica_synced", replica.lastSync() == null ? null : replica.lastSync().toString());
+      status.put("replica_error", replica.error());
+    }
+    return status;
   }
 
   @GetMapping("/messages")

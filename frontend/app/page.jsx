@@ -6,6 +6,7 @@ import Icon from "./components/ui/Icon";
 import Overview from "./components/overview/Overview";
 import Queue from "./components/queue/Queue";
 import Crm from "./components/crm/Crm";
+import Scoreboard from "./components/score/Scoreboard";
 import CaseSheet from "./components/case/CaseSheet";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import { useDispatchData } from "./lib/api";
@@ -16,14 +17,17 @@ const NAV = [
   { id: "overview", label: "Overview", icon: "overview" },
   { id: "queue", label: "Queue", icon: "queue" },
   { id: "crm", label: "Shipments", icon: "box" },
+  // The challenge's own evaluation, kept apart from the product views.
+  { id: "score", label: "Scoreboard", icon: "target", group: "5U challenge" },
 ];
-const TITLES = { overview: "Overview", queue: "Queue", crm: "Shipments" };
+const TITLES = { overview: "Overview", queue: "Queue", crm: "Shipments", score: "Scoreboard" };
+const EYEBROWS = { score: "5U challenge · Evaluation" };
 
 function readUrl() {
   if (typeof window === "undefined") return { view: "overview", caseId: null, scope: "attention" };
   const p = new URLSearchParams(window.location.search);
   return {
-    view: ["queue", "crm"].includes(p.get("view")) ? p.get("view") : "overview",
+    view: ["queue", "crm", "score"].includes(p.get("view")) ? p.get("view") : "overview",
     caseId: p.get("case") ? Number(p.get("case")) : null,
     scope: ["attention", "requests", "all"].includes(p.get("scope")) ? p.get("scope") : "attention",
   };
@@ -78,7 +82,8 @@ function KeptView({ name, active, children }) {
 const NavList = memo(function NavList({ view, attention, onView }) {
   return (
     <ul>
-      {NAV.map((n) => (
+      {NAV.map((n, i) => [
+        n.group && n.group !== NAV[i - 1]?.group && <li key={"group-" + n.group} className="nav-group" aria-hidden="true">{n.group}</li>,
         <li key={n.id}>
           <button className={"nav-item" + (view === n.id ? " active" : "")}
                   aria-current={view === n.id ? "page" : undefined}
@@ -88,8 +93,8 @@ const NavList = memo(function NavList({ view, attention, onView }) {
             <span>{n.label}</span>
             {n.id === "queue" && attention > 0 && <b className="nav-badge" aria-label={attention + " need attention"}>{attention}</b>}
           </button>
-        </li>
-      ))}
+        </li>,
+      ])}
     </ul>
   );
 });
@@ -167,6 +172,9 @@ export default function Page() {
   const bad = error || data?.status?.error;
   const webhookMode = data?.status?.webhook_enabled;
   const lastDelivery = webhookMode ? data.status.last_webhook : data?.status?.last_poll;
+  // A read-only desk never polls the mailbox; it mirrors the writer's data from Postgres.
+  const readOnly = Boolean(data?.status?.read_only);
+  const syncIssue = readOnly && (data.status.replica_error || !data.status.replica_synced);
   const closeCase = useCallback(() => guardedGo({ caseId: null }), [guardedGo]);
   // Stable callbacks so memoised views (Queue, Overview, rows) don't re-render on every parent render.
   const openCase = useCallback((id, opts) => guardedGo({ caseId: id }, opts), [guardedGo]);
@@ -183,13 +191,22 @@ export default function Page() {
         </div>
         <NavList view={nav.view} attention={attention} onView={setView} />
         <div className="sidebar-foot">
-          <span className={"signal" + (bad ? " bad" : data ? " ok" : "")}>
-            <i aria-hidden="true" />
-            {bad ? "Connection issue" : webhookMode ? "Webhook mode" : lastDelivery ? "Mailbox live" : "Connecting…"}
-          </span>
+          {readOnly ? (
+            <span className={"signal" + (data.status.replica_error ? " bad" : syncIssue ? "" : " ok")}>
+              <i aria-hidden="true" />
+              {data.status.replica_error ? "Sync issue" : syncIssue ? "Syncing…" : "Read-only desk"}
+            </span>
+          ) : (
+            <span className={"signal" + (bad ? " bad" : data ? " ok" : "")}>
+              <i aria-hidden="true" />
+              {bad ? "Connection issue" : webhookMode ? "Webhook mode" : lastDelivery ? "Mailbox live" : "Connecting…"}
+            </span>
+          )}
           <dl>
-            <div><dt>Mode</dt><dd>{modeLabel(data?.status)}</dd></div>
-            <div><dt>{webhookMode ? "Last webhook" : "Last poll"}</dt><dd className="mono">{clock(lastDelivery)}</dd></div>
+            <div><dt>Mode</dt><dd>{readOnly ? "View only" : modeLabel(data?.status)}</dd></div>
+            {readOnly
+              ? <div><dt>Last sync</dt><dd className="mono">{clock(data.status.replica_synced)}</dd></div>
+              : <div><dt>{webhookMode ? "Last webhook" : "Last poll"}</dt><dd className="mono">{clock(lastDelivery)}</dd></div>}
             <div><dt>Inbox</dt><dd className="mono">{data ? messages.length : "—"}</dd></div>
             <div><dt>Kit rates</dt><dd className="mono">{data?.status?.tariffs ?? "—"}</dd></div>
           </dl>
@@ -199,7 +216,7 @@ export default function Page() {
       <main id="main" className={"content view-" + nav.view + (current ? " has-case" : "")}>
         <header className="page-head">
           <div>
-            <div className="eyebrow">Air export · Live wave</div>
+            <div className="eyebrow">{EYEBROWS[nav.view] || "Air export · Live wave"}</div>
             <h1>{TITLES[nav.view] || "Overview"}</h1>
           </div>
         </header>
@@ -228,6 +245,11 @@ export default function Page() {
               <KeptView name="queue" active={nav.view === "queue"}>
                 <Queue messages={messages} selectedId={nav.caseId} scope={nav.scope} active={nav.view === "queue"}
                        setScope={setScope} onSelect={openCase} />
+              </KeptView>
+            )}
+            {seen.current.has("score") && (
+              <KeptView name="score" active={nav.view === "score"}>
+                <Scoreboard messages={messages} onOpen={openCase} />
               </KeptView>
             )}
             {seen.current.has("crm") && (

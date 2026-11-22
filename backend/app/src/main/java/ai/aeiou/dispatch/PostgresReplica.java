@@ -25,7 +25,8 @@ class PostgresReplica {
   private final Postgres postgres;
   private final ScheduledExecutorService pulls;
   private Connection pg;
-  private String error;
+  private volatile String error;
+  private volatile java.time.Instant lastSync;
 
   @Autowired
   PostgresReplica(
@@ -83,12 +84,18 @@ class PostgresReplica {
         }
       });
       error = null;
+      lastSync = java.time.Instant.now();
     } catch (SQLException | RuntimeException ex) {
       if (error == null) log.warn("Postgres replica pull failed: {}", ex.getMessage());
       error = "Postgres replica pull failed (" + ex.getClass().getSimpleName() + ")";
       Postgres.close(pg);
       pg = null;
     }
+  }
+
+  /** When the last pull from Postgres finished, or null before the first one. */
+  java.time.Instant lastSync() {
+    return lastSync;
   }
 
   private record Table(List<String> columns, List<Object[]> rows) {}
