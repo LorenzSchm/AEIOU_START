@@ -232,3 +232,7 @@ __marimo__/
 
 # frontend source modules (overrides the generic lib/ rule above)
 !frontend/app/lib/
+
+# Local runtime databases of the desk (read-only replica, translation cache). Never commit.
+backend/state/dispatch.replica.sqlite3*
+backend/state/translations.sqlite3*
