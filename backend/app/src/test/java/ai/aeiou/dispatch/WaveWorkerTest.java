@@ -1120,6 +1120,75 @@ class WaveWorkerTest {
     assertNotNull(ledger.delivery("bid:7:" + other + ":shipment-1:transit"));
   }
 
+  @Test
+  void round185BooksOnlyTheShipmentTheCustomerNamed() {
+    quoteRound185(true);
+    var quoteId = ledger.jdbc().queryForObject(
+        "SELECT json_extract(response,'$.id') FROM deliveries WHERE action='quote:7'", Long.class);
+    when(upstream.post(eq("/v1/portal/bookings"), anyMap())).thenAnswer(call -> {
+      Map<String, Object> request = call.getArgument(1);
+      return Map.of("booking_reference", "BK-" + request.get("rate_id"), "status", "booked",
+          "rate_id", request.get("rate_id"), "team_reference", request.get("team_reference"));
+    });
+    var bookings = new PortalBookings(ledger, upstream, clock, true);
+    receive(5000, "weidner-spielwaren@hackloop.mail", "Re: Air freight quotes for YYZ and BOM", """
+        Thank you for your offer. Both prices work for us. Please go ahead and book the first shipment now; we will confirm the second shipment later.
+
+        Cheers,
+        Klaus Weidner
+        Weidner Spielwaren GmbH, Nuremberg""", quoteId);
+    clock.current = START.plusSeconds(130);
+
+    bookings.bookAcceptedShipments();
+    bookings.bookAcceptedShipments();
+
+    verify(upstream, times(1)).post(eq("/v1/portal/bookings"), anyMap());
+    verify(upstream).post("/v1/portal/bookings", Map.of("rate_id", "R-JP-YYZ", "team_reference", "AEIOU-7-1"));
+    assertNotNull(ledger.jdbc().queryForObject(
+        "SELECT booking FROM shipment_leg WHERE leg_id=?", String.class, Ledger.shipmentQuoteLeg(7, 1)));
+    assertNull(ledger.jdbc().queryForObject(
+        "SELECT booking FROM shipment_leg WHERE leg_id=?", String.class, Ledger.shipmentQuoteLeg(7, 2)));
+    assertNull(ledger.mail(7).get("booking"));
+
+    receive(5001, "weidner-spielwaren@hackloop.mail", "Re: Air freight quotes for YYZ and BOM",
+        "Could you also book the BOM shipment if the price is unchanged?", quoteId);
+    bookings.bookAcceptedShipments();
+    verify(upstream, times(1)).post(eq("/v1/portal/bookings"), anyMap());
+    receive(5002, "weidner-spielwaren@hackloop.mail", "Re: Air freight quotes for YYZ and BOM",
+        "Thanks. Please book the shipment to BOM as well.", quoteId);
+    bookings.bookAcceptedShipments();
+    verify(upstream).post("/v1/portal/bookings", Map.of("rate_id", "R-FQ-BOM", "team_reference", "AEIOU-7-2"));
+    verify(upstream, times(2)).post(eq("/v1/portal/bookings"), anyMap());
+  }
+
+  @Test
+  void separateShipmentApprovalNamesTheShipmentsToBook() {
+    var lanes = List.of("YYZ", "BOM");
+    String round185 = "Thank you for your offer. Both prices work for us. Please go ahead and book the first"
+        + " shipment now; we will confirm the second shipment later.\n\nCheers,\nKlaus Weidner";
+    assertEquals(Set.of(1), PortalBookings.acceptedShipments(round185, lanes));
+    assertEquals(Set.of(2), PortalBookings.acceptedShipments("Please book shipment 2.", lanes));
+    assertEquals(Set.of(2), PortalBookings.acceptedShipments("Please book the shipment to BOM now.", lanes));
+    assertEquals(Set.of(1), PortalBookings.acceptedShipments("Yes, please book the YYZ shipment.", lanes));
+    assertEquals(Set.of(1, 2), PortalBookings.acceptedShipments("Thanks! Please book both shipments.", lanes));
+    assertEquals(Set.of(1, 2), PortalBookings.acceptedShipments(
+        "Please book the first shipment and the second shipment.", lanes));
+    // Conditions, holds, unnamed or unknown shipments and contradictions never book.
+    for (String reply : List.of(
+        "Please book the first shipment if the price stays the same.",
+        "Please book the first shipment unless the transit changes.",
+        "Please book it.",
+        "Please book the first shipment. Could you match EUR 4500 for the second one?",
+        "Please book the first shipment; we will confirm the first shipment later.",
+        "Please book shipment 3.",
+        "Please book the shipment to JFK.",
+        "Please do not book the first shipment.",
+        "Please hold the second shipment and book the first shipment.",
+        "Both prices work for us."))
+      assertEquals(Set.of(), PortalBookings.acceptedShipments(reply, lanes), reply);
+    assertFalse(PortalBookings.accepted(round185));
+  }
+
   @ParameterizedTest
   @ValueSource(strings = {"weight", "omitted", "pickup", "partial_source"})
   void round113RejectsUnverifiedGatewayFacts(String defect) {
