@@ -55,30 +55,55 @@ function shareMessages(prev, next) {
 }
 const shareValue = (prev, next) => (prev && JSON.stringify(prev) === JSON.stringify(next) ? prev : next);
 
-/** Polls status, messages and directory every 2 s. */
+/** Replaces or inserts one message, keeping the inbox order (newest id first) and every other object. */
+function upsertMessage(messages, message) {
+  const i = messages.findIndex((m) => m.id === message.id);
+  if (i >= 0) {
+    if (JSON.stringify(messages[i]) === JSON.stringify(message)) return messages;
+    const next = messages.slice();
+    next[i] = message;
+    return next;
+  }
+  const at = messages.findIndex((m) => m.id < message.id);
+  const next = messages.slice();
+  next.splice(at < 0 ? next.length : at, 0, message);
+  return next;
+}
+
+const STREAM_FAILURES_BEFORE_POLLING = 3;
+
+/**
+ * Live desk data: status, messages and the carrier directory.
+ *
+ * Connects to the backend's event stream (GET /events): one snapshot, then only the messages and status
+ * that change. Unchanged messages keep their objects, so memoised rows don't re-render. If the stream
+ * fails repeatedly (or in mock mode), it falls back to polling every 2 s. `refresh` re-reads everything
+ * at once, e.g. right after an operator action.
+ */
 export function useDispatchData() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const cache = useRef(null);
+  const directory = useCallback(async () => {
+    if (!cache.current) cache.current = await api("/directory");
+    return cache.current;
+  }, []);
   const refresh = useCallback(async () => {
-    const [status, messages, directory] = await Promise.all([
-      api("/status"),
-      api("/messages"),
-      cache.current ? Promise.resolve(cache.current) : api("/directory"),
-    ]);
-    cache.current = directory;
+    const [status, messages, dir] = await Promise.all([api("/status"), api("/messages"), directory()]);
     setData((old) => {
       const next = {
         status: shareValue(old?.status, status),
         messages: shareMessages(old?.messages, messages),
-        directory,
+        directory: dir,
       };
       return old && next.status === old.status && next.messages === old.messages && next.directory === old.directory ? old : next;
     });
     setError("");
-  }, []);
+  }, [directory]);
+
   useEffect(() => {
-    let active = true, timer;
+    let active = true, timer, source;
+
     async function tick() {
       try {
         if (active) await refresh();
@@ -87,12 +112,56 @@ export function useDispatchData() {
       }
       if (active) timer = setTimeout(tick, 2000);
     }
-    tick();
+
+    if (MOCK || typeof EventSource === "undefined") {
+      tick();
+      return () => {
+        active = false;
+        clearTimeout(timer);
+      };
+    }
+
+    let failures = 0;
+    source = new EventSource(base + "/events");
+    const on = (name, handle) => source.addEventListener(name, (e) => {
+      if (!active) return;
+      try {
+        handle(JSON.parse(e.data));
+      } catch (err) {
+        setError("A live update could not be read: " + err.message);
+      }
+    });
+    on("snapshot", async (s) => {
+      failures = 0;
+      const dir = await directory().catch(() => cache.current);
+      if (!active) return;
+      setData((old) => ({
+        status: shareValue(old?.status, s.status),
+        messages: shareMessages(old?.messages, s.messages),
+        directory: dir,
+      }));
+      setError("");
+    });
+    on("message", ({ message }) => setData((old) => old && { ...old, messages: upsertMessage(old.messages, message) }));
+    on("removed", ({ id }) => setData((old) => old && { ...old, messages: old.messages.filter((m) => m.id !== id) }));
+    on("status", ({ status }) => setData((old) => old && { ...old, status: shareValue(old.status, status) }));
+    source.onerror = () => {
+      if (!active) return;
+      // EventSource reconnects by itself and gets a fresh snapshot. Only give up after repeated failures.
+      if (++failures >= STREAM_FAILURES_BEFORE_POLLING) {
+        source.close();
+        tick();
+      } else {
+        setError("Live updates interrupted. Reconnecting…");
+      }
+    };
     return () => {
       active = false;
+      source?.close();
       clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [refresh, directory]);
+
   return { data, error, refresh };
 }
 
