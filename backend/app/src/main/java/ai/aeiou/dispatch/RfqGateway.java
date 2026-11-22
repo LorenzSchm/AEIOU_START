@@ -1256,7 +1256,8 @@ class RfqGateway {
             null,
             0);
     String issue = catalog.problem(s);
-    if (local.issue() != null && !local.issue().equals(catalog.problem(known)))
+    if (local.issue() != null && !local.issue().equals(catalog.problem(known))
+        && !modelSettles(local.issue(), review))
       issue = local.issue();
     else if (truncated || review) issue = "Review the incomplete or ambiguous RFQ extraction.";
     else if (pickup != (zone != null)) issue = "Confirm the pickup requirement and postcode.";
@@ -1275,6 +1276,14 @@ class RfqGateway {
         && (origin == null || !catalog.zones.containsValue(origin) || origin.equals(extractedDestination)))
       issue = IMPORT_ISSUE + " " + extractedDestination;
     return new MailParser.Parsed(s, issue);
+  }
+
+  /**
+   * Java's quote words miss languages and misspellings ("cotización", "qoute"). The confident,
+   * schema-constrained model reading of a complete shipment settles that the mail is an RFQ.
+   */
+  private static boolean modelSettles(String javaIssue, boolean review) {
+    return !review && MailParser.NOT_A_QUOTE_REQUEST_ISSUE.equals(javaIssue);
   }
 
   private static final Pattern AIRPORT = Pattern.compile("[A-Z]{3}");
@@ -1360,7 +1369,8 @@ class RfqGateway {
     String proposedDeadline = text(response, "arrive_by");
     boolean deadlineRequested = flag(response, "arrival_deadline_requested");
     if (proposedReady != null && !proposedReady.equals(Objects.toString(ready, null))
-        && !(ready == null && proposedReady.equals(onlyIsoDate(MailParser.authoredText(body))))) return false;
+        && !(ready == null && proposedReady.equals(
+            onlyIsoDate(MailParser.withIsoDates(MailParser.authoredText(body)))))) return false;
     if (deadlineRequested || proposedDeadline != null) {
       return arrival != null && arrival.complete()
           && (proposedDeadline == null || proposedDeadline.equals(arrival.arriveBy().toString()));
