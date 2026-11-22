@@ -245,7 +245,7 @@ class PriceMatchRepliesTest {
     long replyId = parent + 100;
     ledger.ingest(Map.of("messages", List.of(Map.of(
         "id", replyId, "from", "customer@example.invalid", "subject", "Re: quote",
-        "body", body, "sent_at", NOW.toString(), "in_reply_to", parent)),
+        "body", body, "sent_at", NOW.minusSeconds(PortalBookings.BOOKING_GRACE_SECONDS).toString(), "in_reply_to", parent)),
         "next_since_id", replyId), catalog, NOW);
   }
 }
