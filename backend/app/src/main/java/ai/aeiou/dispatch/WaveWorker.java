@@ -224,6 +224,8 @@ class WaveWorker {
                 """,
                 Long.class,
                 clock.instant().minusSeconds(360).toString())) {
+      var pause = recheckAfter.get(id);
+      if (pause != null && clock.instant().isBefore(pause)) continue;
       try {
         advance(id);
       } catch (RetryLater ex) {
@@ -235,6 +237,14 @@ class WaveWorker {
       } catch (ChangedTariff ex) {
         ledger.stage(id, "collecting", ex.getMessage());
       } catch (Conflict ex) {
+        // A rate that expired or could not be verified a moment ago can be compared again while the
+        // window is open; parking it for review would lose the request.
+        if (RATE_RECHECKS.contains(ex.getMessage()) && rateRechecks.merge(id, 1, Integer::sum) <= MAX_RATE_RECHECKS) {
+          log.info("RFQ {}: {} Comparing rates again shortly.", id, ex.getMessage());
+          recheckAfter.put(id, clock.instant().plusSeconds(RATE_RECHECK_SECONDS));
+          ledger.stage(id, "collecting", ex.getMessage());
+          continue;
+        }
         ledger.stage(id, "review", ex.getMessage());
       } catch (RuntimeException ex) {
         // An unexpected error is often transient (an upstream reply, a race): retry on the next
@@ -254,6 +264,16 @@ class WaveWorker {
 
   private static final int UNEXPECTED_RETRIES = 3;
   private static final int MAX_CLARIFICATIONS = 3;
+  private static final Set<String> RATE_RECHECKS = Set.of(
+      "Quote rate expired.",
+      "No current rate could be confirmed.",
+      "The pickup rate expired. Compare rates again.",
+      "The carrier's current rate could not be verified. Compare rates again.",
+      "The current rate no longer meets the requested arrival date. Compare rates again.");
+  private static final int MAX_RATE_RECHECKS = 3;
+  private static final long RATE_RECHECK_SECONDS = 5;
+  private final java.util.Map<Long, Integer> rateRechecks = new java.util.concurrent.ConcurrentHashMap<>();
+  private final java.util.Map<Long, Instant> recheckAfter = new java.util.concurrent.ConcurrentHashMap<>();
   private final java.util.Map<Long, Integer> unexpected = new java.util.concurrent.ConcurrentHashMap<>();
 
   static class Conflict extends RuntimeException {

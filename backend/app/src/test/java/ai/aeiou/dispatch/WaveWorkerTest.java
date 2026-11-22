@@ -5000,4 +5000,50 @@ class WaveWorkerTest {
     assertNull(ledger.delivery("decline:7"));
     assertNotEquals("declined", ledger.mail(7).get("stage"));
   }
+
+  @Test
+  void comparesRatesAgainWhenThePortalCannotVerifyTheRateForAMoment() {
+    lagosRequest();
+    var offer = new Offer("Test Cargo", 2, new BigDecimal("80.00"), new BigDecimal("1162"), "portal",
+        "R-flaky00000000001", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true));
+    doThrow(new org.springframework.web.client.HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE))
+        .doReturn(offer).when(upstream).currentRate(any(), any(), any());
+    worker.work();
+    clock.current = START.plusSeconds(76);
+    worker.work();
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals("collecting", ledger.mail(7).get("stage"));
+    clock.current = START.plusSeconds(78);
+    worker.work();
+    assertNull(ledger.delivery("quote:7"), "waits a few seconds before asking the portal again");
+    clock.current = START.plusSeconds(82);
+    worker.work();
+    assertEquals("sent", ledger.delivery("quote:7"));
+    assertTrue(outbound.getLast().get("body").toString().contains("EUR 80.00 all in"));
+  }
+
+  @Test
+  void parksTheRequestWhenThePortalKeepsRefusingToVerifyTheRate() {
+    lagosRequest();
+    var offer = new Offer("Test Cargo", 2, new BigDecimal("80.00"), new BigDecimal("1162"), "portal",
+        "R-flaky00000000002", START.plusSeconds(900));
+    when(upstream.rates(any(), any())).thenReturn(new FiveU.Rates(List.of(offer), true));
+    doThrow(new org.springframework.web.client.HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE))
+        .when(upstream).currentRate(any(), any(), any());
+    worker.work();
+    for (long second = 76; second < 140; second += 6) {
+      clock.current = START.plusSeconds(second);
+      worker.work();
+    }
+    assertNull(ledger.delivery("quote:7"));
+    assertEquals("review", ledger.mail(7).get("stage"));
+  }
+
+  /** A route no rate sheet covers (live #36292), so only the portal can price it. */
+  private void lagosRequest() {
+    receive(7, "lindqvist@hackloop.mail", "Fastest air freight to LOS", "Hello,\n\nCould you please quote the"
+        + " fastest air freight option from FRA to LOS (Lagos, NG)? 1162 kg gross, 4.45 cbm, ready on 2026-11-27."
+        + " We will deliver it to FRA ourselves.\n\nSara\nLindqvist Medtech", null);
+  }
 }
