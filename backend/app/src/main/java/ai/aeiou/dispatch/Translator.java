@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -28,12 +27,13 @@ import org.springframework.web.server.ResponseStatusException;
  * local SQLite file next to the dispatch database backs it up when Postgres is unset or unreachable.
  */
 @Component
-class Translator {
+class Translator implements AutoCloseable {
   static final int MAX_PARAGRAPHS = 120;
   static final int MAX_CHARS = 16_000;
 
   private final RestClient openai;
   private final JdbcTemplate cache;
+  private final com.zaxxer.hikari.HikariDataSource cachePool;
   private final ObjectMapper json;
   private final String model;
   private final String key;
@@ -62,13 +62,19 @@ class Translator {
     this.postgres = Postgres.of(postgresUrl);
     var file = Path.of(db).toAbsolutePath().resolveSibling("translations.sqlite3");
     Files.createDirectories(file.getParent());
-    cache = new JdbcTemplate(new DriverManagerDataSource("jdbc:sqlite:" + file + "?busy_timeout=5000"));
+    cachePool = SqlitePool.open(file, 5_000, 4, "translations");
+    cache = new JdbcTemplate(cachePool);
     cache.execute("PRAGMA journal_mode=WAL");
     cache.execute(
         """
         CREATE TABLE IF NOT EXISTS translation(key TEXT PRIMARY KEY, target TEXT NOT NULL,
         source TEXT, paragraphs TEXT NOT NULL, model TEXT NOT NULL, created TEXT NOT NULL)
         """);
+  }
+
+  @Override
+  public void close() {
+    cachePool.close();
   }
 
   record Request(List<String> paragraphs, String target) {}

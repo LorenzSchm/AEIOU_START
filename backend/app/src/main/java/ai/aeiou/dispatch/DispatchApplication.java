@@ -12,10 +12,12 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-@SpringBootApplication
+// The ledger and translator own their SQLite pools; HikariCP on the classpath must not add another.
+@SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
 @EnableScheduling
 public class DispatchApplication {
   public static void main(String[] args) {

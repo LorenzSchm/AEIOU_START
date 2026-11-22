@@ -16,7 +16,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Repository
-class Ledger {
+class Ledger implements AutoCloseable {
   static final long COUNTER_WAIT_SECONDS = 20;
   private static final Pattern CASE_REFERENCE = Pattern.compile("(?i)\\bAEIOU-(\\d{1,18})\\b");
   private static final long SHIPMENT_SCOPE_SIZE = 10;
@@ -41,6 +41,12 @@ class Ledger {
   }
 
   private final ObjectMapper json;
+  private final com.zaxxer.hikari.HikariDataSource pool;
+
+  @Override
+  public void close() {
+    pool.close();
+  }
 
   JsonNode tree(Object value) {
     return json.valueToTree(value);
@@ -60,9 +66,10 @@ class Ledger {
         ? configured.resolveSibling(configured.getFileName().toString().replaceFirst("(\\.sqlite3?)?$", ".replica$1"))
         : configured;
     Files.createDirectories(path.getParent());
-    var ds = new DriverManagerDataSource("jdbc:sqlite:" + path + "?busy_timeout=10000");
-    db = new JdbcTemplate(ds);
-    tx = new TransactionTemplate(new DataSourceTransactionManager(ds));
+    // The worker's scheduler (5), voice executor (3), desk-events, the replica and HTTP requests share it.
+    pool = SqlitePool.open(path, 10_000, 8, "ledger");
+    db = new JdbcTemplate(pool);
+    tx = new TransactionTemplate(new DataSourceTransactionManager(pool));
     db.execute("PRAGMA journal_mode=WAL");
     db.execute("CREATE TABLE IF NOT EXISTS cursor(id INTEGER PRIMARY KEY,value INTEGER NOT NULL)");
     db.update("INSERT OR IGNORE INTO cursor VALUES(1,0)");
