@@ -680,6 +680,14 @@ class Ledger {
         parents.put(mid, id(row.get("root")));
     }
     var outgoing = outgoing(parents);
+    // Load delivery states and tenders once instead of querying per row: every query opens its own
+    // SQLite connection, so per-row lookups over ~1,000 messages took seconds per request.
+    Map<String, String> states = new HashMap<>();
+    for (var d : db.queryForList("SELECT action,state FROM deliveries"))
+      states.put(str(d, "action"), (String) d.get("state"));
+    Map<Long, List<Map<String, Object>>> tendersByRequest = new HashMap<>();
+    for (var t : db.queryForList("SELECT * FROM tender ORDER BY request_id, email"))
+      tendersByRequest.computeIfAbsent(id(t.get("request_id")), k -> new ArrayList<>()).add(t);
     for (var row : rows) {
       long mid = id(row.get("id"));
       for (String k : List.of("fields", "attachments", "proposal", "booking", "board_result"))
@@ -687,16 +695,16 @@ class Ledger {
       row.put("thread_id", threadId(mid, parents));
       row.put("language", MessageLanguage.detect((String) row.get("body")));
       row.put("outgoing", outgoing.getOrDefault(mid, List.of()));
-      row.put("delivery", delivery("quote:" + mid));
-      row.put("reply_delivery", delivery("reply:" + mid));
+      row.put("delivery", states.get("quote:" + mid));
+      row.put("reply_delivery", states.get("reply:" + mid));
       var bids = new LinkedHashMap<String, String>();
-      for (var t : tenders(mid)) {
+      for (var t : tendersByRequest.getOrDefault(mid, List.of())) {
         var email = str(t, "email");
         bids.put(
             email,
             t.get("reply_id") != null
                 ? t.get("euros") != null ? "priced" : "unreadable"
-                : delivery(bidAction(t)));
+                : states.get(bidAction(t)));
       }
       row.put("bid_requests", bids);
     }
