@@ -197,7 +197,7 @@ export default function Page() {
       <a href="#main" className="skip">Skip to content</a>
       <nav className="sidebar glass" aria-label="Primary">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
+          <img className="brand-mark" src="/logo.png" alt="" aria-hidden="true" width="34" height="34" />
           <span>AEIOU<small>Dispatch</small></span>
         </div>
         <NavList view={nav.view} attention={attention} onView={setView} />
