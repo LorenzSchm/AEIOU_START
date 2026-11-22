@@ -888,10 +888,23 @@ class RfqGateway {
         });
         throw quoteRetry();
       }
-      throw extractionUnavailable(id, local, applyExtraction, rejected(id, ex));
+      throw extractionUnavailable(id, local, javaAlone(mail, local), applyExtraction, rejected(id, ex));
     } catch (Exception ex) {
-      throw extractionUnavailable(id, local, applyExtraction, unconfirmed(id));
+      throw extractionUnavailable(id, local, javaAlone(mail, local), applyExtraction, unconfirmed(id));
     }
+  }
+
+  /**
+   * Whether Java's parse may stand without the model: complete, in a language its patterns read
+   * well, and not missing a pickup the customer asked for (the model's cross-check exists because
+   * Java has missed pickups written in other languages).
+   */
+  private boolean javaAlone(Map<String, Object> mail, MailParser.Parsed local) {
+    if (local.issue() != null || local.shipment() == null) return false;
+    String subject = Ledger.str(mail, "subject"), body = Ledger.str(mail, "body");
+    if (local.shipment().pickupZone() == null && MailParser.requestsPickup(subject, body)) return false;
+    String language = CustomerLanguage.replyTag(mail);
+    return language == null || Set.of("en", "de", "fr").contains(language);
   }
 
   /**
@@ -899,9 +912,8 @@ class RfqGateway {
    * loses it, so continue on Java's own parse when that is complete: it is the authoritative
    * candidate the model only cross-checks. Otherwise ask the gateway again shortly.
    */
-  private WaveWorker.Conflict extractionUnavailable(long id, MailParser.Parsed local, boolean applyExtraction,
-      WaveWorker.Conflict failure) {
-    boolean complete = local.issue() == null;
+  private WaveWorker.Conflict extractionUnavailable(long id, MailParser.Parsed local, boolean complete,
+      boolean applyExtraction, WaveWorker.Conflict failure) {
     ledger.transactions().executeWithoutResult(tx -> {
       ledger.jdbc().update("DELETE FROM rfq_parse WHERE request_id=? AND state IN ('pending','unconfirmed')", id);
       if (complete) {

@@ -5046,4 +5046,25 @@ class WaveWorkerTest {
         + " fastest air freight option from FRA to LOS (Lagos, NG)? 1162 kg gross, 4.45 cbm, ready on 2026-11-27."
         + " We will deliver it to FRA ourselves.\n\nSara\nLindqvist Medtech", null);
   }
+
+  @Test
+  void gatewayOutageNeverQuotesAKoreanRequestOnJavaAlone() throws Exception {
+    restart(false, true);
+    when(upstream.parseRfq(anyMap())).thenThrow(new ResourceAccessException("timeout"));
+    receive(7, "nordlicht-audio@hackloop.mail", "KUL행 항공 운송 견적 요청", """
+        안녕하세요,
+
+        화물은 FRA에서 KUL까지 가장 빠른 옵션으로 부탁드립니다. 총중량은 1271 kg, 부피는 4.26 cbm입니다.
+        FRA 공항까지는 저희가 직접 반입하겠습니다.
+
+        Mira Petersen
+        Nordlicht Audio""", null);
+    assertNull(MailParser.request("KUL행 항공 운송 견적 요청", ledger.mail(7).get("body").toString(), false, catalog).issue());
+    worker.work();
+    worker.work();
+    assertTrue(ledger.jdbc().queryForList("SELECT model FROM rfq_parse WHERE request_id=7", String.class).isEmpty(),
+        "the model's cross-check is retried, not replaced by Java");
+    assertTrue(outbound.isEmpty());
+    assertNotEquals("review", ledger.mail(7).get("stage"));
+  }
 }
