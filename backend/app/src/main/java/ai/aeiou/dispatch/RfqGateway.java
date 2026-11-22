@@ -971,7 +971,7 @@ class RfqGateway {
   }
 
   /**
-   * Extracts with the enum and pattern constraints. Should the gateway refuse them (HTTP 400), fall
+   * Extracts with the enum and pattern constraints. Should the gateway refuse them (a client error other than auth or rate limit), fall
    * back once to plain nullable strings and keep using those; validate() normalises either result.
    */
   private JsonNode extract(String prompt, String input, boolean standard, boolean withLanguage)
@@ -982,8 +982,11 @@ class RfqGateway {
     try {
       return completeQuote(prompt, input, extractionSchema(standard, withLanguage, true), tokens);
     } catch (HttpClientErrorException ex) {
-      if (ex.getStatusCode().value() != 400) throw ex;
-      log.warn("The gateway refused the constrained RFQ schema (HTTP 400); retrying with plain strings");
+      int status = ex.getStatusCode().value();
+      // Authentication and rate limits are not about the schema; any other refusal (400, 422, ...)
+      // falls back to the plain schema so a live request never stalls on the constraints.
+      if (status == 401 || status == 403 || status == 429) throw ex;
+      log.warn("The gateway refused the constrained RFQ schema (HTTP {}); retrying with plain strings", status);
       var result = completeQuote(prompt, input, extractionSchema(standard, withLanguage, false), tokens);
       constrainedSchemaRejected = true;
       return result;

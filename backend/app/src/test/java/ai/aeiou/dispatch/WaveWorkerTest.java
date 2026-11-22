@@ -4572,6 +4572,27 @@ class WaveWorkerTest {
     assertEquals("fastest", ledger.read(ledger.mail(7).get("fields"), Shipment.class).preference());
   }
 
+  @Test
+  void aConstrainedSchemaRefusedWith422AlsoFallsBack() throws Exception {
+    restart(false, true);
+    var schemas = new ArrayList<JsonNode>();
+    when(upstream.parseRfq(anyMap())).thenAnswer(call -> {
+      var schema = mapper.valueToTree(call.getArgument(0, Map.class)).at("/response_format/json_schema");
+      if ("quote_check".equals(schema.path("name").asText())) return gatewayResponse("{\"contradiction\":false}");
+      schemas.add(schema);
+      if (schema.at("/schema/properties/preference").has("enum"))
+        throw HttpClientErrorException.create(HttpStatus.UNPROCESSABLE_ENTITY, "Bad schema", new HttpHeaders(), new byte[0], null);
+      return gatewayResponse(standardResult(LIVE_56174_EXTRACTION, true, "\"2026-11-26\"", "null", false));
+    });
+    receive(7, "hofmann-textilwerk@hackloop.mail", LIVE_56174_SUBJECT, LIVE_56174_BODY, null);
+    worker.work();
+
+    assertEquals(2, schemas.size());
+    assertFalse(schemas.getLast().at("/schema/properties/origin").has("pattern"));
+    assertEquals("collecting", ledger.mail(7).get("stage"), () -> String.valueOf(ledger.mail(7)));
+    assertEquals("fastest", ledger.read(ledger.mail(7).get("fields"), Shipment.class).preference());
+  }
+
   @ParameterizedTest
   @CsvSource(nullValues = "NULL", value = {
       "fastest,fastest", "Fastest option,fastest", "quickest,fastest", "express,fastest",
