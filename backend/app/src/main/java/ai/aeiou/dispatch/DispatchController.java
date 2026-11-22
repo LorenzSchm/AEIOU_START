@@ -95,7 +95,7 @@ class DispatchController {
       @RequestParam(required = false) String q, @RequestParam(required = false) Long before,
       @RequestParam(defaultValue = "50") int limit) {
     if (limit < 1 || limit > 200) throw new IllegalArgumentException("limit must be between 1 and 200.");
-    return DeskPages.queue(inbox.current().tree(), scope, q, before, limit);
+    return DeskPages.queue(inbox.current().tree(), scope, q, before, limit, System.currentTimeMillis());
   }
 
   /** One sorted, filtered page of the Shipments Bookings or Lost & open table. */

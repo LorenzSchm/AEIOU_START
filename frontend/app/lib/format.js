@@ -24,17 +24,30 @@ export const secondsLeft = (m, now = Date.now()) =>
 
 export const ATTENTION_STAGES = ["review", "waiting for pickup", "waiting for air price", "operator review"];
 
-export const needsAttention = (m) =>
+// Answered without a quote: nothing is left to do for the operator.
+export const ANSWERED_STAGES = ["declined", "waiting for documents"];
+export const answered = (m) => m.kind === "request" && ANSWERED_STAGES.includes(m.stage);
+
+// Only while the quote window is open can a person still change the outcome.
+const windowOpen = (m, now) => {
+  const left = secondsLeft(m, now);
+  return left === null || left > 0;
+};
+
+export const needsAttention = (m, now = Date.now()) =>
   m.kind === "request" &&
   (ATTENTION_STAGES.includes(m.stage) || ["uncertain", "pending"].includes(m.delivery)) &&
-  m.delivery !== "sent";
+  m.delivery !== "sent" &&
+  !answered(m) &&
+  windowOpen(m, now);
 
 export function statusOf(m, now = Date.now()) {
   if (m.booking) return { label: "Booked", tone: "ok" };
   if (m.delivery === "sent") return { label: "Quoted", tone: "info" };
   if (m.delivery === "uncertain" || m.delivery === "pending") return { label: "Unconfirmed", tone: "warn" };
-  if (m.stage === "declined") return { label: "Declined", tone: "muted" };
-  if (needsAttention(m)) return { label: m.stage === "review" ? "Review" : "Waiting", tone: "warn" };
+  if (m.stage === "declined") return { label: "Declined · done", tone: "ok" };
+  if (m.stage === "waiting for documents") return { label: "Docs requested · done", tone: "ok" };
+  if (needsAttention(m, now)) return { label: m.stage === "review" ? "Review" : "Waiting", tone: "warn" };
   if (m.kind === "request") {
     const left = secondsLeft(m, now);
     if (left !== null && left <= 0) return { label: "Expired", tone: "bad" };

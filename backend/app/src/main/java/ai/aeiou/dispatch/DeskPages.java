@@ -33,12 +33,25 @@ final class DeskPages {
     return root.isMissingNode() || root.isNull() || root.asLong() == 0 || root.asLong() == m.path("id").asLong();
   }
 
-  /** format.js needsAttention: a request waiting on a person whose quote has not been sent. */
+  private static final List<String> ANSWERED_STAGES = List.of("declined", "waiting for documents");
+
+  /** format.js needsAttention without the quote window: kept for callers that have no clock. */
   static boolean needsAttention(JsonNode m) {
     String delivery = text(m, "delivery");
     return "request".equals(text(m, "kind"))
         && (ATTENTION_STAGES.contains(text(m, "stage")) || "uncertain".equals(delivery) || "pending".equals(delivery))
-        && !"sent".equals(delivery);
+        && !"sent".equals(delivery)
+        && !ANSWERED_STAGES.contains(text(m, "stage"));
+  }
+
+  /**
+   * format.js needsAttention: a request waiting on a person whose quote has not been sent, while
+   * its quote window is still open. After the window nobody can change the outcome any more.
+   */
+  static boolean needsAttention(JsonNode m, long now) {
+    if (!needsAttention(m)) return false;
+    Long received = DeskSummary.ms(m.path("received"));
+    return received == null || now - received < DeskSummary.WINDOW_MS;
   }
 
   static long threadKey(JsonNode m) {
@@ -61,6 +74,12 @@ final class DeskPages {
    * belongs to (rows show their process from it), each thread sent once.
    */
   static Map<String, Object> queue(JsonNode messages, String scope, String query, Long before, int limit) {
+    return queue(messages, scope, query, before, limit, null);
+  }
+
+  static Map<String, Object> queue(JsonNode messages, String scope, String query, Long before, int limit, Long now) {
+    java.util.function.Predicate<JsonNode> attentionNow =
+        now == null ? DeskPages::needsAttention : m -> needsAttention(m, now);
     var top = new ArrayList<JsonNode>();
     int attention = 0, requests = 0;
     var byThread = new LinkedHashMap<Long, List<JsonNode>>();
@@ -68,11 +87,11 @@ final class DeskPages {
       byThread.computeIfAbsent(threadKey(m), k -> new ArrayList<>()).add(m);
       if (!topLevel(m)) continue;
       top.add(m);
-      if (needsAttention(m)) attention++;
+      if (attentionNow.test(m)) attention++;
       if ("request".equals(text(m, "kind"))) requests++;
     }
     List<JsonNode> base = switch (scope == null ? "attention" : scope) {
-      case "attention" -> top.stream().filter(DeskPages::needsAttention).toList();
+      case "attention" -> top.stream().filter(attentionNow).toList();
       case "requests" -> top.stream().filter(m -> "request".equals(text(m, "kind"))).toList();
       case "all" -> { var all = new ArrayList<JsonNode>(); messages.forEach(all::add); yield all; }
       default -> throw new IllegalArgumentException("scope must be attention, requests or all.");

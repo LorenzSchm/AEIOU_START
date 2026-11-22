@@ -64,7 +64,7 @@ final class DeskSummary {
     var routes = new ArrayList<Map<String, Object>>();
     for (var m : each(messages)) {
       count++;
-      if (DeskPages.needsAttention(m)) {
+      if (DeskPages.needsAttention(m, now)) {
         attention++;
         if (items.size() < 4) {
           var item = new LinkedHashMap<String, Object>();
@@ -243,9 +243,10 @@ final class DeskSummary {
     String delivery = truthy(r, "delivery") ? text(r, "delivery")
         : lastQuote(r) == null ? "" : text(lastQuote(r), "state");
     if ("sent".equals(delivery)) return "quoted";
-    if (ATTENTION_DELIVERY.contains(delivery) || ATTENTION_STAGES.contains(stage)) return "needs attention";
     Long received = ms(r.path("received"));
-    if (received != null && now - received > WINDOW_MS) return "expired";
+    boolean windowOpen = received == null || now - received <= WINDOW_MS;
+    if (windowOpen && (ATTENTION_DELIVERY.contains(delivery) || ATTENTION_STAGES.contains(stage))) return "needs attention";
+    if (!windowOpen) return "expired";
     return "in progress";
   }
 

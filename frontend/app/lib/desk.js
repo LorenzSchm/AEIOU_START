@@ -5,7 +5,7 @@ import { needsAttention } from "./format";
 import { globeState } from "./process";
 
 export function localDesk(messages = [], now = Date.now()) {
-  const attention = messages.filter(needsAttention);
+  const attention = messages.filter((m) => needsAttention(m));
   return {
     messages: messages.length,
     attention: attention.length,

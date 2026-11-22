@@ -31,7 +31,7 @@ const query = (params) =>
 /** The browser's original queue rules, used in mock mode and as the shape the server mirrors. */
 function localQueue(messages, scope, q, before, limit) {
   const top = messages.filter((m) => !m.root || m.root === m.id);
-  const attention = top.filter(needsAttention);
+  const attention = top.filter((m) => needsAttention(m));
   const requests = top.filter((m) => m.kind === "request");
   const base = scope === "attention" ? attention : scope === "requests" ? requests : messages;
   const needle = (q || "").toLowerCase();

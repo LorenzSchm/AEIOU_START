@@ -14,7 +14,7 @@ import { inWindow, useNow } from "../../lib/clock";
 import Timeline from "./Timeline";
 import { deriveProcess } from "../../lib/process";
 import { api } from "../../lib/api";
-import { clock, eur, kindLabel, needsAttention, secondsLeft, statusOf, transitLabel } from "../../lib/format";
+import { answered, clock, eur, kindLabel, needsAttention, secondsLeft, statusOf, transitLabel } from "../../lib/format";
 import { spring } from "../../lib/motion";
 
 const RATE_PORTAL = "https://start-hack.5u.ai/portal/ui";
@@ -103,7 +103,8 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
   }, [onClose]);
 
   const remaining = secondsLeft(m, now);
-  const closed = Boolean(m.delivery) || (remaining !== null && remaining <= 0);
+  const done = Boolean(m.delivery) || answered(m);
+  const closed = done || (remaining !== null && remaining <= 0);
   const request = m.kind === "request";
   const portalUnavailable = m.review_reason?.startsWith("Portal rates unavailable.");
   const canOpenPortal = request && !closed && fields.origin && fields.destination && fields.weight_kg
@@ -173,7 +174,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
 
   const canSend = proposal?.offer && !busy && !closed && !dirty;
   // Anything that needs a human opens the override controls straight away.
-  const attention = Boolean(m.review_reason) || needsAttention(m);
+  const attention = needsAttention(m, now) || (Boolean(m.review_reason) && !closed);
   const canBook = m.delivery === "sent" && proposal?.offer?.rate_id && !m.booking;
 
   return (
@@ -193,7 +194,7 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
           </div>
         </div>
         <div className="sheet-status">
-          {request && m.received && <CountdownRing received={m.received} size={52} done={Boolean(m.delivery)} />}
+          {request && m.received && <CountdownRing received={m.received} size={52} done={done} />}
           <Chip tone={status.tone}>{status.label}</Chip>
         </div>
         <button ref={closeRef} className="icon-btn" aria-label="Close case" onClick={onClose}>
@@ -201,10 +202,16 @@ function CaseContent({ m, messages, directory, refresh, onClose, intro, onDirtyC
         </button>
       </header>
 
-      {m.review_reason && (
-        <div className="banner banner-warn" role="status">
+      {answered(m) && (
+        <div className="banner banner-ok" role="status">
+          <Icon name="check" size={16} />
+          <span>Answered. No action needed.{m.review_reason ? ` ${m.review_reason}` : ""}</span>
+        </div>
+      )}
+      {m.review_reason && !answered(m) && (
+        <div className={"banner " + (closed ? "banner-muted" : "banner-warn")} role="status">
           <Icon name="alert" size={16} />
-          <span>{m.review_reason}</span>
+          <span>{closed ? `Closed. No action possible any more. ${m.review_reason}` : m.review_reason}</span>
           {canOpenPortal && portalUnavailable && (
             <button className="btn" onClick={() => setPortalDialog(true)}>Open rate lookup</button>
           )}
