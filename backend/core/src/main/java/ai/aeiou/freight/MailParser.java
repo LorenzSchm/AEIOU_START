@@ -109,6 +109,31 @@ public final class MailParser {
         + "(?:我们|我司)(?:将|会)?(?:自行|亲自)(?:送|运|交)|(?:弊社|当社)(?:で|が)[^。！？\\n]{0,40}持(?:ち)?込");
   }
 
+  private static final Pattern SEA_MODE = Pattern.compile(
+      "(?iu)\\b(?:sea|ocean)[ -]?freight\\b|\\bport[ -]to[ -]port\\b|\\b(?:FCL|LCL)\\b"
+          + "|\\b(?:20|40|45)\\h*(?:'|’|ft\\b|foot\\b|feet\\b|f\\b|HC\\b|HQ\\b|DV\\b|GP\\b)"
+          + "|\\bSeefracht\\b|\\bfret maritime\\b|\\bflete mar[ií]timo\\b|海运|海運|해상\\h*운송|해상운임|deniz\\h*yolu");
+  private static final Pattern ROAD_MODE = Pattern.compile(
+      "(?iu)\\broad[ -]?freight\\b|\\bfull truck ?load\\b|\\bLandfracht\\b|\\bfret routier\\b");
+  private static final Pattern RAIL_MODE = Pattern.compile("(?iu)\\brail[ -]?freight\\b|\\bBahnfracht\\b");
+  private static final Pattern AIR_MODE = Pattern.compile(
+      "(?iu)\\bair[ -]?(?:freight|cargo|waybill)\\b|\\bair\\h+(?:and|or|/)\\h+(?:sea|ocean)\\b|\\b(?:sea|ocean)\\h+(?:and|or|/)\\h+air\\b|\\bairport\\b|\\bby air\\b|\\bAWB\\b|Luftfracht|Flughafen"
+          + "|fret a[ée]rien|a[ée]roport|carga a[ée]rea|空运|空運|航空|항공|hava\\h*(?:kargo|yolu|taşı)|havaliman");
+
+  /**
+   * The transport mode of a request that is clearly not air freight ("sea freight", "road freight"
+   * or "rail freight"), or null. A text that also mentions air freight or an airport is never
+   * treated as another mode, so "air or sea options" still gets an air quote.
+   */
+  public static String nonAirMode(String subject, String body) {
+    String text = subject + "\n" + body;
+    if (AIR_MODE.matcher(text).find()) return null;
+    if (SEA_MODE.matcher(text).find()) return "sea freight";
+    if (ROAD_MODE.matcher(text).find()) return "road freight";
+    if (RAIL_MODE.matcher(text).find()) return "rail freight";
+    return null;
+  }
+
   public static boolean requestsPickup(String subject, String body) {
     String text = (subject + "\n" + body).replaceAll(
         "(?iu)\\b(?:(?:no need to arrange|no need for) (?:a |the )?(?:truck )?(?:pick[ -]?up|collection)"

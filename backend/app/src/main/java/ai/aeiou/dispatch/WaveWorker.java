@@ -397,6 +397,25 @@ class WaveWorker {
     }
   }
 
+  /** We quote air freight only: answer a sea, road or rail request once with a polite decline. */
+  private void declineNonAir(long id, Map<String, Object> m, String mode) {
+    String action = "decline:" + id;
+    String reason = "Not an air freight request (" + mode + "). Declined.";
+    if (ledger.delivery(action) != null) {
+      if (!"declined".equals(m.get("stage"))) ledger.stage(id, "declined", reason);
+      return;
+    }
+    String approved = Greeting.at(m, clock.instant()) + "\n\n"
+        + "Thank you for your request. We specialise in air freight only, so we are unable to offer a"
+        + " quote for this " + mode + " shipment.\n\n"
+        + "If you have an air freight shipment, we would be glad to quote it.\n\n"
+        + "Best regards,\nTeam AEIOU";
+    String body = inCustomerLanguage(action, m, approved, List.of());
+    ledger.stage(id, "declined", reason);
+    send(action, Map.of(
+        "to", m.get("sender"), "in_reply_to", id, "subject", "Re: " + m.get("subject"), "body", body));
+  }
+
   /** Renders a reply Java wrote in English into the language of the customer's thread. */
   String inCustomerLanguage(String action, Map<String, Object> mail, String approved, List<String> names) {
     return gateway.customerCopy(action, mail, CustomerLanguage.ENGLISH, approved, names).body();
@@ -456,6 +475,11 @@ class WaveWorker {
     if (delivery != null) {
       ledger.stage(
           id, delivery.equals("sent") ? "sent" : "review", "Check the recorded quote delivery.");
+      return;
+    }
+    String mode = MailParser.nonAirMode(Ledger.str(m, "subject"), MailParser.authoredText(Ledger.str(m, "body")));
+    if (mode != null) {
+      declineNonAir(id, m, mode);
       return;
     }
     var separate = separateShipments(m);

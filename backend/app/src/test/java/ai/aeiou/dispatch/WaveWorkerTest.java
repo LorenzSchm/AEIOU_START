@@ -4257,4 +4257,23 @@ class WaveWorkerTest {
     assertNull(s.pickupZone());
     assertNotEquals("waiting for customer", ledger.mail(7).get("stage"));
   }
+
+  @Test
+  void seaFreightRequestsGetOnePoliteDeclineAndNoQuestions() {
+    assertEquals("sea freight", MailParser.nonAirMode("Sea freight quote: Hamburg to Jebel Ali",
+        "Could you send me an all-in price in EUR for a port-to-port sea freight shipment from Hamburg (DEHAM)"
+            + " to Jebel Ali (AEJEA)? It's an FCL shipment in 1 x 40ft container."));
+    assertNull(MailParser.nonAirMode("Air freight quote", "Could you quote air freight from FRA to JFK?"));
+    assertNull(MailParser.nonAirMode("Quote", "Please compare air and sea freight from HAM to DXB."));
+    receive(7, "klaus@hackloop.mail", "Sea freight quote: Hamburg to Jebel Ali",
+        "Hi there,\n\nCould you send me an all-in price in EUR for a port-to-port sea freight shipment from"
+            + " Hamburg (DEHAM) to Jebel Ali (AEJEA)? It is an FCL shipment in 1 x 40ft container, 9617 kg.\n\nKlaus", null);
+    worker.work();
+    worker.work();
+    assertEquals("sent", ledger.delivery("decline:7"));
+    assertEquals("declined", ledger.mail(7).get("stage"));
+    assertNull(ledger.delivery("rfq-info:7"));
+    assertEquals(1, outbound.size(), () -> String.valueOf(outbound));
+    assertTrue(outbound.getFirst().get("body").toString().contains("air freight only"));
+  }
 }
