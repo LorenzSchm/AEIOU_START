@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { api } from "../../lib/api";
-import { fadeUp, stagger } from "../../lib/motion";
+import { disclosure, fadeUp, stagger } from "../../lib/motion";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import Icon from "../ui/Icon";
-import { RouteBadge, Section } from "../ui/primitives";
+import { Chip, RouteBadge } from "../ui/primitives";
 import "./rates.css";
 
 /* ---------- Formatting ---------- */
@@ -123,221 +123,370 @@ function useEnter(i) {
 function Tile({ i, icon, label, value, sub, tone }) {
   const enter = useEnter(i);
   return (
-    <motion.div className={"tile glass rs-tile" + (tone ? " tile-" + tone : "")} animate={fadeUp.animate} {...enter}>
+    <motion.div className={"tile glass" + (tone ? " tile-" + tone : "")} {...enter}>
       <span className="tile-label"><Icon name={icon} size={14} />{label}</span>
       <span className="tile-value">{value}</span>
-      <span className="tile-sub">{sub}</span>
+      {sub && <span className="tile-sub">{sub}</span>}
     </motion.div>
-  );
-}
-
-function StatusChip({ status }) {
-  return (
-    <span className={"chip chip-" + status.tone + " rs-status"}>
-      <Icon name={status.icon} size={12} />{status.label}
-    </span>
   );
 }
 
 function Summary({ sheets, today }) {
   const statuses = sheets.map((s) => statusOf(s, today));
-  const count = (key) => statuses.filter((s) => s.key === key).length;
   const usable = sheets.filter((s, i) => ["preferred", "approved"].includes(statuses[i].key));
   const lanes = new Set(usable.flatMap((s) => s.rates.map((r) => r.origin + "-" + r.destination)));
   const carriers = new Set(usable.map((s) => s.carrier));
-  const pending = count("pending");
-  const blocked = count("blocked");
-  const rejected = count("rejected");
-  const expired = sheets.filter((s) => s.valid_to && s.valid_to < today).length;
+  const pending = statuses.filter((s) => s.key === "pending").length;
+  const unusable = statuses.filter((s) => ["blocked", "expired", "rejected"].includes(s.key)).length;
   return (
-    <div className="tiles rs-tiles" role="group" aria-label="Rate sheet summary">
-      <Tile i={0} icon="check" label="Preferred" value={count("preferred")} tone={count("preferred") ? "ok" : undefined}
-            sub={count("approved") ? count("approved") + " more approved" : "used first for new quotes"} />
-      <Tile i={1} icon="alert" label="Awaiting approval" value={pending} tone={pending ? "warn" : undefined}
-            sub={pending ? "review prices before use" : "nothing to review"} />
-      <Tile i={2} icon="lock" label="Blocked" value={blocked} tone={blocked ? "bad" : undefined}
-            sub={rejected ? rejected + " rejected" : blocked ? "can’t be used as sent" : "none blocked"} />
-      <Tile i={3} icon="clock" label="Expired" value={expired}
-            sub={expired ? "past their validity" : "all within validity"} />
-      <Tile i={4} icon="plane" label="Lanes in use" value={lanes.size}
-            sub={carriers.size ? "from " + plural(carriers.size, "carrier") : "no sheet in use"} />
+    <div className="tiles" role="group" aria-label="Rate sheet summary">
+      <Tile i={0} icon="check" label="In use" value={usable.length} tone={usable.length ? "ok" : undefined}
+            sub={carriers.size ? plural(carriers.size, "carrier") : "no sheet in use"} />
+      <Tile i={1} icon="plane" label="Lanes covered" value={lanes.size} sub="by sheets in use" />
+      <Tile i={2} icon="clock" label="Awaiting approval" value={pending} tone={pending ? "warn" : undefined} />
+      <Tile i={3} icon="alert" label="Not usable" value={unusable} sub="blocked, expired or rejected" />
     </div>
   );
 }
 
-function ValidityFact({ sheet, today }) {
-  const v = validity(sheet, today);
-  const reduce = useReducedMotion();
-  return (
-    <div className="rs-fact rs-fact-validity">
-      <dt><Icon name="calendar" size={13} />Valid</dt>
-      <dd>
-        <span className="rs-fact-main">{range(sheet.valid_from, sheet.valid_to)}</span>
-        {v && <span className={"rs-fact-sub rs-phase-" + v.phase}>{v.label}</span>}
-        {v && (
-          <span className={"rs-period rs-phase-" + v.phase} aria-hidden="true">
-            <motion.span className="rs-period-fill" initial={reduce ? false : { scaleX: 0 }}
-                         animate={{ scaleX: v.progress }} transition={stagger(3)} />
-          </span>
-        )}
-      </dd>
-    </div>
-  );
-}
-
-function laneSummary(rates) {
-  const origins = [...new Set(rates.map((r) => r.origin))].sort();
-  const destinations = new Set(rates.map((r) => r.destination));
+function transitRange(rates) {
   const days = rates.map((r) => r.days).filter((d) => d != null);
-  const transit = days.length ? (Math.min(...days) === Math.max(...days) ? plural(Math.min(...days), "day") : Math.min(...days) + "–" + Math.max(...days) + " days") : null;
-  return [origins.join(", ") + " to " + plural(destinations.size, "destination"), transit].filter(Boolean).join(" · ");
+  if (!days.length) return null;
+  const lo = Math.min(...days), hi = Math.max(...days);
+  return lo === hi ? plural(lo, "day") : lo + "–" + hi + " days";
 }
 
 function breakLabel(weight, next) {
-  return Number(weight) === 0 ? (next ? "Under " + next + " kg" : "Any weight") : weight + " kg+";
+  return Number(weight) === 0 ? (next ? "< " + next + " kg" : "Any weight") : weight + " kg+";
 }
 
-function RateTable({ rates, carrier, id }) {
-  const breaks = [...new Set(rates.flatMap((r) => Object.keys(r.breaks)))].sort((a, b) => a - b);
-  const rows = [...rates].sort((a, b) => (a.origin + a.destination).localeCompare(b.origin + b.destination));
+const sortLanes = (rates) => [...rates].sort((a, b) => (a.origin + a.destination).localeCompare(b.origin + b.destination));
+const breakColumns = (rates) => [...new Set(rates.flatMap((r) => Object.keys(r.breaks)))].sort((a, b) => a - b);
+const str = (v) => (v == null ? "" : String(v));
+// Edit fields show prices the way the table does (two decimals), so nothing looks changed until it is.
+const priceText = (v) => (v == null || v === "" ? "" : Number(v).toFixed(2));
+
+/** A form-friendly copy of a sheet: every value as text, lanes in display order. */
+function draftOf(sheet) {
+  return {
+    validFrom: sheet.valid_from || "", validTo: sheet.valid_to || "",
+    breaks: breakColumns(sheet.rates),
+    lanes: sortLanes(sheet.rates).map((r) => ({
+      key: r.origin + r.destination, origin: r.origin, destination: r.destination, days: str(r.days),
+      minimum: priceText(r.minimum), fuel: priceText(r.fuel), security: priceText(r.security),
+      breaks: Object.fromEntries(Object.entries(r.breaks).map(([w, v]) => [w, priceText(v)])),
+    })),
+  };
+}
+
+const num = (v) => (String(v).trim() === "" ? null : Number(String(v).replace(",", ".")));
+
+/** The revision payload the backend expects; it validates and explains anything wrong. */
+function revisionOf(draft) {
+  return {
+    valid_from: draft.validFrom, valid_to: draft.validTo,
+    rates: draft.lanes.map((l) => ({
+      origin: l.origin, destination: l.destination, days: num(l.days),
+      minimum: num(l.minimum), fuel: num(l.fuel), security: num(l.security),
+      breaks: Object.fromEntries(draft.breaks.filter((w) => String(l.breaks[w] ?? "").trim() !== "")
+        .map((w) => [w, num(l.breaks[w])])),
+    })),
+  };
+}
+
+function Cell({ value, original, onChange, label, kind = "number", wide }) {
+  const changed = original !== undefined && String(value).trim() !== String(original ?? "").trim();
   return (
-    <>
-    <div className="rs-table-wrap" tabIndex={0} role="region" aria-label={carrier + " lane prices"} aria-describedby={id + "-note"}>
-      <table className="rs-table">
+    <input className={"rs-input" + (wide ? " rs-input-code" : "") + (changed ? " changed" : "")} value={value}
+           inputMode={kind === "number" ? "decimal" : undefined} maxLength={kind === "code" ? 3 : undefined}
+           aria-label={label} title={changed ? "Was " + (original === "" || original == null ? "empty" : original) : undefined}
+           onChange={(e) => onChange(kind === "code" ? e.target.value.toUpperCase() : e.target.value)} />
+  );
+}
+
+function RateTable({ rates, carrier, draft, base, onDraft }) {
+  const editing = Boolean(draft);
+  const breaks = editing ? draft.breaks : breakColumns(rates);
+  const rows = editing ? draft.lanes : sortLanes(rates);
+  const was = (key) => base?.lanes.find((l) => l.key === key);
+  const set = (key, patch) => onDraft({ ...draft, lanes: draft.lanes.map((l) => (l.key === key ? { ...l, ...patch } : l)) });
+  const remove = (key) => onDraft({ ...draft, lanes: draft.lanes.filter((l) => l.key !== key) });
+  return (
+    <div className="rs-lanes" tabIndex={editing ? undefined : 0} role="region" aria-label={carrier + " lane prices"}>
+      <table className={"rs-lane-table" + (editing ? " editing" : "")}>
         <thead>
           <tr>
-            <th scope="col" className="rs-lane">Lane</th>
+            <th scope="col">Lane</th>
             <th scope="col" className="end">Transit</th>
-            <th scope="col" className="end">Minimum</th>
+            <th scope="col" className="end">Min</th>
             {breaks.map((w, i) => <th scope="col" className="end" key={w}>{breakLabel(w, breaks[i + 1])}</th>)}
             <th scope="col" className="end">Fuel</th>
             <th scope="col" className="end">Security</th>
+            {editing && <th scope="col"><span className="sr-only">Remove</span></th>}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.origin + r.destination}>
-              <th scope="row" className="rs-lane">
-                <RouteBadge origin={r.origin} destination={r.destination} size="sm" />
-              </th>
-              <td className="end">{r.days == null ? "—" : plural(r.days, "day")}</td>
-              <td className="end mono">{money(r.minimum)}</td>
-              {breaks.map((w) => <td className="end mono" key={w}>{money(r.breaks[w])}</td>)}
-              <td className="end mono">{money(r.fuel)}</td>
-              <td className="end mono">{money(r.security)}</td>
-            </tr>
-          ))}
+          {rows.map((r) => {
+            if (!editing) return (
+              <tr key={r.origin + r.destination}>
+                <th scope="row"><RouteBadge origin={r.origin} destination={r.destination} size="sm" /></th>
+                <td className="end">{r.days == null ? "—" : plural(r.days, "day")}</td>
+                <td className="end mono">{money(r.minimum)}</td>
+                {breaks.map((w) => <td className="end mono" key={w}>{money(r.breaks[w])}</td>)}
+                <td className="end mono">{money(r.fuel)}</td>
+                <td className="end mono">{money(r.security)}</td>
+              </tr>
+            );
+            const o = was(r.key);
+            const name = r.origin + " to " + r.destination;
+            return (
+              <tr key={r.key}>
+                <th scope="row" className="rs-lane-edit">
+                  <Cell kind="code" wide value={r.origin} original={o?.origin} label={name + " origin"} onChange={(v) => set(r.key, { origin: v })} />
+                  <span aria-hidden="true">→</span>
+                  <Cell kind="code" wide value={r.destination} original={o?.destination} label={name + " destination"} onChange={(v) => set(r.key, { destination: v })} />
+                </th>
+                <td className="end"><Cell value={r.days} original={o?.days} label={name + " transit days"} onChange={(v) => set(r.key, { days: v })} /></td>
+                <td className="end"><Cell value={r.minimum} original={o?.minimum} label={name + " minimum"} onChange={(v) => set(r.key, { minimum: v })} /></td>
+                {breaks.map((w, i) => (
+                  <td className="end" key={w}>
+                    <Cell value={r.breaks[w] ?? ""} original={o?.breaks[w] ?? ""} label={name + " " + breakLabel(w, breaks[i + 1])}
+                          onChange={(v) => set(r.key, { breaks: { ...r.breaks, [w]: v } })} />
+                  </td>
+                ))}
+                <td className="end"><Cell value={r.fuel} original={o?.fuel} label={name + " fuel"} onChange={(v) => set(r.key, { fuel: v })} /></td>
+                <td className="end"><Cell value={r.security} original={o?.security} label={name + " security"} onChange={(v) => set(r.key, { security: v })} /></td>
+                <td>
+                  <button type="button" className="icon-btn rs-remove" aria-label={"Remove lane " + name} title="Remove lane"
+                          onClick={() => remove(r.key)}><Icon name="close" size={14} /></button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
-    <p className="rs-table-note" id={id + "-note"}>Prices in EUR. Weight breaks, fuel and security per kg; minimum per shipment.</p>
+  );
+}
+
+const EDITABLE = new Set(["pending", "blocked"]);
+
+/** Everything about one sheet that is only needed on demand: its issue, prices, file and decisions. */
+function SheetDetail({ sheet, today, canDecide, saving, onDecide, onSaved }) {
+  const options = decisions(sheet, today);
+  const [base, setBase] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const editable = canDecide && EDITABLE.has(sheet.state);
+  const startEdit = () => { const d = draftOf(sheet); setBase(d); setDraft(d); setError(""); };
+  const cancel = () => { setDraft(null); setBase(null); setError(""); };
+  async function save() {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/tariff-sheets/" + sheet.id + "/revision", revisionOf(draft));
+      setDraft(null);
+      setBase(null);
+      await onSaved();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const datesChanged = draft && (draft.validFrom !== base.validFrom || draft.validTo !== base.validTo);
+  const edited = sheet.edited_at && sheet.original;
+  return (
+    <div className="rs-detail">
+      {sheet.issue && !draft && (
+        <p className={"rs-issue " + (sheet.state === "blocked" ? "tone-bad" : "tone-warn")}>
+          <Icon name="alert" size={14} />{sheet.issue}
+        </p>
+      )}
+      {draft && (
+        <div className="rs-validity-edit">
+          <label>Valid from<input type="date" className={"rs-input rs-date" + (draft.validFrom !== base.validFrom ? " changed" : "")}
+                                   value={draft.validFrom} onChange={(e) => setDraft({ ...draft, validFrom: e.target.value })} /></label>
+          <label>to<input type="date" className={"rs-input rs-date" + (draft.validTo !== base.validTo ? " changed" : "")}
+                          value={draft.validTo} onChange={(e) => setDraft({ ...draft, validTo: e.target.value })} /></label>
+          {datesChanged && <span className="rs-muted">Carrier sent {range(base.validFrom, base.validTo)}</span>}
+        </div>
+      )}
+      {sheet.rates.length > 0 || draft ? (
+        <RateTable rates={sheet.rates} carrier={sheet.carrier} draft={draft} base={base} onDraft={setDraft} />
+      ) : <p className="rs-muted">No lane prices could be read from this sheet.</p>}
+      {error && <p className="rs-issue tone-bad" role="alert"><Icon name="alert" size={14} />{error}</p>}
+      <div className="rs-detail-foot">
+        {draft ? (
+          <>
+            <span className="rs-muted">Saved changes go back to review. Approve the sheet to use them for quotes.</span>
+            <span className="rs-actions">
+              <button type="button" className="btn rs-btn" onClick={cancel} disabled={busy}>Cancel</button>
+              <button type="button" className="btn rs-btn rs-btn-primary" onClick={save} disabled={busy || !draft.lanes.length}>
+                {busy ? "Saving…" : "Save changes"}
+              </button>
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="rs-muted">
+              {edited ? "Corrected " + receivedFmt.format(new Date(sheet.edited_at)) + " · " : ""}
+              EUR · breaks, fuel and security per kg · minimum per shipment
+            </span>
+            <a className="cv-file" href={`/api/v1/messages/${sheet.message_id}/attachments/${sheet.attachment_id}`}
+               download={sheet.filename}>
+              <Icon name="paperclip" size={13} />{sheet.filename}
+            </a>
+            {canDecide && (options.length > 0 || editable) && (
+              <span className="rs-actions">
+                {editable && (
+                  <button type="button" className="btn rs-btn" disabled={saving} onClick={startEdit}>Edit values</button>
+                )}
+                {options.map((d) => (
+                  <button key={d} type="button" className={"btn rs-btn rs-btn-" + ACTIONS[d].tone} disabled={saving}
+                          onClick={() => onDecide({ sheet, decision: d })}>
+                    {ACTIONS[d].label}
+                  </button>
+                ))}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const COLUMNS = 5;
+
+function SheetRow({ sheet, today, now, open, onToggle, ...detail }) {
+  const status = statusOf(sheet, today);
+  const v = validity(sheet, today);
+  const reduce = useReducedMotion();
+  const detailId = "rs-detail-" + sheet.id;
+  const toggle = () => onToggle(sheet.id);
+  return (
+    <>
+      <tr className={"rs-row" + (open ? " open" : "")} onClick={toggle}>
+        <td>
+          <button type="button" className="rs-toggle" aria-expanded={open} aria-controls={detailId}
+                  onClick={(e) => { e.stopPropagation(); toggle(); }}>
+            <Icon name="chevron" size={13} className="rs-caret" />
+            <span className="cell-stack">
+              <b>{sheet.carrier}</b>
+              <small>{sheet.filename}</small>
+            </span>
+          </button>
+        </td>
+        <td><Chip tone={status.tone}>{status.label}</Chip></td>
+        <td>
+          <span className="cell-stack">
+            <span>{range(sheet.valid_from, sheet.valid_to)}</span>
+            {v && <small className={v.phase === "expired" ? "tone-bad" : v.phase === "ending" ? "tone-warn" : ""}>{v.label}</small>}
+          </span>
+        </td>
+        <td className="end">
+          <span className="cell-stack end">
+            <span className="mono">{sheet.rates.length}</span>
+            <small>{transitRange(sheet.rates) || "—"}</small>
+          </span>
+        </td>
+        <td className="end opt">
+          {sheet.received && (
+            <span className="cell-stack end">
+              <time dateTime={sheet.received}>{receivedFmt.format(new Date(sheet.received))}</time>
+              <small>{ago(sheet.received, now)}</small>
+            </span>
+          )}
+        </td>
+      </tr>
+      <tr className="rs-detail-row" id={detailId}>
+        <td colSpan={COLUMNS}>
+          <AnimatePresence initial={false}>
+            {open && (
+              <motion.div key="detail" className="rs-detail-wrap"
+                          initial={reduce ? false : disclosure.initial} animate={disclosure.animate}
+                          exit={reduce ? undefined : disclosure.exit}>
+                <SheetDetail sheet={sheet} today={today} {...detail} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </td>
+      </tr>
     </>
   );
 }
 
-function SheetCard({ i, sheet, today, canDecide, saving, now, onDecide }) {
-  const status = statusOf(sheet, today);
-  const options = decisions(sheet, today);
-  const enter = useEnter(i + 5);
-  const issueTone = sheet.state === "blocked" ? "bad" : "warn";
+function Ledger({ sheets, today, now, canDecide, saving, onDecide, onSaved }) {
+  // Sheets that need a decision open by default; everything else stays one line.
+  const [open, setOpen] = useState(() => new Set(sheets.filter((s) => s.state === "pending").map((s) => s.id)));
+  const toggle = useCallback((id) => setOpen((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  }), []);
+  const enter = useEnter(4);
   return (
-    <motion.article className={"rs-card glass rs-" + status.key} aria-labelledby={"rs-title-" + sheet.id}
-                    animate={fadeUp.animate} {...enter}>
-      <header className="rs-head">
-        <span className="rs-mark" aria-hidden="true"><Icon name="euro" size={18} /></span>
-        <div className="rs-title">
-          <h2 id={"rs-title-" + sheet.id}>{sheet.carrier}</h2>
-          <a className="rs-file" href={`/api/v1/messages/${sheet.message_id}/attachments/${sheet.attachment_id}`}
-             download={sheet.filename} aria-label={"Download " + sheet.filename}>
-            <Icon name="paperclip" size={14} /><span>{sheet.filename}</span>
-          </a>
-        </div>
-        <StatusChip status={status} />
-      </header>
-
-      <dl className="rs-facts">
-        {sheet.valid_from && <ValidityFact sheet={sheet} today={today} />}
-        {sheet.received && (
-          <div className="rs-fact">
-            <dt><Icon name="mail" size={13} />Received</dt>
-            <dd>
-              <time className="rs-fact-main" dateTime={sheet.received}>{receivedFmt.format(new Date(sheet.received))}</time>
-              <span className="rs-fact-sub">{ago(sheet.received, now)} · Berlin time</span>
-            </dd>
-          </div>
-        )}
-        {sheet.decided_at && DECIDED[sheet.state] && (
-          <div className="rs-fact">
-            <dt><Icon name="check" size={13} />{DECIDED[sheet.state]}</dt>
-            <dd>
-              <time className="rs-fact-main" dateTime={sheet.decided_at}>{receivedFmt.format(new Date(sheet.decided_at))}</time>
-              <span className="rs-fact-sub">{ago(sheet.decided_at, now)}</span>
-            </dd>
-          </div>
-        )}
-      </dl>
-
-      {sheet.issue && (
-        <p className={"rs-issue rs-issue-" + issueTone} role="note">
-          <Icon name="alert" size={15} /><span>{sheet.issue}</span>
-        </p>
-      )}
-
-      {sheet.rates.length > 0 && (
-        <Section title="Lane prices" icon="plane" badge={sheet.rates.length} summary={laneSummary(sheet.rates)}>
-          <RateTable rates={sheet.rates} carrier={sheet.carrier} id={"rs-rates-" + sheet.id} />
-        </Section>
-      )}
-
-      {options.length > 0 && (canDecide ? (
-        <div className="rs-actions">
-          {options.map((d) => (
-            <button key={d} className={"btn rs-btn rs-btn-" + ACTIONS[d].tone} disabled={saving}
-                    onClick={() => onDecide({ sheet, decision: d })}>
-              {ACTIONS[d].label}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="rs-readonly-note"><Icon name="lock" size={14} />
-          {options.map((d) => ACTIONS[d].label).join(" or ")} from the desk that runs the live worker.
-        </p>
-      ))}
-    </motion.article>
+    <motion.section className="glass rs-ledger" aria-label="Rate sheets" {...enter}>
+      <div className="rs-ledger-head">
+        <h2>Sheets <span className="rs-count">{sheets.length}</span></h2>
+        {!canDecide && <span className="rs-muted"><Icon name="lock" size={13} />View only · decisions are made on the live desk</span>}
+      </div>
+      <div className="rs-scroll">
+        <table className="rs-table">
+          <thead>
+            <tr>
+              <th scope="col">Carrier</th>
+              <th scope="col">Status</th>
+              <th scope="col">Valid</th>
+              <th scope="col" className="end">Lanes</th>
+              <th scope="col" className="end opt">Received</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sheets.map((sheet) => (
+              <SheetRow key={sheet.id} sheet={sheet} today={today} now={now} open={open.has(sheet.id)} onToggle={toggle}
+                        canDecide={canDecide} saving={saving} onDecide={onDecide} onSaved={onSaved} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </motion.section>
   );
 }
 
 function Skeleton() {
   return (
-    <div className="rs-loading" aria-busy="true" aria-label="Loading rate sheets">
-      <div className="tiles rs-tiles">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton glass rs-skel-tile" />)}</div>
-      {Array.from({ length: 2 }).map((_, i) => <div key={i} className="skeleton glass rs-skel-card" />)}
+    <div className="rates" aria-busy="true" aria-label="Loading rate sheets">
+      <div className="tiles">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton glass rs-skel-tile" />)}</div>
+      <div className="skeleton glass rs-skel-ledger" />
     </div>
   );
 }
 
 function Empty() {
   return (
-    <motion.div className="glass rs-empty" {...fadeUp}>
+    <motion.section className="glass rs-ledger" {...fadeUp}>
       <div className="empty-state">
-        <span className="rs-empty-icon"><Icon name="euro" size={26} /></span>
+        <Icon name="euro" size={28} />
         <strong>No rate sheets yet</strong>
-        <span>When a carrier emails a rate sheet (PDF, XLSX or text), it appears here with its validity period and lane prices for review.</span>
+        <span>Rate sheets carriers send by email appear here with their validity and lane prices.</span>
       </div>
-    </motion.div>
+    </motion.section>
   );
 }
 
 function Failed({ message, onRetry, busy }) {
   return (
-    <motion.div className="glass rs-empty" role="alert" {...fadeUp}>
+    <motion.section className="glass rs-ledger" role="alert" {...fadeUp}>
       <div className="empty-state rs-failed">
-        <span className="rs-empty-icon rs-empty-bad"><Icon name="alert" size={26} /></span>
+        <Icon name="alert" size={28} />
         <strong>Rate sheets couldn’t be loaded</strong>
         <span>{message}</span>
-        <button className="btn rs-btn" onClick={onRetry} disabled={busy}>Try again</button>
+        <button type="button" className="btn rs-btn" onClick={onRetry} disabled={busy}>Try again</button>
       </div>
-    </motion.div>
+    </motion.section>
   );
 }
 
@@ -422,20 +571,10 @@ export default function RateSheets() {
         pollError ? <Failed message={pollError} onRetry={retry} busy={retrying} /> : <Skeleton />
       ) : (
         <>
-          {!queue.can_decide && (
-            <motion.p className="rs-notice glass" {...fadeUp}>
-              <Icon name="lock" size={16} />
-              <span><b>View only.</b> This desk can’t approve, pause or reject rate sheets. Decisions are made on the desk that runs the live worker.</span>
-            </motion.p>
-          )}
           {sheets.length > 0 && <Summary sheets={sheets} today={today} />}
           {sheets.length === 0 ? <Empty /> : (
-            <div className="rs-list">
-              {sheets.map((sheet, i) => (
-                <SheetCard key={sheet.id} i={i} sheet={sheet} today={today} now={now}
-                           canDecide={queue.can_decide} saving={saving} onDecide={setAction} />
-              ))}
-            </div>
+            <Ledger sheets={sheets} today={today} now={now} canDecide={queue.can_decide}
+                    saving={saving} onDecide={setAction} onSaved={refresh} />
           )}
         </>
       )}
